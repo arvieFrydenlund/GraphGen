@@ -2,8 +2,8 @@
 // Created by arvie on 3/24/25.
 //
 
-#ifndef CPP_GRAPH_H
-#define
+#ifndef GRAPH_H
+#define GRAPH_H
 
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/connected_components.hpp>
@@ -46,6 +46,7 @@ typedef DistanceProperty::matrix_map_type DistanceMatrixMap;
 
 // template <typename Graph>
 int floyd_warshall(UnDirGraph g, DistanceMatrix &distances, bool verbose = false) {
+    // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
 
     const WeightMap weight_pmap = boost::get(boost::edge_weight, g);
     DistanceMatrixMap dm(distances, g);
@@ -75,4 +76,4 @@ int floyd_warshall(UnDirGraph g, DistanceMatrix &distances, bool verbose = false
 }
 
 
-#endif //CPP_GRAPH_H
+#endif //GRAPH_H
