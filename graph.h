@@ -36,7 +36,9 @@ typedef
   >
 UnDirGraph;
 
-typedef boost::sorted_erdos_renyi_iterator<boost::minstd_rand, UnDirGraph> ERGen;
+typedef boost::sorted_erdos_renyi_iterator<std::mt19937, UnDirGraph> ERGen;
+
+typedef boost::adjacency_list<boost::listS, boost::listS, boost::undirectedS> Cluster;
 
 typedef boost::property_map<UnDirGraph, boost::edge_weight_t>::type WeightMap;
 typedef boost::exterior_vertex_property<UnDirGraph, t_weight> DistanceProperty;
@@ -44,8 +46,44 @@ typedef DistanceProperty::matrix_type DistanceMatrix;
 typedef DistanceProperty::matrix_map_type DistanceMatrixMap;
 
 
+template<typename T>
+vector<T> list_to_vector(list<T> &l) {
+    vector<T> v;
+    v.reserve(l.size());
+    std::copy(std::begin(l), std::end(l), std::back_inserter(v));
+    return v;
+}
+
+inline int sample_num_connected(std::mt19937 &gen, const int num_nodes, const int c_min = 75, const int c_max = 125) {
+    if ( num_nodes < c_min ) {
+        return 1;
+    }
+    if ( num_nodes > c_max ) {
+        return 2;
+    }
+    std::uniform_int_distribution dist(1, 2);
+    return dist(gen);
+}
+
+
 // template <typename Graph>
-int floyd_warshall(UnDirGraph g, DistanceMatrix &distances, bool verbose = false) {
+inline WeightMap make_edge_weights(UnDirGraph &g, bool verbose = false) {
+
+    // make all edge weights 1
+    WeightMap weight_map = boost::get(boost::edge_weight, g);
+    boost::graph_traits<UnDirGraph>::edge_iterator ei, ei_end;
+    for (boost::tie(ei, ei_end) = boost::edges(g); ei != ei_end; ++ei) {
+        weight_map[*ei] = 1;
+        if (verbose) {
+            cout << *ei << " " << weight_map[*ei] << endl;
+        }
+    }
+    return weight_map;
+}
+
+
+// template <typename Graph>
+inline int floyd_warshall(UnDirGraph &g, DistanceMatrix &distances, bool verbose = false) {
     // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
 
     const WeightMap weight_pmap = boost::get(boost::edge_weight, g);
@@ -73,6 +111,18 @@ int floyd_warshall(UnDirGraph g, DistanceMatrix &distances, bool verbose = false
         }
     }
     return 0;
+}
+
+
+inline int floyd_warshall_frydenlund(UnDirGraph &g, DistanceMatrix &distances, bool verbose = false) {
+    return 1;
+}
+
+inline void pprint_distances(DistanceMatrix &distances) {
+    std::cout << "Distance matrix: " << std::endl;
+    // for each connected component
+    // make square matrix to console
+
 }
 
 
