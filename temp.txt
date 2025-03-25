@@ -1,0 +1,99 @@
+struct Vertex {
+    double m_d  = 0;
+    size_t m_id = -1;
+    // or std::size_t id() const;
+};
+
+struct Edge {
+    double cost = 0;
+};
+
+using Graph =
+    boost::adjacency_list<boost::vecS, boost::vecS, boost::bidirectionalS, Vertex, Edge>;
+
+using boost::make_iterator_range;
+
+
+void example1() {
+    Graph g;
+    auto v0 = add_vertex({0.1, 0}, g);
+    auto v1 = add_vertex({0.2, 1}, g);
+    auto v2 = add_vertex({0.3, 2}, g);
+    auto v3 = add_vertex({0.4, 3}, g);
+    auto v4 = add_vertex({0.5, 4}, g);
+    auto v5 = add_vertex({0.6, 5}, g);
+
+    add_edge(v0, v2, Edge{1.5}, g);
+    add_edge(v1, v3, Edge{2.5}, g);
+    add_edge(v4, v1, Edge{3.5}, g);
+    add_edge(v2, v5, Edge{4.5}, g);
+
+    auto idmap = boost::get(&Vertex::m_id, g);
+    auto cost  = boost::get(&Edge::cost, g);
+
+    auto find_by_id = [&g](size_t id) -> Vertex& {
+        auto vv = boost::make_iterator_range(vertices(g));
+        auto vd = find_if(vv, [&, id](auto vd) { return g[vd].m_id == id; });
+        return g[*vd];
+    };
+
+    print_graph(g, idmap, std::cout << "original: ");
+
+    auto i_want = [](auto vd) {  // lambda if mod 2
+        return (vd % 2); // when I want
+    };
+
+
+    for (auto vd : make_iterator_range(vertices(g))) {
+        if (i_want(vd)) {
+            g[vd].m_id += 1;
+            idmap[vd] += 1;
+        }
+    }
+
+    print_graph(g, idmap, std::cout << "altered: ");
+
+    // clear_vertex(v3, g);
+    // remove_vertex(v3, g); // undefined behaviour unless edges cleared
+    // print_graph(g, idmap, std::cout << "removed: ");
+
+    for (auto ed : make_iterator_range(edges(g))) {
+        std::cout << ed << " cost " << cost[ed] << "\n";
+    }
+
+    for (auto ed : make_iterator_range(edges(g))) {
+        cost[ed] *= 111;
+    }
+
+    for (auto ed : make_iterator_range(edges(g))) {
+        std::cout << ed << " cost " << cost[ed] << "\n";
+    }
+}
+
+
+
+https://stackoverflow.com/questions/31053360/find-the-shortest-path-with-floyd-algorithm
+
+
+void Floyd_Warshal(int graph[Nodes][Nodes], int D[Nodes][Nodes])
+{
+    for (int i = 0; i < Nodes; i++)
+    {
+        for (int j = 0; j < Nodes; j++)
+        {
+            if (graph[i][j] == 0) { graph[i][j] = INT_MAX; }
+            D[i][j] = graph[i][j];
+        }
+    }
+    for (int k = 0; k < Nodes; k++) {
+        for (int i = 0; i < Nodes; i++)
+        {
+            for (int j = 0; j < Nodes; j++)
+            {
+                if (D[i][j] > D[i][k] + D[k][j]) {
+                    D[i][j] = D[i][k] + D[k][j];
+                }
+            }
+        }
+    }
+}
