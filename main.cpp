@@ -161,6 +161,8 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
 int main(){
     int num_nodes = 100;
 
+
+
     unique_ptr<UnDirGraph> g_ptr;
     unique_ptr<DistanceMatrix> distances_ptr;
 
