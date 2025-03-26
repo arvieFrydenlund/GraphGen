@@ -37,6 +37,7 @@ typedef
 UnDirGraph;
 
 typedef boost::sorted_erdos_renyi_iterator<std::mt19937, UnDirGraph> ERGen;
+typedef boost::sorted_erdos_renyi_iterator<boost::minstd_rand, UnDirGraph> ERGen2;
 
 typedef boost::adjacency_list<boost::listS, boost::listS, boost::undirectedS> Cluster;
 
@@ -53,6 +54,24 @@ vector<T> list_to_vector(list<T> &l) {
     std::copy(std::begin(l), std::end(l), std::back_inserter(v));
     return v;
 }
+
+
+map<int, list<int>> get_connected_components_map(UnDirGraph &g, bool verbose = false) {
+    std::vector<int> component (num_vertices (g));
+    size_t num_components = connected_components(g, &component[0]);
+    if (verbose) {
+        cout << "Number of connected components: " << num_components << " num edges " << num_edges(g) << endl;
+    }
+
+    // make map of connected components
+    map<int, list<int>> component_map;
+    for (size_t i = 0; i < num_vertices(g); i++) {
+        component_map[component[i]].push_back(i);
+    }
+    return component_map;
+}
+
+
 
 inline int sample_num_connected(std::mt19937 &gen, const int num_nodes, const int c_min = 75, const int c_max = 125) {
     if ( num_nodes < c_min ) {
