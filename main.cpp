@@ -63,7 +63,7 @@ int erdos_renyi_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatr
     return r;
 }
 
-int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix> &distances_ptr, const int num_nodes, std::mt19937 &gen, const int dim = 2, float radius = -1.0, const bool verbose = true) {
+int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix> &distances_ptr, unique_ptr<vector<vector<float>>> &positions_ptr, const int num_nodes, std::mt19937 &gen, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125, const bool verbose = true) {
     /*  These are the only graphs which have a true property which is the position a vector of length dim
      *  Because of this, we just keep this as a num_nodes x dim matrix
      */
@@ -76,7 +76,8 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
 
     // uniformly generates num_nodes points in dim
     std::uniform_real_distribution<float> distr(0, 1);
-    vector<vector<float>> positions = vector(num_nodes, vector<float>(dim));
+    positions_ptr = make_unique<vector<vector<float>>>(num_nodes, vector<float>(dim));
+    auto positions = *positions_ptr.get();
     for (int i = 0; i < num_nodes; i++) {
         for (int j = 0; j < dim; j++) {
             positions[i][j] = distr(gen);
@@ -140,7 +141,7 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
             sort(closest.begin(), closest.end(), [](auto &left, auto &right) {
                 return get<2>(left) < get<2>(right);
             });
-            for (size_t k = 0; k < sample_num_connected(gen, num_nodes); k++) {
+            for (size_t k = 0; k < sample_num_connected(gen, num_nodes, c_min, c_max); k++) {
                 int u = get<0>(closest[k]);
                 int v = get<1>(closest[k]);
                 boost::add_edge(u, v, g);
@@ -164,8 +165,6 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
 int main(){
     int num_nodes = 100;
 
-
-
     unique_ptr<UnDirGraph> g_ptr;
     unique_ptr<DistanceMatrix> distances_ptr;
 
@@ -174,9 +173,10 @@ int main(){
 
     std::mt19937 gen(seed);
 
-    //erdos_renyi_generator(g_ptr, distances_ptr, num_nodes, gen, -1.0, 125, 125, false);
+    // erdos_renyi_generator(g_ptr, distances_ptr, num_nodes, gen, -1.0, 75, 125, false);
 
-    euclidean_generator(g_ptr, distances_ptr, num_nodes, gen, 2, -1.0, false);
+    unique_ptr<vector<vector<float>>> positions_ptr;
+    euclidean_generator(g_ptr, distances_ptr, positions_ptr, num_nodes, gen, 2, -1.0, 75, 125, false);
 
     return 0;
 };
