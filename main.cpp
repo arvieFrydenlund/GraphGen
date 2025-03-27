@@ -181,9 +181,14 @@ int main(){
     unique_ptr<Graph<boost::directedS>> dg_ptr;
     unique_ptr<DistanceMatrix<boost::directedS>> ddistances_ptr;
 
-    path_star_generator(dg_ptr, ddistances_ptr, 6, 6, 5, 6, gen, true);
+    // path_star_generator(dg_ptr, ddistances_ptr, 6, 6, 5, 6, gen, false);
 
-    cout << "Graph has " << num_vertices(*dg_ptr) << " vertices and " << num_edges(*dg_ptr) << " edges " << endl;
+    balanced_generator(dg_ptr, ddistances_ptr, 25, gen, 7);
+
+    if ( dg_ptr ) {
+        cout << "Graph has " << num_vertices(*dg_ptr) << " vertices and " << num_edges(*dg_ptr) << " edges " << endl;
+    }
+
 
 
 
