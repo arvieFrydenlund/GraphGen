@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "graph.h"
+#include "balanced.h"
 
 
 using namespace std;
@@ -175,8 +176,13 @@ int main(){
 
     // erdos_renyi_generator(g_ptr, distances_ptr, num_nodes, gen, -1.0, 75, 125, false);
 
-    unique_ptr<vector<vector<float>>> positions_ptr;
-    euclidean_generator(g_ptr, distances_ptr, positions_ptr, num_nodes, gen, 2, -1.0, 75, 125, false);
+    // unique_ptr<vector<vector<float>>> positions_ptr;
+    // euclidean_generator(g_ptr, distances_ptr, positions_ptr, num_nodes, gen, 2, -1.0, 75, 125, false);
+
+    unique_ptr<DirGraph> dg_ptr;
+    unique_ptr<DirDistanceMatrix> ddistances_ptr;
+    path_star_generator(dg_ptr, ddistances_ptr, 6, 6, 5, 6, gen, true);
+
 
     return 0;
 };

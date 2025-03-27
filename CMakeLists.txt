@@ -4,4 +4,5 @@ project(GraphGen)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(GraphGen main.cpp
-        graph.h)
+        graph.h
+        balanced.h)

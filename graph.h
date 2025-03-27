@@ -62,7 +62,6 @@ map<int, list<int>> get_connected_components_map(UnDirGraph &g, bool verbose = f
     if (verbose) {
         cout << "Number of connected components: " << num_components << " num edges " << num_edges(g) << endl;
     }
-
     // make map of connected components
     map<int, list<int>> component_map;
     for (size_t i = 0; i < num_vertices(g); i++) {
@@ -70,7 +69,6 @@ map<int, list<int>> get_connected_components_map(UnDirGraph &g, bool verbose = f
     }
     return component_map;
 }
-
 
 
 inline int sample_num_connected(std::mt19937 &gen, const int num_nodes, const int c_min = 75, const int c_max = 125) {
