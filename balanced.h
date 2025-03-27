@@ -26,60 +26,12 @@
 using namespace std;
 
 
-typedef
-  boost::adjacency_list<
-    boost::vecS            // edge list
-  , boost::vecS            // vertex list
-  , boost::directedS     // directedness
-  , boost::no_property     // property associated with vertices, float or int etc.
-  , EdgeWeightProperty     // property associated with edges
-  >
-DirGraph;
-
-typedef boost::property_map<DirGraph, boost::edge_weight_t>::type DirWeightMap;
-typedef boost::exterior_vertex_property<DirGraph, t_weight> DirDistanceProperty;
-typedef DirDistanceProperty::matrix_type DirDistanceMatrix;
-typedef DirDistanceProperty::matrix_map_type DirDistanceMatrixMap;
-
-inline int floyd_warshall(DirGraph &g, DirDistanceMatrix &distances, bool verbose = false) {
-    // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
-
-    const DirWeightMap weight_pmap = boost::get(boost::edge_weight, g);
-    DirDistanceMatrixMap dm(distances, g);
-
-    bool valid = floyd_warshall_all_pairs_shortest_paths(g, dm, boost::weight_map(weight_pmap));
-
-    if (!valid) {
-        if (verbose) {
-            std::cerr << "Error - Negative cycle in matrix" << std::endl;
-        }
-        return -1;
-    }
-    if (verbose) {
-        std::cout << "Distance matrix: " << std::endl;
-        for (std::size_t i = 0; i < num_vertices(g); ++i) {
-            for (std::size_t j = i; j < num_vertices(g); ++j) {
-                std::cout << "From vertex " << i+1 << " to " << j+1 << " : ";
-                if(distances[i][j] > 100000)
-                    std::cout << "inf" << std::endl;
-                else
-                    std::cout << distances[i][j] << std::endl;
-            }
-            std::cout << std::endl;
-        }
-    }
-    return 0;
-}
-
-
-/* Path-star graphs and balanced graphs */
-inline int path_star_generator(unique_ptr<DirGraph> &g_ptr, unique_ptr<DistanceMatrix> &distances_ptr,
+inline int path_star_generator(unique_ptr<Graph<boost::directedS>> &g_ptr, unique_ptr<DistanceMatrix<boost::directedS>> &distances_ptr,
     const int min_num_arms, const int max_num_arms,
     const int min_arm_length, const int max_arm_length,
     std::mt19937 &gen, const bool verbose = false) {
 
-    g_ptr = make_unique<DirGraph>();
-    auto g = *g_ptr.get();
+    g_ptr = make_unique<Graph<boost::directedS>>();
 
     int num_arms = min_num_arms;
     if ( min_num_arms < max_num_arms) {
@@ -93,7 +45,7 @@ inline int path_star_generator(unique_ptr<DirGraph> &g_ptr, unique_ptr<DistanceM
     auto node_ids = vector<int>(num_arms * (arm_length - 1) + 1);
     for (int i = 0; i < num_arms * (arm_length - 1) + 1; i++) {
         node_ids[i] = i;
-        boost::add_vertex(g);
+        boost::add_vertex(*g_ptr);
     }
     std::shuffle(node_ids.begin(), node_ids.end(), gen);
 
@@ -104,20 +56,27 @@ inline int path_star_generator(unique_ptr<DirGraph> &g_ptr, unique_ptr<DistanceM
     for (int i = 0; i < num_arms; i++) {
         int prev_node = start;
         for (int j = 0; j < arm_length - 1; j++) {
-            boost::add_edge(prev_node, node_ids[cur], g);
+            boost::add_edge(prev_node, node_ids[cur], *g_ptr);
             prev_node = node_ids[cur];
             cur++;
         }
     }
+    make_edge_weights(*g_ptr, verbose);
 
     if (verbose) {
-        cout << "Graph has " << num_vertices(g) << " vertices and " << num_edges(g) << " edges" << endl;
+        cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges" << endl;
     }
 
-    unique<DirDistanceMatrix>(num_vertices(g));
-    //auto distances = *distances_ptr.get();
-    //int r = floyd_warshall(g, distances, verbose);
-    //return r;
+    distances_ptr = make_unique<DistanceMatrix<boost::directedS>>(num_vertices(*g_ptr));
+    auto distances = *distances_ptr.get();
+    const int r = floyd_warshall(*g_ptr, distances, verbose);
+    return r;
+}
+
+
+inline int balanced_generator(unique_ptr<Graph<boost::directedS>> &g_ptr, unique_ptr<DistanceMatrix<boost::directedS>> &distances_ptr,
+    const int num_nodes, std::mt19937 &gen, const int max_num_parents = 4, const int max_prefix_vertices = -1, const bool verbose = false) {
+
     return 0;
 }
 

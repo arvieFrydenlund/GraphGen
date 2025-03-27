@@ -21,25 +21,22 @@
 
 using namespace std;
 
-int erdos_renyi_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix> &distances_ptr, const int num_nodes,
+int erdos_renyi_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr, unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, const int num_nodes,
     std::mt19937 &gen, float p = -1.0, const int c_min = 75, const int c_max = 125, const bool verbose = false) {
 
     if ( p < 0 ) {
         p = 1.0 / static_cast<float>(num_nodes);
     }
 
-    g_ptr = make_unique<UnDirGraph>(ERGen(gen, num_nodes, p), ERGen(), num_nodes);
-    auto g = *g_ptr.get();
-    make_edge_weights(g, verbose);
-
-    cout << "Graph has " << num_vertices(g) << " vertices and " << num_edges(g) << " edges " << p << " p" << endl;
+    g_ptr = make_unique<Graph<boost::undirectedS>>(ERGen(gen, num_nodes, p), ERGen(), num_nodes);
+    make_edge_weights(*g_ptr, verbose);
 
     if (verbose) {
-        cout << "Graph has " << num_vertices(g) << " vertices and " << num_edges(g) << " edges " << p << " p" << endl;
+        cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges " << p << " p" << endl;
     }
 
     // connect components
-    auto component_map = get_connected_components_map(g , verbose);
+    auto component_map = get_connected_components_map(*g_ptr , verbose);
     while ( component_map.size() > 1 ) {
         for (size_t i = 0; i < component_map.size(); i++) {
             for (int _ = 0; _ < sample_num_connected(gen, num_nodes, c_min, c_max); _++) {
@@ -52,19 +49,20 @@ int erdos_renyi_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatr
                 vector<int> c2 = list_to_vector(component_map[j]);
                 uniform_int_distribution<int> d2(0, c2.size() - 1);
                 int v2 = c2[d2(gen)];
-                boost::add_edge(v1, v2, g);
+                boost::add_edge(v1, v2, *g_ptr);
             }
         }
-        component_map = get_connected_components_map(g, verbose);  // remake connected components
+        component_map = get_connected_components_map(*g_ptr, verbose);  // remake connected components
     }
 
-    distances_ptr = make_unique<DistanceMatrix>(num_vertices(g));
+    distances_ptr = make_unique<DistanceMatrix<boost::undirectedS>>(num_vertices(*g_ptr));
     auto distances = *distances_ptr.get();
-    int r = floyd_warshall(g, distances, verbose);
+    const int r = floyd_warshall(*g_ptr, distances, verbose);
     return r;
 }
 
-int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix> &distances_ptr, unique_ptr<vector<vector<float>>> &positions_ptr, const int num_nodes, std::mt19937 &gen, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125, const bool verbose = true) {
+
+int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr, unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, unique_ptr<vector<vector<float>>> &positions_ptr, const int num_nodes, std::mt19937 &gen, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125, const bool verbose = true) {
     /*  These are the only graphs which have a true property which is the position a vector of length dim
      *  Because of this, we just keep this as a num_nodes x dim matrix
      */
@@ -72,8 +70,7 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
     if ( radius <= 0 ) {
         radius = 1.0 / sqrt(static_cast<float>(num_nodes));
     }
-    g_ptr = make_unique<UnDirGraph>(num_nodes);
-    auto g = *g_ptr.get();
+    g_ptr = make_unique<Graph<boost::undirectedS>>(num_nodes);
 
     // uniformly generates num_nodes points in dim
     std::uniform_real_distribution<float> distr(0, 1);
@@ -94,7 +91,7 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
             }
             dist = sqrt(dist);
             if ( dist < radius ) {
-                boost::add_edge(i, j, g);
+                boost::add_edge(i, j, *g_ptr);
             }
         }
     }
@@ -107,8 +104,8 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
             }
             // edges
             cout << "Edges: ";
-            boost::graph_traits<UnDirGraph>::adjacency_iterator ai, ai_end;
-            for (boost::tie(ai, ai_end) = boost::adjacent_vertices(i, g); ai != ai_end; ++ai) {
+            boost::graph_traits<Graph<boost::undirectedS>>::adjacency_iterator ai, ai_end;
+            for (boost::tie(ai, ai_end) = boost::adjacent_vertices(i, *g_ptr); ai != ai_end; ++ai) {
                 cout << *ai << " ";
             }
             cout << endl;
@@ -116,7 +113,7 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
     }
 
     // connect components
-    auto component_map = get_connected_components_map(g, verbose);
+    auto component_map = get_connected_components_map(*g_ptr, verbose);
     while ( component_map.size() > 1 ) {
         for (size_t i = 0; i < component_map.size(); i++) {
             vector<tuple<int, int, float>> closest;
@@ -145,29 +142,29 @@ int euclidean_generator(unique_ptr<UnDirGraph> &g_ptr, unique_ptr<DistanceMatrix
             for (size_t k = 0; k < sample_num_connected(gen, num_nodes, c_min, c_max); k++) {
                 int u = get<0>(closest[k]);
                 int v = get<1>(closest[k]);
-                boost::add_edge(u, v, g);
+                boost::add_edge(u, v, *g_ptr);
             }
         }
-        component_map = get_connected_components_map(g , verbose);  // remake connected components
+        component_map = get_connected_components_map(*g_ptr , verbose);  // remake connected components
     }
 
-    make_edge_weights(g, verbose);
+    make_edge_weights(*g_ptr, verbose);
 
     if (verbose) {
-        cout << "Graph has " << num_vertices(g) << " vertices and " << num_edges(g) << " edges" << endl;
+        cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges" << endl;
     }
 
-    distances_ptr = make_unique<DistanceMatrix>(num_vertices(g));
+    distances_ptr = make_unique<DistanceMatrix<boost::undirectedS>>(num_vertices(*g_ptr));
     auto distances = *distances_ptr.get();
-    int r = floyd_warshall(g, distances, verbose);
+    const int r = floyd_warshall(*g_ptr, distances, verbose);
     return r;
 }
 
 int main(){
     int num_nodes = 100;
 
-    unique_ptr<UnDirGraph> g_ptr;
-    unique_ptr<DistanceMatrix> distances_ptr;
+    unique_ptr<Graph<boost::undirectedS>> g_ptr;
+    unique_ptr<DistanceMatrix<boost::undirectedS>> distances_ptr;
 
     unsigned int seed = std::random_device{}();
     cout << "Seed: " << seed << endl;
@@ -179,9 +176,15 @@ int main(){
     // unique_ptr<vector<vector<float>>> positions_ptr;
     // euclidean_generator(g_ptr, distances_ptr, positions_ptr, num_nodes, gen, 2, -1.0, 75, 125, false);
 
-    unique_ptr<DirGraph> dg_ptr;
-    unique_ptr<DirDistanceMatrix> ddistances_ptr;
+    // cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges " << endl;
+
+    unique_ptr<Graph<boost::directedS>> dg_ptr;
+    unique_ptr<DistanceMatrix<boost::directedS>> ddistances_ptr;
+
     path_star_generator(dg_ptr, ddistances_ptr, 6, 6, 5, 6, gen, true);
+
+    cout << "Graph has " << num_vertices(*dg_ptr) << " vertices and " << num_edges(*dg_ptr) << " edges " << endl;
+
 
 
     return 0;

@@ -26,25 +26,31 @@ using namespace std;
 typedef int t_weight;
 typedef boost::property<boost::edge_weight_t, t_weight> EdgeWeightProperty;
 
-typedef
-  boost::adjacency_list<
-    boost::vecS            // edge list
-  , boost::vecS            // vertex list
-  , boost::undirectedS     // directedness
-  , boost::no_property     // property associated with vertices, float or int etc.
-  , EdgeWeightProperty     // property associated with edges
-  >
-UnDirGraph;
+template <typename D>  // undirectedS  or directedS
+using Graph = boost::adjacency_list<
+                                    boost::vecS            // edge list
+                                  , boost::vecS            // vertex list
+                                  , D    // directedness
+                                  , boost::no_property     // property associated with vertices, float or int etc.
+                                  , EdgeWeightProperty     // property associated with edges
+                                  >;
 
-typedef boost::sorted_erdos_renyi_iterator<std::mt19937, UnDirGraph> ERGen;
-typedef boost::sorted_erdos_renyi_iterator<boost::minstd_rand, UnDirGraph> ERGen2;
+using ERGen = boost::sorted_erdos_renyi_iterator<std::mt19937, Graph<boost::undirectedS>>;
+using ERGen2 = boost::sorted_erdos_renyi_iterator<boost::minstd_rand, Graph<boost::undirectedS>>;
 
-typedef boost::adjacency_list<boost::listS, boost::listS, boost::undirectedS> Cluster;
+template <typename D>
+using Cluster = boost::adjacency_list<boost::listS, boost::listS, D>;
 
-typedef boost::property_map<UnDirGraph, boost::edge_weight_t>::type WeightMap;
-typedef boost::exterior_vertex_property<UnDirGraph, t_weight> DistanceProperty;
-typedef DistanceProperty::matrix_type DistanceMatrix;
-typedef DistanceProperty::matrix_map_type DistanceMatrixMap;
+template <typename D>
+using  WeightMap = typename boost::property_map<Graph<D>, boost::edge_weight_t>::type;
+
+template <typename D>
+using DistanceProperty = boost::exterior_vertex_property<Graph<D>, t_weight>;
+
+template <typename D>
+using DistanceMatrix = typename DistanceProperty<D>::matrix_type;
+template <typename D>
+using DistanceMatrixMap = typename DistanceProperty<D>::matrix_map_type;
 
 
 template<typename T>
@@ -56,7 +62,7 @@ vector<T> list_to_vector(list<T> &l) {
 }
 
 
-map<int, list<int>> get_connected_components_map(UnDirGraph &g, bool verbose = false) {
+inline map<int, list<int>> get_connected_components_map(Graph<boost::undirectedS> &g, bool verbose = false) {
     std::vector<int> component (num_vertices (g));
     size_t num_components = connected_components(g, &component[0]);
     if (verbose) {
@@ -83,12 +89,12 @@ inline int sample_num_connected(std::mt19937 &gen, const int num_nodes, const in
 }
 
 
-// template <typename Graph>
-inline WeightMap make_edge_weights(UnDirGraph &g, bool verbose = false) {
+template <typename D>
+ WeightMap<D> make_edge_weights(Graph<D> &g, bool verbose = false) {
 
     // make all edge weights 1
-    WeightMap weight_map = boost::get(boost::edge_weight, g);
-    boost::graph_traits<UnDirGraph>::edge_iterator ei, ei_end;
+    WeightMap<D> weight_map = boost::get(boost::edge_weight, g);
+    typename boost::graph_traits<Graph<D>>::edge_iterator ei, ei_end;
     for (boost::tie(ei, ei_end) = boost::edges(g); ei != ei_end; ++ei) {
         weight_map[*ei] = 1;
         if (verbose) {
@@ -99,12 +105,12 @@ inline WeightMap make_edge_weights(UnDirGraph &g, bool verbose = false) {
 }
 
 
-// template <typename Graph>
-inline int floyd_warshall(UnDirGraph &g, DistanceMatrix &distances, bool verbose = false) {
+template <typename D>
+int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, bool verbose = false) {
     // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
 
-    const WeightMap weight_pmap = boost::get(boost::edge_weight, g);
-    DistanceMatrixMap dm(distances, g);
+    const WeightMap<D> weight_pmap = boost::get(boost::edge_weight, g);
+    DistanceMatrixMap<D> dm(distances, g);
 
     bool valid = floyd_warshall_all_pairs_shortest_paths(g, dm, boost::weight_map(weight_pmap));
 
@@ -131,11 +137,13 @@ inline int floyd_warshall(UnDirGraph &g, DistanceMatrix &distances, bool verbose
 }
 
 
-inline int floyd_warshall_frydenlund(UnDirGraph &g, DistanceMatrix &distances, bool verbose = false) {
+template <typename D>
+int floyd_warshall_frydenlund(Graph<D> &g, DistanceMatrix<D> &distances, bool verbose = false) {
     return 1;
 }
 
-inline void pprint_distances(DistanceMatrix &distances) {
+template <typename D>
+void pprint_distances(DistanceMatrix<D> &distances) {
     std::cout << "Distance matrix: " << std::endl;
     // for each connected component
     // make square matrix to console
