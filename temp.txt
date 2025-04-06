@@ -71,7 +71,6 @@ void example1() {
 }
 
 
-
 https://stackoverflow.com/questions/31053360/find-the-shortest-path-with-floyd-algorithm
 
 
@@ -97,3 +96,42 @@ void Floyd_Warshal(int graph[Nodes][Nodes], int D[Nodes][Nodes])
         }
     }
 }
+
+
+
+        # sample some parent/ancestor vertices
+        alpha = 0.5
+        in_degrees = np.array([alpha + len(vertex.parents) for vertex in vertices[:max_num_vertices]])
+        out_degrees = np.array([alpha + len(vertex.children) for vertex in vertices[:max_num_vertices]])
+        for i in range(cur, max_num_vertices):
+            # sample the number of child and parent vertices
+            num_children = self.rng.integers(0, self.max_num_parents)
+            num_parents = self.rng.integers(0 if num_children != 0 else 1, self.max_num_parents)
+            num_children = min(num_children, i)
+            num_parents = min(num_parents, i)
+
+            # sample the children of this new node
+            probabilities = in_degrees[:cur].copy()
+            probabilities /= np.sum(probabilities)
+            for child_id in np.random.choice(cur, num_children, replace=False, p=probabilities):
+                vertices[cur].children.append(vertices[child_id])
+                vertices[child_id].parents.append(vertices[cur])
+                in_degrees[child_id] += 1
+
+            # to avoid creating a cycle, we have to remove any descendants from the possible parents
+            descendants = self.get_descendants(vertices[cur])
+            probabilities = out_degrees[:cur].copy()
+
+            for descendant in descendants:
+                probabilities[descendant.id] = 0
+            total_probability = np.sum(probabilities)
+            if total_probability != 0.0:
+                probabilities /= total_probability
+                num_parents = min(num_parents, cur - len(descendants))
+
+                # sample the parents of this new node
+                for parent_id in np.random.choice(cur, num_parents, replace=False, p=probabilities):
+                    vertices[parent_id].children.append(vertices[i])
+                    vertices[i].parents.append(vertices[parent_id])
+                    out_degrees[parent_id] += 1
+            cur += 1

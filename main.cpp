@@ -168,6 +168,8 @@ int main(){
 
     unsigned int seed = std::random_device{}();
     cout << "Seed: " << seed << endl;
+    // seed = 2871693314;
+    // seed = 2564846737;
 
     std::mt19937 gen(seed);
 
@@ -183,7 +185,7 @@ int main(){
 
     // path_star_generator(dg_ptr, ddistances_ptr, 6, 6, 5, 6, gen, false);
 
-    balanced_generator(dg_ptr, ddistances_ptr, 25, gen, 7);
+    balanced_generator(dg_ptr, ddistances_ptr, 37, gen, 7, 5);
 
     if ( dg_ptr ) {
         cout << "Graph has " << num_vertices(*dg_ptr) << " vertices and " << num_edges(*dg_ptr) << " edges " << endl;
