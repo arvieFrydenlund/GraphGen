@@ -261,20 +261,8 @@ inline int balanced_generator(unique_ptr<Graph<boost::directedS>> &g_ptr,
         }
     }
 
-    /*
-    children = get_children(g_ptr);
-    parents = get_parents(children);
-    for (int i = 0; i < num_vertices(*g_ptr); i++) {
-        cout << "Node " << i;
-        for (int c : children[i]) {
-            cout << " child " << c;
-        }
-        for (int p : parents[i]) {
-            cout << " parent " << p;
-        }
-        cout << endl;
-    }
-     */
+
+
 
 
     return 0;
