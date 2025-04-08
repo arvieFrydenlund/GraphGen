@@ -107,12 +107,10 @@ template <typename D>
 
 
 template <typename D>
-int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, bool verbose = false) {
+int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weight_pmap, bool verbose = false) {
     // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
 
-    const WeightMap<D> weight_pmap = boost::get(boost::edge_weight, g);
     DistanceMatrixMap<D> dm(distances, g);
-
     bool valid = floyd_warshall_all_pairs_shortest_paths(g, dm, boost::weight_map(weight_pmap));
 
     if (!valid) {
@@ -139,28 +137,38 @@ int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, bool verbose = fal
 
 
 template <typename D>
-int floyd_warshall_frydenlund(Graph<D> &g, DistanceMatrix<D> &distances, bool verbose = false) {
+int floyd_warshall_frydenlund(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weight_pmap, bool verbose = false) {
     return 1;
 }
 
 template <typename D>
-void pprint_distances(DistanceMatrix<D> &distances) {
+void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N) {
+    // cant figure out the damn shape of the distance matrix
+    // so just pass in the size, sigh
+    auto distances = *distances_ptr;
     std::cout << "Distance matrix: " << std::endl;
-    // for each connected component
-    // make square matrix to console
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = i; j < N; ++j) {
+            if(distances[i][j] > 100000)
+                std::cout << "inf " << std::endl;
+            else
+                std::cout << distances[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
 
 }
 
 template <typename D>
-int get_distances(unique_ptr<Graph<D>>
-    &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool is_casual = false, bool verbose = false) {
+int get_distances(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr,
+    const bool is_casual = false, bool verbose = false) {
 
     distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
-    auto distances = *distances_ptr.get();
+    auto weight_pmap = make_edge_weights(*g_ptr, false);
     if ( is_casual ) {
-        return floyd_warshall_frydenlund(*g_ptr, distances, verbose);
+        return floyd_warshall_frydenlund(*g_ptr, *distances_ptr, weight_pmap, verbose);
     }
-    return floyd_warshall(*g_ptr, distances, verbose);
+    return floyd_warshall(*g_ptr, *distances_ptr, weight_pmap, verbose);
 }
 
 
@@ -172,7 +180,7 @@ inline int erdos_renyi_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
     }
 
     g_ptr = make_unique<Graph<boost::undirectedS>>(ERGen(gen, num_nodes, p), ERGen(), num_nodes);
-    make_edge_weights(*g_ptr, verbose);
+
 
     if (verbose) {
         cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges " << p << " p" << endl;
@@ -195,8 +203,13 @@ inline int erdos_renyi_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
                 boost::add_edge(v1, v2, *g_ptr);
             }
         }
+        //cout << "Number of connected components: " << component_map.size() << endl;
         component_map = get_connected_components_map(*g_ptr, verbose);  // remake connected components
     }
+
+    // component_map = get_connected_components_map(*g_ptr, verbose);
+    //cout << "Number of connected components: " << component_map.size() << endl;
+
     return 0;
 }
 

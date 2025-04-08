@@ -6,3 +6,9 @@
 #define DATA_GEN_H
 
 #endif //DATA_GEN_H
+
+
+#include "undirected_graphs.h"
+#include "directed_graphs.h"
+
+
