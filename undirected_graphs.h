@@ -107,11 +107,13 @@ template <typename D>
 
 
 template <typename D>
-int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weight_pmap, bool verbose = false) {
+int floyd_warshall(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool verbose = false) {
     // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
 
-    DistanceMatrixMap<D> dm(distances, g);
-    bool valid = floyd_warshall_all_pairs_shortest_paths(g, dm, boost::weight_map(weight_pmap));
+    distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
+    auto weight_pmap = make_edge_weights(*g_ptr, false);
+    DistanceMatrixMap<D> dm(*distances_ptr, *g_ptr);
+    bool valid = floyd_warshall_all_pairs_shortest_paths(*g_ptr, dm, boost::weight_map(weight_pmap));
 
     if (!valid) {
         if (verbose) {
@@ -121,13 +123,13 @@ int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weig
     }
     if (verbose) {
         std::cout << "Distance matrix: " << std::endl;
-        for (std::size_t i = 0; i < num_vertices(g); ++i) {
-            for (std::size_t j = i; j < num_vertices(g); ++j) {
+        for (std::size_t i = 0; i < num_vertices(*g_ptr); ++i) {
+            for (std::size_t j = i; j < num_vertices(*g_ptr); ++j) {
                 std::cout << "From vertex " << i+1 << " to " << j+1 << " : ";
-                if(distances[i][j] > 100000)
+                if((*distances_ptr)[i][j] > 100000)
                     std::cout << "inf" << std::endl;
                 else
-                    std::cout << distances[i][j] << std::endl;
+                    std::cout << (*distances_ptr)[i][j] << std::endl;
             }
             std::cout << std::endl;
         }
@@ -135,24 +137,58 @@ int floyd_warshall(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weig
     return 0;
 }
 
-
 template <typename D>
-int floyd_warshall_frydenlund(Graph<D> &g, DistanceMatrix<D> &distances, WeightMap<D> &weight_pmap, bool verbose = false) {
+int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr, unique_ptr<vector<vector<int>>> &distances_ptr,
+                              unique_ptr<vector<vector<int>>> &ground_truths_ptr, vector<pair<int, int>> &edge_list,
+                              bool verbose = false);
+
+template <>
+int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
+                                                  unique_ptr<vector<vector<int>>> &distances_ptr,
+                                                  unique_ptr<vector<vector<int>>> &ground_truths_ptr,
+                                                  vector<pair<int, int>> &edge_list, bool verbose) {
+  // other verson that uses numpy edge list in py_bindings
+  // assume edge weights of 1, no need to make them unlike boost
+  	auto N = num_vertices(*g_ptr);
+    auto E = num_edges(*g_ptr);
+    int inf = std::numeric_limits<int>::max();
+    distances_ptr = make_unique<vector<vector<int>>>(N, vector<int>(N, inf));
+    ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, inf));
+    for (int i = 0; i < N; i++) {  // initialize distance matrix
+        (*distances_ptr)[i][i] = 0;
+    }
+    for (int t = 0; t < E; t++) {  // stream edges as pivot
+    	auto node_i = edge_list[t].first;
+        auto node_j = edge_list[t].second;
+        (*distances_ptr)[node_i][node_j] = 1;  // add new edge
+        (*distances_ptr)[node_j][node_i] = 1;
+        for (int ki = 0; ki < N; ki++) {
+            for (int kj = 0; kj < N; kj++) {
+            	auto d = (*distances_ptr)[ki][node_i] + 1 + (*distances_ptr)[node_j][kj];
+            	if ( (*distances_ptr)[ki][kj] > d ){
+                	(*distances_ptr)[ki][kj] = d;
+                	(*distances_ptr)[kj][ki] = d;
+            	}
+            }
+        }
+        // copy current distances to ground truths for node i in edge t after observing <=t edges
+        for (int i = 0; i < N; i++) {
+            (*ground_truths_ptr)[t][i] = (*distances_ptr)[node_i][i];  // edge_i, makes more sense for directed verson
+        }
+    }
     return 1;
 }
 
 template <typename D>
 void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N);
 
-
 template<>
 inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, int N) {
-    // cant figure out the damn shape of the distance matrix
-    // so just pass in the size, sigh
+    // cant figure out the damn shape of the distance matrix, so just pass in the size, sigh
     auto distances = *distances_ptr;
     std::cout << "Distance matrix: " << std::endl;
     for (std::size_t i = 0; i < N; ++i) {
-        for (std::size_t j = i; j < N; ++j) {
+        for (std::size_t j = i; j < N; ++j) {  // triangular matrix only
             if(distances[i][j] > 100000)
                 std::cout << "inf " << std::endl;
             else
@@ -160,21 +196,6 @@ inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost:
         }
         std::cout << std::endl;
     }
-}
-
-
-
-
-template <typename D>
-int get_distances(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr,
-    const bool is_casual = false, bool verbose = false) {
-
-    distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
-    auto weight_pmap = make_edge_weights(*g_ptr, false);
-    if ( is_casual ) {
-        return floyd_warshall_frydenlund(*g_ptr, *distances_ptr, weight_pmap, verbose);
-    }
-    return floyd_warshall(*g_ptr, *distances_ptr, weight_pmap, verbose);
 }
 
 
@@ -212,10 +233,8 @@ inline int erdos_renyi_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
         //cout << "Number of connected components: " << component_map.size() << endl;
         component_map = get_connected_components_map(*g_ptr, verbose);  // remake connected components
     }
-
     // component_map = get_connected_components_map(*g_ptr, verbose);
     //cout << "Number of connected components: " << component_map.size() << endl;
-
     return 0;
 }
 
