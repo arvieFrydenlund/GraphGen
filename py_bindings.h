@@ -6,7 +6,8 @@
 #define PY_BINDINGS_H
 
 #include <iostream>
-#include <python3.11/Python.h>
+// #include <python3.11/Python.h>
+#include <Python.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
@@ -27,21 +28,20 @@ using namespace py::literals;
 static const py::bool_ py_true(true);
 
 inline unsigned int seed = std::random_device{}();
-static thread_local std::mt19937 gen = std::mt19937(seed);
+static thread_local auto gen = std::mt19937(seed);  // so each thread in the dataloader is different
 
 
 inline unsigned int get_seed() {
     return seed;
 }
 
-
-inline void set_seed(unsigned int new_seed) {
+inline void set_seed(const unsigned int new_seed) {
     gen.seed(new_seed);
     seed = new_seed;
 }
 
 
-py::dict return_dict_test(){
+inline py::dict return_dict_test(){  // example code
     py::dict d;
     d["a"] = py::none();
     d["b"] = 2;
@@ -66,13 +66,11 @@ int get_edge_list(unique_ptr<Graph<D>> &g_ptr, unique_ptr<vector<pair<int, int>>
 
 template<typename D>
 py::array_t<int, py::array::c_style> get_edge_list_np(unique_ptr<Graph<D>> &g_ptr) {
-
     const size_t N = num_edges(*g_ptr);
     constexpr size_t M = 2;
     py::array_t<int, py::array::c_style> arr({N, M});
     auto ra = arr.mutable_unchecked();
     typename boost::graph_traits<Graph<D>>::edge_iterator ei, ei_end;
-
     int cur = 0;
     for (boost::tie(ei, ei_end) = boost::edges(*g_ptr); ei != ei_end; ++ei) {
         const auto i = source(*ei, *g_ptr);
@@ -101,7 +99,6 @@ py::array_t<int, py::array::c_style> get_node_list_np(unique_ptr<Graph<D>> &g_pt
     py::array_t<int, py::array::c_style> arr({N});
     auto ra = arr.mutable_unchecked();
     typename boost::graph_traits<Graph<D>>::vertex_iterator vi, vi_end;
-
     int cur = 0;
     for (boost::tie(vi, vi_end) = boost::vertices(*g_ptr); vi != vi_end; ++vi) {
         ra(cur) = *vi;
@@ -134,10 +131,9 @@ void print_np(py::array_t<T, py::array::c_style> arr) {
 
 
 template <typename D>
-py::array_t<int, py::array::c_style> convert_distance(unique_ptr<DistanceMatrix<D>> &distances_ptr,
+py::array_t<int, py::array::c_style> convert_distance(unique_ptr<DistanceMatrix<D>> &distances_ptr, const int N,
     const bool is_causal = false, const bool full = false) {
 
-    const size_t N = sizeof((*distances_ptr)[0]);
     py::array_t<int, py::array::c_style> arr({N, N});
     if ( is_causal ) {
         // convert to full distance matrix
@@ -160,6 +156,11 @@ py::array_t<int, py::array::c_style> convert_distance(unique_ptr<DistanceMatrix<
 
 inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
     const bool is_causal = false, const bool full = false, const bool shuffle = false) {
+    /*
+    * Do shuffle during copy to arrays, note shuffle only needed when learning a fixed vocabulary.
+    * Shuffle for erdos_renyi and euclidean graphs not needed due to randomness
+    * 'Shuffle' for path_star and balanced graphs is already done, just not past the number of nodes in graph.
+     */
 
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
@@ -169,7 +170,7 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     print_distances<boost::undirectedS>(distances_ptr, num_vertices(*g_ptr));
 
     //auto edge_list = get_edge_list_np(g_ptr);
-    //auto distances = convert_distance<boost::undirectedS>(distances_ptr, is_causal, full);
+    //auto distances = convert_distance<boost::undirectedS>(distances_ptr, num_vertices(*g_ptr), is_causal, full);
     // print_np(edge_list);
     // auto node_list = get_node_list_np(g_ptr);
     // print_np(node_list);
@@ -180,6 +181,12 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
 
     return d;
 
+}
+
+
+PYBIND11_MODULE(generator, m) {
+    m.def("erdos_renyi", &erdos_renyi);
+    m.def("set_seed", &set_seed);
 }
 
 

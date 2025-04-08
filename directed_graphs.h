@@ -27,7 +27,8 @@ using namespace std;
 typedef pair<int, int> start_end_pair;
 
 
-inline void print_distances(unique_ptr<DistanceMatrix<Graph<boost::directedS>>> &distances_ptr, int N) {
+template<>
+inline void print_distances<boost::directedS>(unique_ptr<DistanceMatrix<boost::directedS>> &distances_ptr, int N) {
     // cant figure out the damn shape of the distance matrix
     // so just pass in the size, sigh
     auto distances = *distances_ptr;
