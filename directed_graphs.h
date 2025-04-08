@@ -27,6 +27,23 @@ using namespace std;
 typedef pair<int, int> start_end_pair;
 
 
+inline void print_distances(unique_ptr<DistanceMatrix<Graph<boost::directedS>>> &distances_ptr, int N) {
+    // cant figure out the damn shape of the distance matrix
+    // so just pass in the size, sigh
+    auto distances = *distances_ptr;
+    std::cout << "Distance matrix: " << std::endl;
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < N; ++j) {
+            if(distances[i][j] > 100000)
+                std::cout << "inf " << std::endl;
+            else
+                std::cout << distances[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
+}
+
+
 inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::directedS>> &g_ptr,
                                                const vector<int> &node_ids, const vector<int> &reverse_node_ids) {
   /*

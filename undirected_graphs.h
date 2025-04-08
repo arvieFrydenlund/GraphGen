@@ -141,8 +141,8 @@ int floyd_warshall_frydenlund(Graph<D> &g, DistanceMatrix<D> &distances, WeightM
     return 1;
 }
 
-template <typename D>
-void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N) {
+
+inline void print_distances(unique_ptr<DistanceMatrix<Graph<boost::undirectedS>>> &distances_ptr, int N) {
     // cant figure out the damn shape of the distance matrix
     // so just pass in the size, sigh
     auto distances = *distances_ptr;
@@ -156,7 +156,6 @@ void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N) {
         }
         std::cout << std::endl;
     }
-
 }
 
 template <typename D>
