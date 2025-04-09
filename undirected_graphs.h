@@ -59,12 +59,12 @@ using DistanceMatrixMap = typename DistanceProperty<D>::matrix_map_type;
 
 template<typename T>
 void print_matrix(T &matrix_ptr, const int N, const int M,
-    bool full, const int cutoff = 100000) {
+    bool full, const int cutoff = 100000, const string max_value = "inf") {
     // cant figure out the damn shape of the distance matrix, so just pass in the size, sigh
     for (std::size_t i = 0; i < N; ++i) {
         for (std::size_t j = (full) ? 0 : i; j < M; ++j) {  // triangular matrix only if not full
-            if((*matrix_ptr)[i][j] >= cutoff)
-                std::cout << "inf " << std::endl;
+            if(cutoff > 0 && (*matrix_ptr)[i][j] >= cutoff)
+                std::cout << max_value << " ";
             else
                 std::cout << (*matrix_ptr)[i][j] << " ";
         }
@@ -260,10 +260,9 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
     // uniformly generates num_nodes points in dim
     std::uniform_real_distribution<float> distr(0, 1);
     positions_ptr = make_unique<vector<vector<float>>>(num_nodes, vector<float>(dim));
-    auto positions = *positions_ptr.get();
     for (int i = 0; i < num_nodes; i++) {
         for (int j = 0; j < dim; j++) {
-            positions[i][j] = distr(gen);
+            (*positions_ptr)[i][j] = distr(gen);
         }
     }
 
@@ -272,7 +271,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
         for (int j = i+1; j < num_nodes; j++) {
             float dist = 0;
             for (int k = 0; k < dim; k++) {
-                dist += pow(positions[i][k] - positions[j][k], 2);
+                dist += pow((*positions_ptr)[i][k] - (*positions_ptr)[j][k], 2);
             }
             dist = sqrt(dist);
             if ( dist < radius ) {
@@ -285,7 +284,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
         for (int i = 0; i < num_nodes; i++) {
             cout << "Node " << i << " : ";
             for (int j = 0; j < dim; j++) {
-                cout << positions[i][j] << " ";
+                cout << (*positions_ptr)[i][j] << " ";
             }
             // edges
             cout << "Edges: ";
@@ -311,7 +310,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
                     for (int v : component_map[j]) {
                         float distance = 0;
                         for (int k = 0; k < dim; k++) {
-                            distance += pow(positions[u][k] - positions[v][k], 2);
+                            distance += pow((*positions_ptr)[u][k] - (*positions_ptr)[v][k], 2);
                         }
                         distance = sqrt(distance);
                         if ( distance < get<2>(closest_in_component) ) {

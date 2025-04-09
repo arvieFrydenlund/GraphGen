@@ -12,7 +12,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
-#include "data_gen.h"
 
 /*
 import pybind11;
@@ -38,19 +37,6 @@ inline unsigned int get_seed() {
 inline void set_seed(const unsigned int seed = 0) {
     gen.seed(seed);
     seed_ = seed;
-}
-
-
-inline py::dict return_dict_test(){  // example code, delete
-    py::dict d;
-    d["a"] = py::none();
-    d["b"] = 2;
-    for (auto item : d)
-    {
-        std::cout << "key: " << item.first << ", value=" << item.second << std::endl;
-    };
-    cout << endl;
-    return d;
 }
 
 
@@ -149,15 +135,19 @@ py::array_t<int, py::array::c_style> get_edge_list_np(unique_ptr<Graph<D>> &g_pt
 }
 
 
-template <typename T>
-py::array_t<int, py::array::c_style> convert_matrix(unique_ptr<T> &matrix_ptr,
-                                                    const int N, const int M) {
+template <typename T, typename D>
+py::array_t<D, py::array::c_style> convert_matrix(unique_ptr<T> &matrix_ptr,
+                                                    const int N, const int M, D cuttoff = 100000, D max_value = -1) {
     // distances are in node order so just copy them to the array
-    py::array_t<int, py::array::c_style>  arr = py::array_t<int, py::array::c_style>({N, M});
+    py::array_t<D, py::array::c_style>  arr = py::array_t<D, py::array::c_style>({N, M});
     auto ra = arr.mutable_unchecked();
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < M; j++) {
-            ra(i, j) = (*matrix_ptr)[i][j];
+            if (cuttoff > 0 && (*matrix_ptr)[i][j] >= cuttoff) {
+                ra(i, j) = max_value;
+            } else {
+                ra(i, j) = (*matrix_ptr)[i][j];
+            }
         }
     }
     return arr;
@@ -165,45 +155,44 @@ py::array_t<int, py::array::c_style> convert_matrix(unique_ptr<T> &matrix_ptr,
 
 template <typename D>
 py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
-                 const bool is_causal = false, const bool full = false, const bool shuffle = false){
+                            const bool is_causal = false,
+                            const bool return_full = false,
+                            const bool shuffle_edges = false) {
 
 	const auto N = num_vertices(*g_ptr);
     const auto E = num_edges(*g_ptr);
 
     unique_ptr<DistanceMatrix<boost::undirectedS>> distances_ptr;
     floyd_warshall(g_ptr, distances_ptr, false);
-    print_matrix(distances_ptr, N, N, true);
+    print_matrix(distances_ptr, N, N, true, 100000, " ");
+    auto original_distances = convert_matrix<DistanceMatrix<boost::undirectedS>, int>(distances_ptr, N, N);
 
-
-
-    auto shuffle_map = get_shuffle_map(E, shuffle);  // just range if no shuffle
+    auto shuffle_map = get_shuffle_map(E, shuffle_edges);  // just range if no shuffle
     auto edge_list = get_edge_list(g_ptr, shuffle_map);
 
     unique_ptr<vector<vector<int>>> distances_ptr2;
     unique_ptr<vector<vector<int>>> ground_truths_ptr;
-
     floyd_warshall_frydenlund(g_ptr, distances_ptr2, ground_truths_ptr, edge_list, false);
-    print_matrix(distances_ptr2, N, N, true);
-    print_matrix(ground_truths_ptr, E, N, true);
+    print_matrix(distances_ptr2, N, N, true, 100000, " ");
+    // print_matrix(ground_truths_ptr, E, N, true);
 
-    auto distances = convert_matrix(distances_ptr2, N, N);
-    print_np(distances, true);
-
-
-    // auto distances = convert_distance<boost::undirectedS>(distances_ptr, N, E, shuffle_map, edge_list, is_causal, full);
-    // print_np(edge_list);
-    // auto node_list = get_node_list_np(g_ptr);
-    // print_np(node_list);
+    auto distances = convert_matrix<vector<vector<int>>, int>(distances_ptr2, N, N);
+    auto ground_truths = convert_matrix<vector<vector<int>>, int>(ground_truths_ptr, E, N);
+    // print_np(distances, true);
 
     py::dict d;
-    d["edge_list"] = 1; //edge_list;
-    d["distances"] = 1; //distances;
+    // d["edge_list"] = 1; //edge_list;
+    d["original_distances"] = original_distances;
+    d["distances"] = distances;
+    d["ground-truths"] = ground_truths;
+
     return d;
 }
 
+inline const string erdos_renyi_doc_string("TODO");
 
 inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
-    const bool is_causal = false, const bool full = false, const bool shuffle = false) {
+    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
     /*
 	* Expose generation to python
 	* Notes:
@@ -211,20 +200,52 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     * Actually just do this once data is on gpu?  Issue is if vocab is too large, then pushing lots of data to gpu
     * Shuffle for erdos_renyi and euclidean graphs not needed due to randomness
     * 'Shuffle' for path_star and balanced graphs is already done, just not past the number of nodes in graph.
-    *
-    * Now shuffle means to just shuffle edge list
      */
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
-    return package_for_python(g_ptr, is_causal, full, shuffle);
+    return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+}
+
+inline const string euclidian_doc_string("TODO");
+
+inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0,
+                          const int c_min = 75, const int c_max = 125,
+    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
+    /*
+     */
+    unique_ptr<Graph<boost::undirectedS>> g_ptr;
+    unique_ptr<vector<vector<float>>> positions_ptr;
+    euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
+    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+
+    // print_matrix(positions_ptr, num_vertices(*g_ptr), 2, true);
+    auto positions = convert_matrix<vector<vector<float>>, float>(positions_ptr, num_vertices(*g_ptr), 2);
+    d["positions"] = positions;
+    return d;
+}
+
+inline const string path_star_doc_string("TODO");
+
+inline py::dict path_star(const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
+    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
+    /*
+     *
+     */
+    unique_ptr<Graph<boost::directedS>> g_ptr;
+    path_star_generator(g_ptr,  min_num_arms, max_num_arms, min_arm_length,max_arm_length, gen, false);
+    return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
 }
 
 
 PYBIND11_MODULE(generator, m) {
   	m.doc() = "Graph generation module"; // optional module docstring
-    m.def("erdos_renyi", &erdos_renyi);
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
+
+    m.def("erdos_renyi", &erdos_renyi); // erdos_renyi_doc_string);
+    m.def("euclidian", &euclidian); // euclidian_doc_string);
+    m.def("path_star", &path_star); // path_star_doc_string);
+
 }
 
 

@@ -17,7 +17,6 @@
 
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
-#include "data_gen.h"
 #include "py_bindings.h"
 #include <pybind11/embed.h>
 
@@ -122,6 +121,15 @@ void test_pybind(string graph_type = "erdos_renyi") {
     if ( graph_type == "erdos_renyi" ) {
         d = erdos_renyi(15, -1.0, 75, 125, false, false);
 
+    } else if ( graph_type == "euclidian" ) {
+        d = euclidian(15, 2, -1.0, 75, 125, false, false);
+    } else if ( graph_type == "path_star" ) {
+        d = path_star(6, 6, 5, 6, false, false);
+    } else if ( graph_type == "balanced" ) {
+        // d = balanced(37, 7, 5);
+    } else {
+        cout << "Unknown graph type: " << graph_type << endl;
+        return;
     }
 
     // print the dict
@@ -151,7 +159,11 @@ int main(){
     // cout << "Dict: " << &d << endl;
 
 
-    test_pybind("erdos_renyi");
+    //test_pybind("erdos_renyi");
+
+    // test_pybind("euclidian");
+
+    test_pybind("path_star");
 
 
 
