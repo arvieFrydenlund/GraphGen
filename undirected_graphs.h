@@ -21,6 +21,9 @@
 #include <vector>
 #include <memory>
 
+/*
+ * Undirected graphs and utils, read before directed_graphs.h and py_bindings.h
+ */
 
 using namespace std;
 
@@ -53,6 +56,22 @@ using DistanceMatrix = typename DistanceProperty<D>::matrix_type;
 template <typename D>
 using DistanceMatrixMap = typename DistanceProperty<D>::matrix_map_type;
 
+
+template<typename T>
+void print_matrix(T &matrix_ptr, const int N, const int M,
+    bool full, const int cutoff = 100000) {
+    // cant figure out the damn shape of the distance matrix, so just pass in the size, sigh
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = (full) ? 0 : i; j < M; ++j) {  // triangular matrix only if not full
+            if((*matrix_ptr)[i][j] >= cutoff)
+                std::cout << "inf " << std::endl;
+            else
+                std::cout << (*matrix_ptr)[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
 
 template<typename T>
 vector<T> list_to_vector(list<T> &l) {  // convert list to vector
@@ -109,44 +128,24 @@ template <typename D>
 template <typename D>
 int floyd_warshall(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool verbose = false) {
     // https://stackoverflow.com/questions/26855184/floyd-warshall-all-pairs-shortest-paths-on-weighted-undirected-graph-boost-g
-
     distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
     auto weight_pmap = make_edge_weights(*g_ptr, false);
     DistanceMatrixMap<D> dm(*distances_ptr, *g_ptr);
     bool valid = floyd_warshall_all_pairs_shortest_paths(*g_ptr, dm, boost::weight_map(weight_pmap));
 
-    if (!valid) {
-        if (verbose) {
-            std::cerr << "Error - Negative cycle in matrix" << std::endl;
-        }
+    if (!valid && verbose) {
+        std::cerr << "Error - Negative cycle in matrix" << std::endl;
         return -1;
     }
-    if (verbose) {
-        std::cout << "Distance matrix: " << std::endl;
-        for (std::size_t i = 0; i < num_vertices(*g_ptr); ++i) {
-            for (std::size_t j = i; j < num_vertices(*g_ptr); ++j) {
-                std::cout << "From vertex " << i+1 << " to " << j+1 << " : ";
-                if((*distances_ptr)[i][j] > 100000)
-                    std::cout << "inf" << std::endl;
-                else
-                    std::cout << (*distances_ptr)[i][j] << std::endl;
-            }
-            std::cout << std::endl;
-        }
-    }
-    return 0;
+    return valid;
 }
 
-template <typename D>
-int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr, unique_ptr<vector<vector<int>>> &distances_ptr,
-                              unique_ptr<vector<vector<int>>> &ground_truths_ptr, vector<pair<int, int>> &edge_list,
-                              bool verbose = false);
 
-template <>
-inline int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
-                                                         unique_ptr<vector<vector<int>>> &distances_ptr,
-                                                         unique_ptr<vector<vector<int>>> &ground_truths_ptr,
-                                                         vector<pair<int, int>> &edge_list, bool verbose) {
+template <typename D>
+inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
+                                     unique_ptr<vector<vector<int>>> &distances_ptr,
+                                     unique_ptr<vector<vector<int>>> &ground_truths_ptr,
+                                     vector<pair<int, int>> &edge_list, bool verbose) {
     // other version that uses numpy edge list in py_bindings
     // assume edge weights of 1, no need to make them unlike boost
   	auto N = num_vertices(*g_ptr);
@@ -156,30 +155,32 @@ inline int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost:
     ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
 
     auto connected_components = vector(N, set<int>());
-    for (int i = 0; i < N; i++) {  // initialize distance matrix
+    for (int i = 0; i < N; i++) {  // initialize distance matrix and connected components
         (*distances_ptr)[i][i] = 0;
         connected_components[i].insert(i);
     }
-    for (int t = 0; t < E; t++) {  // stream edges as pivot
+    for (int t = 0; t < E; t++) {  // stream edges as pivot instead of nodes
     	auto node_i = edge_list[t].first;
         auto node_j = edge_list[t].second;
         if (node_i == node_j) {
             continue;  // skip self loops
         }
         (*distances_ptr)[node_i][node_j] = 1;  // add new edge
-        (*distances_ptr)[node_j][node_i] = 1;
+        if (std::is_same<D, boost::undirectedS>::value) {
+            (*distances_ptr)[node_j][node_i] = 1;  // add new edge for undirected graph
+        }
         // update distances
-        //for (int ki = 0; ki < N; ki++) {  // slower
-        for (int ki : connected_components[node_i]) {
-            //for (int kj = 0; kj < N; kj++) {  // slower
-            for (int kj : connected_components[node_j]) {
+        for (int ki : connected_components[node_i]) {  //for (int ki = 0; ki < N; ki++) {  // slower
+            for (int kj : connected_components[node_j]) {  //for (int kj = 0; kj < N; kj++) {  // slower
             	auto d = (*distances_ptr)[ki][node_i] + 1 + (*distances_ptr)[node_j][kj];
             	if ( (*distances_ptr)[ki][kj] > d ){
                 	(*distances_ptr)[ki][kj] = d;
-                	(*distances_ptr)[kj][ki] = d;
+                    if (std::is_same<D, boost::undirectedS>::value) {
+                		(*distances_ptr)[kj][ki] = d;  // update distance for undirected graph
+                    }
             	}
             }
-            // merge connected components
+            // merge connected components, note this is for undirected and could be made faster for directed
             connected_components[node_i].insert(connected_components[node_j].begin(), connected_components[node_j].end());
             for (auto k : connected_components[node_i]) {
                 if (k != node_i) {
@@ -198,39 +199,6 @@ inline int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost:
         }
     }
     return 1;
-}
-
-template <typename D>
-void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N, bool full = true);
-
-template<>
-inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, int N,
-    bool full) {
-    // cant figure out the damn shape of the distance matrix, so just pass in the size, sigh
-    auto distances = *distances_ptr;
-    std::cout << "Distance matrix: " << std::endl;
-    for (std::size_t i = 0; i < N; ++i) {
-        for (std::size_t j = (full) ? 0 : i; j < N; ++j) {  // triangular matrix only if not full
-            if(distances[i][j] > 100000)
-                std::cout << "inf " << std::endl;
-            else
-                std::cout << distances[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-
-template <typename D>
-void print_distances(unique_ptr<vector<vector<D>>> &M) {
-    for (auto i : *M) {
-        for (auto j : i) {
-            std::cout << j << " ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
 }
 
 
