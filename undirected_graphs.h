@@ -143,52 +143,74 @@ int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr, unique_ptr<vector<vec
                               bool verbose = false);
 
 template <>
-int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
-                                                  unique_ptr<vector<vector<int>>> &distances_ptr,
-                                                  unique_ptr<vector<vector<int>>> &ground_truths_ptr,
-                                                  vector<pair<int, int>> &edge_list, bool verbose) {
-  // other verson that uses numpy edge list in py_bindings
-  // assume edge weights of 1, no need to make them unlike boost
+inline int floyd_warshall_frydenlund<boost::undirectedS>(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
+                                                         unique_ptr<vector<vector<int>>> &distances_ptr,
+                                                         unique_ptr<vector<vector<int>>> &ground_truths_ptr,
+                                                         vector<pair<int, int>> &edge_list, bool verbose) {
+    // other version that uses numpy edge list in py_bindings
+    // assume edge weights of 1, no need to make them unlike boost
   	auto N = num_vertices(*g_ptr);
     auto E = num_edges(*g_ptr);
-    int inf = std::numeric_limits<int>::max();
+    int inf = std::numeric_limits<int>::max() / 8;  // careful because we add max + 1 + max -> overflow
     distances_ptr = make_unique<vector<vector<int>>>(N, vector<int>(N, inf));
-    ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, inf));
+    ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
+
+    auto connected_components = vector(N, set<int>());
     for (int i = 0; i < N; i++) {  // initialize distance matrix
         (*distances_ptr)[i][i] = 0;
+        connected_components[i].insert(i);
     }
     for (int t = 0; t < E; t++) {  // stream edges as pivot
     	auto node_i = edge_list[t].first;
         auto node_j = edge_list[t].second;
+        if (node_i == node_j) {
+            continue;  // skip self loops
+        }
         (*distances_ptr)[node_i][node_j] = 1;  // add new edge
         (*distances_ptr)[node_j][node_i] = 1;
-        for (int ki = 0; ki < N; ki++) {
-            for (int kj = 0; kj < N; kj++) {
+        // update distances
+        //for (int ki = 0; ki < N; ki++) {  // slower
+        for (int ki : connected_components[node_i]) {
+            //for (int kj = 0; kj < N; kj++) {  // slower
+            for (int kj : connected_components[node_j]) {
             	auto d = (*distances_ptr)[ki][node_i] + 1 + (*distances_ptr)[node_j][kj];
             	if ( (*distances_ptr)[ki][kj] > d ){
                 	(*distances_ptr)[ki][kj] = d;
                 	(*distances_ptr)[kj][ki] = d;
             	}
             }
+            // merge connected components
+            connected_components[node_i].insert(connected_components[node_j].begin(), connected_components[node_j].end());
+            for (auto k : connected_components[node_i]) {
+                if (k != node_i) {
+                    // delete old connected component?
+                    connected_components[k] = connected_components[node_i];  // add new connected component as same set
+                }
+            }
         }
-        // copy current distances to ground truths for node i in edge t after observing <=t edges
+        // copy current distances to ground truths for node i in edge t after observing <= t edges
         for (int i = 0; i < N; i++) {
-            (*ground_truths_ptr)[t][i] = (*distances_ptr)[node_i][i];  // edge_i, makes more sense for directed verson
+            if ((*distances_ptr)[node_i][i] >= inf) {
+                (*ground_truths_ptr)[t][i] = -1;
+            } else {
+                (*ground_truths_ptr)[t][i] = (*distances_ptr)[node_i][i];  // edge_i, makes more sense for directed
+            }
         }
     }
     return 1;
 }
 
 template <typename D>
-void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N);
+void print_distances(unique_ptr<DistanceMatrix<D>> &distances_ptr, int N, bool full = true);
 
 template<>
-inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, int N) {
+inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost::undirectedS>> &distances_ptr, int N,
+    bool full) {
     // cant figure out the damn shape of the distance matrix, so just pass in the size, sigh
     auto distances = *distances_ptr;
     std::cout << "Distance matrix: " << std::endl;
     for (std::size_t i = 0; i < N; ++i) {
-        for (std::size_t j = i; j < N; ++j) {  // triangular matrix only
+        for (std::size_t j = (full) ? 0 : i; j < N; ++j) {  // triangular matrix only if not full
             if(distances[i][j] > 100000)
                 std::cout << "inf " << std::endl;
             else
@@ -196,6 +218,19 @@ inline void print_distances<boost::undirectedS>(unique_ptr<DistanceMatrix<boost:
         }
         std::cout << std::endl;
     }
+    std::cout << std::endl;
+}
+
+
+template <typename D>
+void print_distances(unique_ptr<vector<vector<D>>> &M) {
+    for (auto i : *M) {
+        for (auto j : i) {
+            std::cout << j << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 
@@ -227,6 +262,9 @@ inline int erdos_renyi_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
                 vector<int> c2 = list_to_vector(component_map[j]);
                 uniform_int_distribution<int> d2(0, c2.size() - 1);
                 int v2 = c2[d2(gen)];
+                if (v1 == v2) {
+                    continue;  // skip self loops
+                }
                 boost::add_edge(v1, v2, *g_ptr);
             }
         }

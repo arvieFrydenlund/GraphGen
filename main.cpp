@@ -120,7 +120,7 @@ void test_pybind(string graph_type = "erdos_renyi") {
     py::dict d;
 
     if ( graph_type == "erdos_renyi" ) {
-        d = erdos_renyi(10, -1.0, 75, 125, false, false);
+        d = erdos_renyi(15, -1.0, 75, 125, false, false);
 
     }
 

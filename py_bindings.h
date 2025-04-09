@@ -213,7 +213,15 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     const auto E = num_edges(*g_ptr);
 
     auto shuffle_map = get_shuffle_map(E, shuffle);  // just range if no shuffle
-    auto edge_list = get_edge_list_np(g_ptr, shuffle_map);
+    auto edge_list = get_edge_list(g_ptr, shuffle_map);
+
+    unique_ptr<vector<vector<int>>> distances_ptr2;
+    unique_ptr<vector<vector<int>>> ground_truths_ptr;
+
+    floyd_warshall_frydenlund(g_ptr, distances_ptr2, ground_truths_ptr, edge_list, false);
+    print_distances(distances_ptr2);
+    print_distances(ground_truths_ptr);
+
 
     // auto distances = convert_distance<boost::undirectedS>(distances_ptr, N, E, shuffle_map, edge_list, is_causal, full);
     // print_np(edge_list);

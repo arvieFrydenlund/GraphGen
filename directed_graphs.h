@@ -28,7 +28,8 @@ typedef pair<int, int> start_end_pair;
 
 
 template<>
-inline void print_distances<boost::directedS>(unique_ptr<DistanceMatrix<boost::directedS>> &distances_ptr, int N) {
+inline void print_distances<boost::directedS>(unique_ptr<DistanceMatrix<boost::directedS>> &distances_ptr, int N,
+    bool full) {
     // cant figure out the damn shape of the distance matrix
     // so just pass in the size, sigh
     auto distances = *distances_ptr;
@@ -42,6 +43,7 @@ inline void print_distances<boost::directedS>(unique_ptr<DistanceMatrix<boost::d
         }
         std::cout << std::endl;
     }
+    std::cout << std::endl;
 }
 
 
