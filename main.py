@@ -9,13 +9,14 @@ np.set_printoptions(threshold=np.inf, edgeitems=10, linewidth=np.inf, precision=
 def build_module(name):
     from os import system
     #  f"-I. /usr/include/boost/ "
-    if system(f"g++ -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) "
-              f"-I. /usr/include/boost/graph/ undirected_graphs.h directed_graphs.h "
-              f"-I. {name}.cpp -o {name}$(python3-config --extension-suffix)") != 0:
+    if system(f"g++ --std=c++20 -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
+              f"-fPIC $(python3 -m pybind11 --includes) "
+              f"-I/usr/include/boost/graph/"
+              f" -I. undirected_graphs.h directed_graphs.h generator.cpp "
+              f"-o generator$(python3-config --extension-suffix)") != 0:
         print(f"ERROR: Unable to compile `{name}.cpp`.")
         import sys
         sys.exit(1)
-
 
 try:
     from os.path import getmtime
@@ -32,4 +33,19 @@ except ModuleNotFoundError:
     build_module("generator")
     import generator
 print("C++ module `generator` loaded.")
+
+
+
+print(f'Random seed is {generator.get_seed()}')
+generator.set_seed(42)
+print(f'Random seed is {generator.get_seed()} after setting to 42')
+
+d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, False)
+
+
+for k, v in d.items():
+    print(f'{k}: {type(v)}')
+    if isinstance(v, np.ndarray):
+        print(f'\t {k}: {v.shape}')
+
 
