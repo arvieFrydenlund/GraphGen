@@ -248,7 +248,9 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
 
-    m.def("erdos_renyi", &erdos_renyi, "TODO");
+    m.def("erdos_renyi", &erdos_renyi, "Generate a single Erdos Renyi", py::arg("num_nodes"),
+        py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
     m.def("euclidian", &euclidian, "TODO");
     m.def("path_star", &path_star, "TODO");
     m.def("balanced", &balanced, "TODO");

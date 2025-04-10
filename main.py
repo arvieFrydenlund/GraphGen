@@ -1,4 +1,5 @@
 import time
+import pydoc
 import numpy as np
 
 
@@ -37,6 +38,9 @@ print("C++ module `generator` loaded.")
 print(f'Random seed is {generator.get_seed()}')
 generator.set_seed(42)
 print(f'Random seed is {generator.get_seed()} after setting to 42')
+
+h = pydoc.render_doc(generator, "Help on %s")
+print(h)
 
 d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, False)
 
