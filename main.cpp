@@ -17,7 +17,7 @@
 
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
-#include "py_bindings.h"
+#include "generator.cpp"
 #include <pybind11/embed.h>
 
 using namespace std;

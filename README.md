@@ -3,7 +3,10 @@ Generate graphs and distances in C++ for use in Python via pybind11
 
 ## Build
 
-You need to include python library and pybind11 to the compiler options
+ `g++ --std=c++20 -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) -I/usr/include/boost/graph/ -I. undirected_graphs.h directed_graphs.h generator.cpp -o generator$(python3-config --extension-suffix)`
+
+
+You need to include python library and pybind11 to the compiler options, for Clion include
 examples:
 * -I/usr/include/python3.11 -lpython3.11
 * -I/usr/include/python3.10 -lpython3.10
