@@ -1,13 +1,4 @@
 #include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/connected_components.hpp>
-#include <boost/graph/graph_utility.hpp>
-#include <boost/range/algorithm.hpp>
-#include <boost/graph/erdos_renyi_generator.hpp>
-#include <boost/random/linear_congruential.hpp>
-#include <boost/graph/undirected_graph.hpp>
-#include <boost/graph/exterior_property.hpp>
-#include <boost/graph/floyd_warshall_shortest.hpp>
-#include <boost/graph/random.hpp>
 #include <random>
 #include <iostream>
 #include <string>
@@ -107,17 +98,7 @@ void test_balanced(std::mt19937 &gen, const int num_nodes = 100, const bool verb
 
 void test_pybind(string graph_type = "erdos_renyi") {
 
-
-
-
-    //unique_ptr<Graph<boost::undirectedS>> g_ptr;
-    //unique_ptr<Graph<boost::undirectedS>> g_ptr;
-    // unique_ptr<DistanceMatrix<boost::undirectedS>> distances_ptr;
-    //erdos_renyi_generator(g_ptr,  25, gen, -1.0, 75, 125, false);
-    //erdos_renyi_generator(g_ptr,  75, gen, -1.0, 75, 125, false);
-
     py::dict d;
-
     if ( graph_type == "erdos_renyi" ) {
         d = erdos_renyi(15, -1.0, 75, 125, false, false);
 
@@ -160,20 +141,11 @@ int main(){
 
 
     //test_pybind("erdos_renyi");
-
     // test_pybind("euclidian");
-
     // test_pybind("path_star");
-
     test_pybind("balanced");
-
-
 
 
 
     return 0;
 };
-// TIP See CLion help at <a
-// href="https://www.jetbrains.com/help/clion/">jetbrains.com/help/clion/</a>.
-//  Also, you can try interactive lessons for CLion by selecting
-//  'Help | Learn IDE Features' from the main menu.

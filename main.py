@@ -1,18 +1,16 @@
 import time
 import numpy as np
 
+
 np.set_printoptions(threshold=np.inf, edgeitems=10, linewidth=np.inf, precision=2, suppress=True,)
-
-
 
 
 def build_module(name):
     from os import system
-    #  f"-I. /usr/include/boost/ "
     if system(f"g++ --std=c++20 -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
               f"-fPIC $(python3 -m pybind11 --includes) "
-              f"-I/usr/include/boost/graph/"
-              f" -I. undirected_graphs.h directed_graphs.h generator.cpp "
+              f"-I/usr/include/boost/graph/ "
+              f"-I. undirected_graphs.h directed_graphs.h generator.cpp "
               f"-o generator$(python3-config --extension-suffix)") != 0:
         print(f"ERROR: Unable to compile `{name}.cpp`.")
         import sys
@@ -22,7 +20,7 @@ try:
     from os.path import getmtime
     from importlib.util import find_spec
     generator_module = find_spec("generator")
-    if generator_module == None:
+    if generator_module is None:
         raise ModuleNotFoundError
     elif getmtime(generator_module.origin) < getmtime(f'{"generator"}.cpp'):
         print("C++ module `generator` is out-of-date. Compiling from source...")
@@ -47,5 +45,7 @@ for k, v in d.items():
     print(f'{k}: {type(v)}')
     if isinstance(v, np.ndarray):
         print(f'\t {k}: {v.shape}')
+        print(v)
+    print()
 
 
