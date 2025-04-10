@@ -126,7 +126,7 @@ void test_pybind(string graph_type = "erdos_renyi") {
     } else if ( graph_type == "path_star" ) {
         d = path_star(6, 6, 5, 6, false, false);
     } else if ( graph_type == "balanced" ) {
-        // d = balanced(37, 7, 5);
+        d = balanced(37, 7, 5);
     } else {
         cout << "Unknown graph type: " << graph_type << endl;
         return;
@@ -163,7 +163,9 @@ int main(){
 
     // test_pybind("euclidian");
 
-    test_pybind("path_star");
+    // test_pybind("path_star");
+
+    test_pybind("balanced");
 
 
 

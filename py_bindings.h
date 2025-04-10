@@ -164,7 +164,7 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
 
     unique_ptr<DistanceMatrix<boost::undirectedS>> distances_ptr;
     floyd_warshall(g_ptr, distances_ptr, false);
-    print_matrix(distances_ptr, N, N, true, 100000, " ");
+    // print_matrix(distances_ptr, N, N, true, 100000, " ");
     auto original_distances = convert_matrix<DistanceMatrix<boost::undirectedS>, int>(distances_ptr, N, N);
 
     auto shuffle_map = get_shuffle_map(E, shuffle_edges);  // just range if no shuffle
@@ -173,7 +173,7 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     unique_ptr<vector<vector<int>>> distances_ptr2;
     unique_ptr<vector<vector<int>>> ground_truths_ptr;
     floyd_warshall_frydenlund(g_ptr, distances_ptr2, ground_truths_ptr, edge_list, false);
-    print_matrix(distances_ptr2, N, N, true, 100000, " ");
+    // print_matrix(distances_ptr2, N, N, true, 100000, " ");
     // print_matrix(ground_truths_ptr, E, N, true);
 
     auto distances = convert_matrix<vector<vector<int>>, int>(distances_ptr2, N, N);
@@ -185,11 +185,9 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     d["original_distances"] = original_distances;
     d["distances"] = distances;
     d["ground-truths"] = ground_truths;
-
     return d;
 }
 
-inline const string erdos_renyi_doc_string("TODO");
 
 inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
     const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
@@ -206,7 +204,6 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
 }
 
-inline const string euclidian_doc_string("TODO");
 
 inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0,
                           const int c_min = 75, const int c_max = 125,
@@ -224,7 +221,6 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
     return d;
 }
 
-inline const string path_star_doc_string("TODO");
 
 inline py::dict path_star(const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
     const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
@@ -232,8 +228,25 @@ inline py::dict path_star(const int min_num_arms, const int max_num_arms, const 
      *
      */
     unique_ptr<Graph<boost::directedS>> g_ptr;
-    path_star_generator(g_ptr,  min_num_arms, max_num_arms, min_arm_length,max_arm_length, gen, false);
-    return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    auto start_end = path_star_generator(g_ptr,  min_num_arms, max_num_arms, min_arm_length,max_arm_length, gen, false);
+    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    d["start"] = start_end.first;
+    d["end"] = start_end.second;
+    return d;
+}
+
+
+inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4,
+    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
+    /*
+     *
+     */
+    unique_ptr<Graph<boost::directedS>> g_ptr;
+    auto start_end = balanced_generator(g_ptr, num_nodes, gen, lookahead, min_noise_reserve, max_num_parents, false);
+    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    d["start"] = start_end.first;
+    d["end"] = start_end.second;
+    return d;
 }
 
 
@@ -242,9 +255,10 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
 
-    m.def("erdos_renyi", &erdos_renyi); // erdos_renyi_doc_string);
-    m.def("euclidian", &euclidian); // euclidian_doc_string);
-    m.def("path_star", &path_star); // path_star_doc_string);
+    m.def("erdos_renyi", &erdos_renyi, "TODO");
+    m.def("euclidian", &euclidian, "TODO");
+    m.def("path_star", &path_star, "TODO");
+    m.def("balanced", &balanced, "TODO");
 
 }
 

@@ -220,16 +220,10 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
             num_parents = uniform_int_distribution<int>(1, max_num_parents)(gen);
         }
 
-       	cout << " num children and num parents " << num_children << " " << num_parents << endl;
-       	cout << " num nodes and i " << num_nodes << " " << i << " " << num_nodes - i << endl;
         vector<float> probabilities(i);
         for (int j = 0; j < i; j++) {
             probabilities[j] = in_degrees[j];
         }
-        for (int j = 0; j < i; j++) {
-            cout << probabilities[j] << " ";
-        }
-        cout << endl;
         for (int j = 0; j < num_children; j++) {
             int child_id = std::discrete_distribution<>(probabilities.begin(), probabilities.end())(gen);
             children[i].insert(child_id);

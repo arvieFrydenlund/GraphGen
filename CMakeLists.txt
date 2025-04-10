@@ -15,7 +15,7 @@ add_executable(GraphGen main.cpp
         directed_graphs.h)
 
 
-
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 #set(DPYTHON_INCLUDE_DIR, $(python3.11 -c "import sysconfig; print(sysconfig.get_path('include'))"))
 #set(DPYTHON_LIBRARY, $(python.11 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))"))
