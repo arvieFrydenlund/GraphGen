@@ -42,7 +42,8 @@ print(f'Random seed is {generator.get_seed()} after setting to 42')
 h = pydoc.render_doc(generator, "Help on %s")
 print(h)
 
-d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, False)
+# d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
+d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
 
 
 for k, v in d.items():

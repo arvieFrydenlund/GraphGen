@@ -174,7 +174,7 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     // print_np(distances, true);
 
     py::dict d;
-    // d["edge_list"] = 1; //edge_list;
+    d["edge_list"] = get_edge_list_np(g_ptr, shuffle_map);
     d["original_distances"] = original_distances;
     d["distances"] = distances;
     d["ground-truths"] = ground_truths;
@@ -242,17 +242,45 @@ inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise
     return d;
 }
 
+template <typename T>
+py::array_t<T, py::array::c_style> batch_matrix(vector<T> &in_matrices,  const int M, const int N, int pad = -1) {
+    pad = static_cast<T>(pad);
+    return 0;
+}
+
+
+template <typename T>
+py::array_t<T, py::array::c_style> batch_edge_list(vector<pair<int, int>> &edge_list,  const int E) {
+    return 0;
+}
+
 
 PYBIND11_MODULE(generator, m) {
   	m.doc() = "Graph generation module"; // optional module docstring
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
 
-    m.def("erdos_renyi", &erdos_renyi, "Generate a single Erdos Renyi", py::arg("num_nodes"),
+    // single graph generation
+    m.def("erdos_renyi", &erdos_renyi, "Generate a single Erdos Renyi graph", py::arg("num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
-    m.def("euclidian", &euclidian, "TODO");
-    m.def("path_star", &path_star, "TODO");
-    m.def("balanced", &balanced, "TODO");
+
+
+    m.def("euclidian", &euclidian, "Generate a single Euclidian graph", py::arg("num_nodes"),
+        py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+
+
+    m.def("path_star", &path_star, "Generate a single path star graph",
+        py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
+        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+
+
+    m.def("balanced", &balanced, "Generate a single balanced graph.  Note these are done slightly differently from original paper.",
+        py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4,
+        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+
+    // batched graph generation
+
 
 }
