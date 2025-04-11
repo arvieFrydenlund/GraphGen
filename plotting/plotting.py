@@ -7,20 +7,23 @@ np.finfo(np.dtype("float64"))
 
 
 class GraphPlotter(object):
-    def __init__(self, G=None, d=None):
+    def __init__(self, G=None, d=None, is_undirected=True):
         self.G = G
         if d is not None:
             pos = d['positions'] if 'positions' in d else None
-            self.G = self.make_graph(d['edge_list'], pos=pos)
+            self.G = self.make_graph(d['edge_list'], pos=pos, is_undirected=True)
 
-    def make_graph(self, edge_list, pos=None):
+    def make_graph(self, edge_list, pos=None, is_undirected=True):
         """
         Make a graph from an edge list.
         :param edge_list: list of edges
         :param pos: node positions
         :return: graph
         """
-        self.G = nx.Graph()
+        if is_undirected:
+            self.G = nx.Graph()
+        else:
+            self.G = nx.DiGraph()
         self.G.add_edges_from(edge_list)
         if pos is not None:
             pos = pos.tolist() if isinstance(pos, np.ndarray) else pos

@@ -2,13 +2,14 @@ import time
 import pydoc
 import numpy as np
 
-
+# np.finfo(np.dtype("float32"))  # gets rid of warnings, hope they aint important
+# np.finfo(np.dtype("float64"))
 np.set_printoptions(threshold=np.inf, edgeitems=10, linewidth=np.inf, precision=2, suppress=True,)
 
 
 def build_module(name):
-    from os import system
-    if system(f"g++ --std=c++20 -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
+    from os import system  #  -Ofast, don't use this cause numpy warnings
+    if system(f"g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
               f"-fPIC $(python3 -m pybind11 --includes) "
               f"-I/usr/include/boost/graph/ "
               f"-I. undirected_graphs.h directed_graphs.h generator.cpp "
@@ -31,8 +32,8 @@ except ModuleNotFoundError:
     print("C++ module `generator` not found. Compiling from source...")
     build_module("generator")
     import generator
-print("C++ module `generator` loaded.")
 
+print("C++ module `generator` loaded.")
 
 
 print(f'Random seed is {generator.get_seed()}')
