@@ -139,11 +139,12 @@ int main(){
     //auto d = return_dict_test();
     // cout << "Dict: " << &d << endl;
 
-
+    set_seed(3172477368);
+    cout << "Seed: " << get_seed() << endl;
     //test_pybind("erdos_renyi");
-    // test_pybind("euclidian");
+    test_pybind("euclidian");
     // test_pybind("path_star");
-    test_pybind("balanced");
+    // test_pybind("balanced");
 
 
 

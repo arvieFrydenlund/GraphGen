@@ -205,10 +205,11 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
      */
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     unique_ptr<vector<vector<float>>> positions_ptr;
+    // cout << seed_ << endl;
     euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
     auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
 
-    // print_matrix(positions_ptr, num_vertices(*g_ptr), 2, true);
+    //print_matrix(positions_ptr, num_vertices(*g_ptr), 2, true);
     auto positions = convert_matrix<vector<vector<float>>, float>(positions_ptr, num_vertices(*g_ptr), 2);
     d["positions"] = positions;
     return d;

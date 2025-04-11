@@ -297,6 +297,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
     }
 
     // connect components
+    if ( true ) {
     auto component_map = get_connected_components_map(*g_ptr, verbose);
     while ( component_map.size() > 1 ) {
         for (size_t i = 0; i < component_map.size(); i++) {
@@ -305,7 +306,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
                 if ( i == j ) {
                     continue;
                 }
-                tuple<int, int, float> closest_in_component = make_tuple(-1, -1, 1000000.0);
+                tuple<int, int, float> closest_in_component = make_tuple(-1, -1, 10000.0);
                 for (int u : component_map[i]) {
                     for (int v : component_map[j]) {
                         float distance = 0;
@@ -318,12 +319,17 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
                         }
                     }
                 }
+                if ( get<0>(closest_in_component) == -1 ) {
+                    continue;
+                }
                 closest.push_back(closest_in_component);
             }
             sort(closest.begin(), closest.end(), [](auto &left, auto &right) {
                 return get<2>(left) < get<2>(right);
             });
-            for (size_t k = 0; k < sample_num_connected(gen, num_nodes, c_min, c_max); k++) {
+            auto num_connected = sample_num_connected(gen, num_nodes, c_min, c_max);
+            for (size_t k = 0; k < num_connected && k < closest.size(); k++) {
+                // cout << "Adding edge " << k << " " << num_connected << " " << closest.size() << endl;
                 int u = get<0>(closest[k]);
                 int v = get<1>(closest[k]);
                 boost::add_edge(u, v, *g_ptr);
@@ -331,8 +337,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
         }
         component_map = get_connected_components_map(*g_ptr , verbose);  // remake connected components
     }
-
-    make_edge_weights(*g_ptr, verbose);
+    }
     return 0;
 }
 

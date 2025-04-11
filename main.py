@@ -36,7 +36,8 @@ print("C++ module `generator` loaded.")
 
 
 print(f'Random seed is {generator.get_seed()}')
-generator.set_seed(42)
+# generator.set_seed(42)
+# generator.set_seed(3172477368)
 print(f'Random seed is {generator.get_seed()} after setting to 42')
 
 h = pydoc.render_doc(generator, "Help on %s")
@@ -49,7 +50,7 @@ d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
 for k, v in d.items():
     print(f'{k}: {type(v)}')
     if isinstance(v, np.ndarray):
-        print(f'\t {k}: {v.shape}')
+        print(f'\t {k}: {v.shape}, {v.dtype}')
         print(v)
     print()
 
