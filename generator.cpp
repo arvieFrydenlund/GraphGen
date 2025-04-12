@@ -83,7 +83,18 @@ py::array_t<int, py::array::c_style> get_node_list_np(unique_ptr<Graph<D>> &g_pt
     return arr;
 }
 
-vector<int> get_shuffle_map(const int E, const bool shuffle = false) {
+vector<int> get_node_shuffle_map(const int N, const int min_vocab, const int max_vocab, const bool shuffle = false) {
+    assert ( N >= max_vocab - min_vocab );
+    auto m = std::vector<int>(max_vocab - min_vocab);
+    std::iota(m.begin(), m.end(), min_vocab);
+    if (shuffle) {
+        std::shuffle(m.begin(), m.end(), gen);
+    }
+    // return on first N elements of m
+    return auto(m.begin(), m.begin() + N);
+}
+
+vector<int> get_edge_shuffle_map(const int E, const bool shuffle = false) {
     auto m = std::vector<int>(E);
     std::iota(m.begin(), m.end(), 0);
     if (shuffle) {
@@ -239,7 +250,7 @@ inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise
 }
 
 template <typename T>
-py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vector<T>>>> &in_matrices,  int pad = -1) {
+py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vector<int>>>> &in_matrices,  int pad = -1) {
     int N = 0;
     int M = 0;
     for (auto &m : in_matrices) {
@@ -265,6 +276,41 @@ py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vec
         }
         for (int j = (*m).size(); j < N; j++) {
             for (int k = 0; k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        cur += 1;
+    }
+    return arr;
+}
+
+// what a mess
+template <typename T, typename T2>
+py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<T2>> &in_matrices,
+    const list<pair<int, int>> &batched_sizes, int pad = -1) {
+    int N = 0;
+    int M = 0;
+    for (auto &m : batched_sizes) {
+        if (m.first > N) {
+            N = m.first;
+        }
+        if (m.second > M) {
+            M = m.second;
+        }
+    }
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
+    auto ra = arr.mutable_unchecked();
+    int cur = 0;
+    auto it1 = in_matrices.begin();
+    auto it2 = batched_sizes.begin();
+    for(; it1 != in_matrices.end() && it2 != batched_sizes.end(); ++it1, ++it2) {
+        auto n = it2->first;
+        auto m = it2->second;
+        for (int j = 0; j < n; j++) {
+            for (int k = 0; k < m; k++) {
+                ra(cur, j, k) = (**it1)[j][k];
+            }
+            for (int k = m; k < M; k++) {
                 ra(cur, j, k) = pad;
             }
         }
@@ -299,6 +345,37 @@ py::array_t<T, py::array::c_style> batch_edge_list(const list<vector<pair<int, i
     return arr;
 }
 
+template <typename D>
+void push_back_data(unique_ptr<Graph<D>> &g_ptr,
+                    list<vector<pair<int, int>>> &batched_edge_list,
+                    list<unique_ptr<vector<vector<int>>>> &batched_distances_v,
+                    list<unique_ptr<DistanceMatrix<D>>> &batched_distances_m,
+                    list<pair<int, int>> &batched_sizes,
+                    list<unique_ptr<vector<vector<int>>>> &batched_ground_truths,
+                    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
+
+    const auto E = num_edges(*g_ptr);
+    auto shuffle_map = get_shuffle_map(E, shuffle_edges);
+    auto edge_list = get_edge_list<D>(g_ptr, shuffle_map);
+    batched_edge_list.push_back(edge_list);
+    if ( is_causal ) {
+        unique_ptr<vector<vector<int>>> distances_ptr;
+        unique_ptr<vector<vector<int>>> ground_truths_ptr;
+        floyd_warshall_frydenlund(g_ptr, distances_ptr, ground_truths_ptr, edge_list, false);
+        batched_distances_v.push_back(move(distances_ptr));
+        batched_ground_truths.push_back(move(ground_truths_ptr));
+    } else {
+        auto N = num_vertices(*g_ptr);
+        // auto E = num_edges(*g_ptr);
+        unique_ptr<DistanceMatrix<D>> distances_ptr;
+        floyd_warshall<D>(g_ptr, distances_ptr, false);
+        batched_distances_m.push_back(move(distances_ptr));
+        batched_sizes.push_back(make_pair(N, N));
+    }
+
+}
+
+
 
 inline py::dict erdos_renyi_n(
     const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
@@ -307,7 +384,10 @@ inline py::dict erdos_renyi_n(
 
 
     auto batched_edge_list = list<vector<pair<int, int>>>();
-    auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
+    // dumb code
+    auto batched_distances_v = list<unique_ptr<vector<vector<int>>>>();
+    auto batched_distances_m = list<unique_ptr<DistanceMatrix<boost::undirectedS>>>();
+    auto batched_sizes = list<pair<int, int>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     int attempts = 0;
     int num = 0;
@@ -323,23 +403,8 @@ inline py::dict erdos_renyi_n(
             }
             continue;
         }
-
-        auto shuffle_map = get_shuffle_map(E, shuffle_edges);
-        auto edge_list = get_edge_list(g_ptr, shuffle_map);
-        batched_edge_list.push_back(edge_list);
-
-        if ( is_causal ) {
-            unique_ptr<vector<vector<int>>> distances_ptr;
-            unique_ptr<vector<vector<int>>> ground_truths_ptr;
-            floyd_warshall_frydenlund(g_ptr, distances_ptr, ground_truths_ptr, edge_list, false);
-            batched_distances.push_back(move(distances_ptr));
-            batched_ground_truths.push_back(move(ground_truths_ptr));
-        } else {
-
-        }
-
-
-
+        push_back_data<boost::undirectedS>(g_ptr, batched_edge_list, batched_distances_v, batched_distances_m, batched_sizes, batched_ground_truths,
+            is_causal, return_full, shuffle_edges);
 
         num += 1;
     }
@@ -350,8 +415,12 @@ inline py::dict erdos_renyi_n(
         return d;
     }
     d["edge_list"] = batch_edge_list<int>(batched_edge_list);
-    d["distances"] = batch_matrix<int>(batched_distances, -1);
-    d["ground-truths"] = batch_matrix<int>(batched_ground_truths, -1);
+    if ( is_causal ) {
+        d["distances"] = batch_matrix<int>(batched_distances_v, -1);
+        d["ground-truths"] = batch_matrix<int>(batched_ground_truths, -1);
+    } else {
+        d["distances"] = batch_matrix<int, DistanceMatrix<boost::undirectedS>>(batched_distances_m, batched_sizes, -1);
+    }
     return d;
 }
 
