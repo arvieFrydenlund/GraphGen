@@ -4,7 +4,6 @@
 
 #include <iostream>
 #include <random>
-// #include <python3.11/Python.h>
 #include <Python.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -197,7 +196,6 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
 }
 
-
 inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0,
                           const int c_min = 75, const int c_max = 125,
     const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
@@ -205,7 +203,6 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
      */
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     unique_ptr<vector<vector<float>>> positions_ptr;
-    // cout << seed_ << endl;
     euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
     auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
 
@@ -214,7 +211,6 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
     d["positions"] = positions;
     return d;
 }
-
 
 inline py::dict path_star(const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
     const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
@@ -228,7 +224,6 @@ inline py::dict path_star(const int min_num_arms, const int max_num_arms, const 
     d["end"] = start_end.second;
     return d;
 }
-
 
 inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4,
     const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
@@ -244,16 +239,122 @@ inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise
 }
 
 template <typename T>
-py::array_t<T, py::array::c_style> batch_matrix(vector<T> &in_matrices,  const int M, const int N, int pad = -1) {
+py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vector<T>>>> &in_matrices,  int pad = -1) {
+    int N = 0;
+    int M = 0;
+    for (auto &m : in_matrices) {
+        if ((*m).size() > N) {
+            N = (*m).size();
+        }
+        if ((*m)[0].size() > M) {
+            M = (*m)[0].size();
+        }
+    }
     pad = static_cast<T>(pad);
-    return 0;
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
+    auto ra = arr.mutable_unchecked();
+    int cur = 0;
+    for (auto &m : in_matrices) {
+        for (int j = 0; j < (*m).size(); j++) {
+            for (int k = 0; k < (*m)[j].size(); k++) {
+                ra(cur, j, k) = (*m)[j][k];
+            }
+            for (int k = (*m)[j].size(); k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        for (int j = (*m).size(); j < N; j++) {
+            for (int k = 0; k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        cur += 1;
+    }
+    return arr;
 }
 
 
 template <typename T>
-py::array_t<T, py::array::c_style> batch_edge_list(vector<pair<int, int>> &edge_list,  const int E) {
-    return 0;
+py::array_t<T, py::array::c_style> batch_edge_list(const list<vector<pair<int, int>>> &batched_edge_list, int pad = -1) {
+    int E = 0;
+    for (auto &m : batched_edge_list) {
+        if (m.size() > E) {
+            E = m.size();
+        }
+    }
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_edge_list.size()), E, 2});
+    auto ra = arr.mutable_unchecked();
+    auto cur = 0;
+    for (auto &m : batched_edge_list) {
+        for (int j = 0; j < m.size(); j++) {
+            ra(cur, j, 0) = m[j].first;
+            ra(cur, j, 1) = m[j].second;
+        }
+        for (int j = m.size(); j < E; j++) {
+            ra(cur, j, 0) = pad;
+            ra(cur, j, 1) = pad;
+        }
+        cur += 1;
+    }
+    return arr;
 }
+
+
+inline py::dict erdos_renyi_n(
+    const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
+    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false,
+    const int batch_size = 256, const int max_edges = 512, const bool sample_target_paths = true, int max_attempts = 1000) {
+
+
+    auto batched_edge_list = list<vector<pair<int, int>>>();
+    auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
+    auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
+    int attempts = 0;
+    int num = 0;
+    while ( num < batch_size ) {
+        unique_ptr<Graph<boost::undirectedS>> g_ptr;
+        erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
+        const auto E = num_edges(*g_ptr);
+        if ( E > max_edges ) {
+            attempts += 1;
+            if (attempts > max_attempts) {
+                cout << "Failed to generate graph after " << attempts << " attempts" << endl;
+                break;
+            }
+            continue;
+        }
+
+        auto shuffle_map = get_shuffle_map(E, shuffle_edges);
+        auto edge_list = get_edge_list(g_ptr, shuffle_map);
+        batched_edge_list.push_back(edge_list);
+
+        if ( is_causal ) {
+            unique_ptr<vector<vector<int>>> distances_ptr;
+            unique_ptr<vector<vector<int>>> ground_truths_ptr;
+            floyd_warshall_frydenlund(g_ptr, distances_ptr, ground_truths_ptr, edge_list, false);
+            batched_distances.push_back(move(distances_ptr));
+            batched_ground_truths.push_back(move(ground_truths_ptr));
+        } else {
+
+        }
+
+
+
+
+        num += 1;
+    }
+
+    py::dict d;
+    d["num_attempts"] = attempts;
+    if ( attempts >= max_attempts ) {
+        return d;
+    }
+    d["edge_list"] = batch_edge_list<int>(batched_edge_list);
+    d["distances"] = batch_matrix<int>(batched_distances, -1);
+    d["ground-truths"] = batch_matrix<int>(batched_ground_truths, -1);
+    return d;
+}
+
 
 
 PYBIND11_MODULE(generator, m) {
@@ -282,6 +383,11 @@ PYBIND11_MODULE(generator, m) {
         py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
 
     // batched graph generation
+    m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
+        py::arg("num_nodes"), py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false,
+        py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("sample_target_paths") = true,
+        py::arg("max_attempts") = 1000);
 
 
 }
