@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <Python.h>
+#include <chrono>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
@@ -13,6 +14,12 @@
 #include "directed_graphs.h"
 
 using namespace std;
+
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::duration;
+using std::chrono::milliseconds;
+
 namespace py = pybind11;
 using namespace py::literals;
 
@@ -20,6 +27,17 @@ static const py::bool_ py_true(true);
 
 inline unsigned int seed_ = std::random_device{}();
 static thread_local auto gen = std::mt19937(seed_);  // so each thread in the dataloader is different
+
+chrono::time_point<high_resolution_clock> time_before() {
+    return high_resolution_clock::now();
+
+}
+
+void time_after(chrono::time_point<high_resolution_clock> t1, const string &msg = "") {
+    auto t2 = high_resolution_clock::now();
+    duration<double, std::milli> ms_double = t2 - t1;
+    std::cout << msg << ": " << ms_double.count() << "ms, " << ms_double.count() * 0.001 << "s"  << std::endl;
+}
 
 
 inline unsigned int get_seed() {
@@ -496,8 +514,12 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
     if ( is_causal ) {
         unique_ptr<vector<vector<int>>> distances_ptr;
         unique_ptr<vector<vector<int>>> ground_truths_ptr;
+        auto path_d = time_before();
         floyd_warshall_frydenlund(g_ptr, distances_ptr, ground_truths_ptr, edge_list, false);
+        time_after(path_d, "floyd_warshall_frydenlund");
+        auto path_t = time_before();
         auto path = sample_path(distances_ptr, max_length, min_length, -1, -1);
+        time_after(path_t, "sample_path");
         batched_paths.push_back(path);
         batched_path_lengths.push_back(path.size());
         batched_distances.push_back(move(distances_ptr));
@@ -505,10 +527,14 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
     } else {
         auto N = num_vertices(*g_ptr);
         unique_ptr<DistanceMatrix<D>> distances_ptr;
+        auto path_d = time_before();
         floyd_warshall<D>(g_ptr, distances_ptr, false);
+        time_after(path_d, "floyd_warshall");
         unique_ptr<vector<vector<int>>> distances_ptr2;
         convert_matrix<int, DistanceMatrix<D>>(distances_ptr, distances_ptr2, N, N);
+        auto path_t = time_before();
         auto path = sample_path(distances_ptr2, max_length, min_length, -1, -1);
+        time_after(path_t, "sample_path");
         batched_paths.push_back(path);
         batched_path_lengths.push_back(path.size());
         batched_distances.push_back(move(distances_ptr2));
@@ -539,7 +565,9 @@ inline py::dict erdos_renyi_n(
     int num = 0;
     while ( num < batch_size ) {
         unique_ptr<Graph<boost::undirectedS>> g_ptr;
+        auto graph_t = time_before();
         erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
+        time_after(graph_t, "graph gen");
         const auto E = num_edges(*g_ptr);
         if ( E > max_edges ) {
             attempts += 1;
@@ -549,10 +577,12 @@ inline py::dict erdos_renyi_n(
             }
             continue;
         }
+        auto pack_t = time_before();
         push_back_data<boost::undirectedS>(g_ptr, batched_edge_list, batched_distances,  batched_sizes,
             batched_ground_truths, batched_paths, batched_edge_list_lengths, batched_path_lengths,
             max_length, min_length,
             is_causal, return_full, shuffle_edges);
+        time_after(pack_t, "pack");
 
 
         num += 1;

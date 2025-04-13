@@ -96,19 +96,19 @@ void test_balanced(std::mt19937 &gen, const int num_nodes = 100, const bool verb
 
 }
 
-void test_pybind(string graph_type = "erdos_renyi") {
+void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, const int batch_size = 7, const int max_edges = 512) {
 
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {
-        d = erdos_renyi(25, -1.0, 75, 125, false, false);
+        d = erdos_renyi(num_nodes, -1.0, 75, 125, false, false);
     } else  if ( graph_type == "erdos_renyi_n" ) {
-        d = erdos_renyi_n(15, -1.0, 75, 125,  false, false, true, 10, 3, 7, 125);
+        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  true, false, true, 10, 3, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
-        d = euclidian(15, 2, -1.0, 75, 125, false, false);
-    } else if ( graph_type == "path_star" ) {
+        d = euclidian(num_nodes, 2, -1.0, 75, 125, false, false);
+    } else if ( graph_type == "path_star" ) {  // no need to test this at scale
         d = path_star(6, 6, 5, 6, false, false);
     } else if ( graph_type == "balanced" ) {
-        d = balanced(37, 7, 5);
+        d = balanced(num_nodes, 7, 5);
     } else {
         cout << "Unknown graph type: " << graph_type << endl;
         return;
@@ -120,6 +120,9 @@ void test_pybind(string graph_type = "erdos_renyi") {
         std::cout << "key: " << item.first << ", value=" << item.second << std::endl;
     };
 }
+
+
+
 
 
 
@@ -145,7 +148,9 @@ int main(){
     // test_pybind("path_star");
     // test_pybind("balanced");
 
-    test_pybind("erdos_renyi_n");
+    auto t1 = time_before();
+    test_pybind("erdos_renyi_n", 150, 256);
+    time_after(t1, "Final");
 
 
 

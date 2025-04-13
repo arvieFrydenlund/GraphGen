@@ -142,6 +142,12 @@ int floyd_warshall(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &d
 
 
 template <typename D>
+int floyd_warshall_fast(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool verbose = false) {
+    // TODO
+}
+
+
+template <typename D>
 inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
                                      unique_ptr<vector<vector<int>>> &distances_ptr,
                                      unique_ptr<vector<vector<int>>> &ground_truths_ptr,
@@ -154,10 +160,10 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
     distances_ptr = make_unique<vector<vector<int>>>(N, vector<int>(N, inf));
     ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
 
-    auto connected_components = vector(N, set<int>());
+    auto connected_components = vector(N, shared_ptr<set<int>>());
     for (int i = 0; i < N; i++) {  // initialize distance matrix and connected components
         (*distances_ptr)[i][i] = 0;
-        connected_components[i].insert(i);
+        connected_components[i] = make_shared<set<int>>(initializer_list<int>{i});
     }
     for (int t = 0; t < E; t++) {  // stream edges as pivot instead of nodes
     	auto node_i = edge_list[t].first;
@@ -170,8 +176,10 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
             (*distances_ptr)[node_j][node_i] = 1;  // add new edge for undirected graph
         }
         // update distances
-        for (int ki : connected_components[node_i]) {  //for (int ki = 0; ki < N; ki++) {  // slower
-            for (int kj : connected_components[node_j]) {  //for (int kj = 0; kj < N; kj++) {  // slower
+        for (int ki : *(connected_components[node_i])) {  //
+        // for (int ki = 0; ki < N; ki++) {  // slower
+            for (int kj : *(connected_components[node_j])) {  //for (int kj = 0; kj < N; kj++) {  // slower
+            // for (int kj = 0; kj < N; kj++) {  // slower
             	auto d = (*distances_ptr)[ki][node_i] + 1 + (*distances_ptr)[node_j][kj];
             	if ( (*distances_ptr)[ki][kj] > d ){
                 	(*distances_ptr)[ki][kj] = d;
@@ -180,15 +188,17 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
                     }
             	}
             }
-            // merge connected components, note this is for undirected and could be made faster for directed
-            connected_components[node_i].insert(connected_components[node_j].begin(), connected_components[node_j].end());
-            for (auto k : connected_components[node_i]) {
-                if (k != node_i) {
-                    // delete old connected component?
-                    connected_components[k] = connected_components[node_i];  // add new connected component as same set
-                }
+        }
+        // merge connected components by making all node_j's connected components node_i's connected components
+        // note this is for undirected and could be made faster for directed
+        (connected_components[node_i])->insert((connected_components[node_j])->begin(), (connected_components[node_j])->end());
+        for (auto it = (connected_components[node_j])->begin(), end = (connected_components[node_j])->end(); it != end; ++it) {
+            if (*it != node_i && *it != node_j) {
+                connected_components[*it] = connected_components[node_i];  // add new connected component as same set
             }
         }
+        connected_components[node_j] = connected_components[node_i];  // make node_j's the same as node_i's
+
         // copy current distances to ground truths for node i in edge t after observing <= t edges
         for (int i = 0; i < N; i++) {
             if ((*distances_ptr)[node_i][i] >= inf) {
