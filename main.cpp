@@ -100,9 +100,9 @@ void test_pybind(string graph_type = "erdos_renyi") {
 
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {
-        d = erdos_renyi(15, -1.0, 75, 125, false, false);
+        d = erdos_renyi(25, -1.0, 75, 125, false, false);
     } else  if ( graph_type == "erdos_renyi_n" ) {
-        d = erdos_renyi_n(15, -1.0, 75, 125, false, false, true, 7, 125);
+        d = erdos_renyi_n(15, -1.0, 75, 125,  false, false, true, 10, 3, 7, 125);
     } else if ( graph_type == "euclidian" ) {
         d = euclidian(15, 2, -1.0, 75, 125, false, false);
     } else if ( graph_type == "path_star" ) {
@@ -140,7 +140,7 @@ int main(){
     // cout << "Dict: " << &d << endl;
 
     cout << "Seed: " << get_seed() << endl;
-    //test_pybind("erdos_renyi");
+    // test_pybind("erdos_renyi");
     // test_pybind("euclidian");
     // test_pybind("path_star");
     // test_pybind("balanced");
