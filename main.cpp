@@ -102,7 +102,7 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
     if ( graph_type == "erdos_renyi" ) {
         d = erdos_renyi(num_nodes, -1.0, 75, 125, false, false);
     } else  if ( graph_type == "erdos_renyi_n" ) {
-        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  true, false, true, 10, 3, batch_size, max_edges);
+        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  false, false, true, 10, 3, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
         d = euclidian(num_nodes, 2, -1.0, 75, 125, false, false);
     } else if ( graph_type == "path_star" ) {  // no need to test this at scale

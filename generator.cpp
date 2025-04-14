@@ -279,7 +279,8 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     const auto E = num_edges(*g_ptr);
 
     unique_ptr<DistanceMatrix<boost::undirectedS>> distances_ptr;
-    floyd_warshall(g_ptr, distances_ptr, false);
+    // floyd_warshall(g_ptr, distances_ptr, false);
+    johnson<D>(g_ptr, distances_ptr, false);
     // print_matrix(distances_ptr, N, N, true, 100000, " ");
     auto original_distances = convert_matrix<int, DistanceMatrix<boost::undirectedS>>(distances_ptr, N, N);
 
@@ -528,7 +529,8 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
         auto N = num_vertices(*g_ptr);
         unique_ptr<DistanceMatrix<D>> distances_ptr;
         auto path_d = time_before();
-        floyd_warshall<D>(g_ptr, distances_ptr, false);
+        // floyd_warshall<D>(g_ptr, distances_ptr, false);  // much slower
+        johnson<D>(g_ptr, distances_ptr, false);
         time_after(path_d, "floyd_warshall");
         unique_ptr<vector<vector<int>>> distances_ptr2;
         convert_matrix<int, DistanceMatrix<D>>(distances_ptr, distances_ptr2, N, N);

@@ -14,6 +14,7 @@
 #include <boost/graph/undirected_graph.hpp>
 #include <boost/graph/exterior_property.hpp>
 #include <boost/graph/floyd_warshall_shortest.hpp>
+#include <boost/graph/johnson_all_pairs_shortest.hpp>
 #include <boost/graph/random.hpp>
 #include <random>
 #include <iostream>
@@ -140,20 +141,23 @@ int floyd_warshall(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &d
     return valid;
 }
 
-
 template <typename D>
-int floyd_warshall_fast(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool verbose = false) {
-    // TODO
+int johnson(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distances_ptr, bool verbose = false) {
+    //  much faster than floyd_warshall for sparse graphs
+	// https://stackoverflow.com/questions/47757973/obtain-predecessors-with-boost-bgl-for-an-all-pair-shortest-path-search
+    distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
+    auto weight_pmap = make_edge_weights(*g_ptr, false);
+    DistanceMatrixMap<D> dm(*distances_ptr, *g_ptr);
+    johnson_all_pairs_shortest_paths(*g_ptr, *distances_ptr);
+	return 0;
 }
-
 
 template <typename D>
 inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
                                      unique_ptr<vector<vector<int>>> &distances_ptr,
                                      unique_ptr<vector<vector<int>>> &ground_truths_ptr,
                                      vector<pair<int, int>> &edge_list, bool verbose) {
-    // other version that uses numpy edge list in py_bindings
-    // assume edge weights of 1, no need to make them unlike boost
+    // assume edge weights of 1, no need to make them in the graph (unlike boost)
   	auto N = num_vertices(*g_ptr);
     auto E = num_edges(*g_ptr);
     int inf = std::numeric_limits<int>::max() / 8;  // careful because we add max + 1 + max -> overflow
@@ -198,7 +202,6 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
             }
         }
         connected_components[node_j] = connected_components[node_i];  // make node_j's the same as node_i's
-
         // copy current distances to ground truths for node i in edge t after observing <= t edges
         for (int i = 0; i < N; i++) {
             if ((*distances_ptr)[node_i][i] >= inf) {
