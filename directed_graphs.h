@@ -112,17 +112,16 @@ inline start_end_pair path_star_generator(unique_ptr<Graph<boost::directedS>> &g
     }
 
     const int num_nodes = num_arms * (arm_length - 1) + 1;
-    auto node_ids = make_node_ids(num_nodes, g_ptr, gen);
 
     // add start node
-    int start = node_ids[0];
-    int end = node_ids[arm_length];
+    int start = 0;
+    int end = arm_length - 1;  // -1 since it is the index
     int cur = 1;  // 0 is start
     for (int i = 0; i < num_arms; i++) {
         int prev_node = start;
         for (int j = 0; j < arm_length - 1; j++) {
-            boost::add_edge(prev_node, node_ids[cur], *g_ptr);
-            prev_node = node_ids[cur];
+            boost::add_edge(prev_node, cur, *g_ptr);
+            prev_node = cur;
             cur++;
         }
     }
@@ -130,14 +129,6 @@ inline start_end_pair path_star_generator(unique_ptr<Graph<boost::directedS>> &g
 
     if (verbose) {
         cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges" << endl;
-        for (int node : node_ids) {
-            auto decendants = get_descendents(node, g_ptr);
-            cout << "Decendants of " << node << " are: ";
-            for (auto d : decendants) {
-                cout << d << " ";
-            }
-            cout << endl;
-        }
     }
     return pair<int, int>(start, end);
 }
@@ -163,7 +154,7 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
     int num_paths = uniform_int_distribution<int>(1, max_num_paths)(gen);
 
     int start = node_ids[0];
-    int end = node_ids[lookahead];
+    int end = node_ids[lookahead - 1];
 
     int cur = 1;
     // make ground-truth path

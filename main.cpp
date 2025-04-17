@@ -8,6 +8,7 @@
 
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "utils.h"
 #include "generator.cpp"
 #include <pybind11/embed.h>
 
@@ -41,30 +42,6 @@ void test_euclidian(std::mt19937 &gen, const int num_nodes = 100, const bool ver
     if ( g_ptr ) {
         cout << "Graph has " << num_vertices(*g_ptr) << " vertices and " << num_edges(*g_ptr) << " edges " << endl;
     }
-
-    /*
-    unique_ptr<vector<pair<int, int>>> edge_list_ptr;
-    get_edge_list(g_ptr, edge_list_ptr);
-
-    if ( edge_list_ptr ) {
-        cout << "Edge list has " << edge_list_ptr->size() << " edges " << endl;
-        for (auto e : *edge_list_ptr.get()) {
-            cout << e.first << " " << e.second << endl;
-        }
-    }
-
-    unique_ptr<vector<int>> node_list_ptr;
-    get_node_list(g_ptr, node_list_ptr);
-    if ( node_list_ptr ) {
-        cout << "Node list has " << node_list_ptr->size() << " nodes " << endl;
-        for (auto n : *node_list_ptr.get()) {
-            cout << n << " ";
-        }
-        cout << endl;
-    }
-    */
-
-
 }
 
 void test_path_star(std::mt19937 &gen, const int num_nodes = 100, const bool verbose = false) {
@@ -100,15 +77,16 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
 
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {
-        d = erdos_renyi(num_nodes, -1.0, 75, 125, false, false);
+        d = erdos_renyi(num_nodes, -1.0, 75, 125, 10, 3, false, true, true, 3, num_nodes + 5);
     } else  if ( graph_type == "erdos_renyi_n" ) {
-        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  false, false, true, 10, 3, batch_size, max_edges);
+        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  10, 3, false, false, true, 10, 3, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
-        d = euclidian(num_nodes, 2, -1.0, 75, 125, false, false);
+        d = euclidian(num_nodes, 2, -1.0, 75, 125, false, false, false);
     } else if ( graph_type == "path_star" ) {  // no need to test this at scale
-        d = path_star(6, 6, 5, 6, false, false);
+        d = path_star(3, 3, 5, 5, false, false);
     } else if ( graph_type == "balanced" ) {
-        d = balanced(num_nodes, 7, 5);
+        cout << "Balanced Graph Test: " << endl;
+        d = balanced(num_nodes, 7, 5, 4, false, false, false, 0, -1);
     } else {
         cout << "Unknown graph type: " << graph_type << endl;
         return;
@@ -146,11 +124,11 @@ int main(){
     // test_pybind("erdos_renyi");
     // test_pybind("euclidian");
     // test_pybind("path_star");
-    // test_pybind("balanced");
+    test_pybind("balanced");
 
-    auto t1 = time_before();
-    test_pybind("erdos_renyi_n", 150, 256);
-    time_after(t1, "Final");
+    //auto t1 = time_before();
+    //test_pybind("erdos_renyi_n", 150, 256);
+    // time_after(t1, "Final");
 
 
 

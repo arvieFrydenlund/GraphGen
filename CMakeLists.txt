@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 add_executable(GraphGen main.cpp
         undirected_graphs.h
         directed_graphs.h,
+        utils.h,
         generator.cpp)
 
 

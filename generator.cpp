@@ -1,5 +1,6 @@
 //
 // Created by arvie on 4/6/25.
+// Uitls for generation.cpp
 //
 
 #include <iostream>
@@ -12,33 +13,19 @@
 
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "utils.h"
 
 using namespace std;
-
-using std::chrono::high_resolution_clock;
-using std::chrono::duration_cast;
-using std::chrono::duration;
-using std::chrono::milliseconds;
 
 namespace py = pybind11;
 using namespace py::literals;
 
-static const py::bool_ py_true(true);
+/* ************************************************
+ *  Seeding, needed for datastream in python
+ *  ***********************************************/
 
 inline unsigned int seed_ = std::random_device{}();
 static thread_local auto gen = std::mt19937(seed_);  // so each thread in the dataloader is different
-
-chrono::time_point<high_resolution_clock> time_before() {
-    return high_resolution_clock::now();
-
-}
-
-void time_after(chrono::time_point<high_resolution_clock> t1, const string &msg = "") {
-    auto t2 = high_resolution_clock::now();
-    duration<double, std::milli> ms_double = t2 - t1;
-    std::cout << msg << ": " << ms_double.count() << "ms, " << ms_double.count() * 0.001 << "s"  << std::endl;
-}
-
 
 inline unsigned int get_seed() {
     return seed_;
@@ -49,70 +36,29 @@ inline void set_seed(const unsigned int seed = 0) {
     seed_ = seed;
 }
 
+/* ************************************************
+ *  Constructing inputs and targets for model
+ *  Single graph generation
+ *  ***********************************************/
 
-template <typename T>
-void print_np(py::array_t<T, py::array::c_style> arr, bool full, const int cutoff = 100000) {
-    auto ra = arr.mutable_unchecked();
-     // std::cout << "Shape: " << arr.ndim() << std::endl;
-    for (int i = 0; i < arr.ndim(); i++) {
-        std::cout << "Dim " << i << ": " << arr.shape(i) << " ";
+vector<int> get_node_shuffle_map(const int N, const int min_vocab, int max_vocab, const bool shuffle = false) {
+    // Shuffle nodes and map to the new range [min_vocab, max_vocab)
+    if ( max_vocab > 0 ) {
+        assert( (max_vocab - min_vocab) >= N && max_vocab - min_vocab > 0 && min_vocab >= 0);
+    } else {
+        assert ( min_vocab == 0 );
+        max_vocab = N;
     }
-    std::cout << std::endl;
-    if ( arr.ndim() == 1 ) {
-        for (int i = 0; i < arr.shape(0); i++) {
-            std::cout << ra(i) << " ";
-        }
-    } else if ( arr.ndim() == 2) {
-        for (int i = 0; i < arr.shape(0); i++) {
-            for (int j = (full) ? 0 : i; j < arr.shape(1); j++) {
-                if (ra(i, j) >= cutoff) {
-                    std::cout << "inf " << std::endl;
-                } else {
-                	std::cout << ra(i, j) << " ";
-                }
-            }
-            std::cout << std::endl;
-        }
-    }
-}
-
-
-template <typename D>
-int get_node_list(unique_ptr<Graph<D>> &g_ptr, unique_ptr<vector<int>> &node_list_ptr) {
-    node_list_ptr = make_unique<vector<int>>();
-    typename boost::graph_traits<Graph<D>>::vertex_iterator vi, vi_end;
-    for (boost::tie(vi, vi_end) = boost::vertices(*g_ptr); vi != vi_end; ++vi) {
-        node_list_ptr->push_back(*vi);
-    }
-    return 0;
-}
-
-template <typename D>
-py::array_t<int, py::array::c_style> get_node_list_np(unique_ptr<Graph<D>> &g_ptr) {
-    const size_t N = num_vertices(*g_ptr);
-    py::array_t<int, py::array::c_style> arr({N});
-    auto ra = arr.mutable_unchecked();
-    typename boost::graph_traits<Graph<D>>::vertex_iterator vi, vi_end;
-    int cur = 0;
-    for (boost::tie(vi, vi_end) = boost::vertices(*g_ptr); vi != vi_end; ++vi) {
-        ra(cur) = *vi;
-        cur += 1;
-    }
-    return arr;
-}
-
-vector<int> get_node_shuffle_map(const int N, const int min_vocab, const int max_vocab, const bool shuffle = false) {
-    assert ( N >= max_vocab - min_vocab );
     auto m = std::vector<int>(max_vocab - min_vocab);
     std::iota(m.begin(), m.end(), min_vocab);
     if (shuffle) {
         std::shuffle(m.begin(), m.end(), gen);
     }
-    // return on first N elements of m
-    return std::vector<int>(m.begin(), m.begin() + N);
+    return std::vector<int>(m.begin(), m.begin() + N);  // Only return the first N elements of the new range
 }
 
 vector<int> get_edge_shuffle_map(const int E, const bool shuffle = false) {
+    // shuffle the edges around, this will be the shuffled order given to the model
     auto m = std::vector<int>(E);
     std::iota(m.begin(), m.end(), 0);
     if (shuffle) {
@@ -121,86 +67,17 @@ vector<int> get_edge_shuffle_map(const int E, const bool shuffle = false) {
     return m;
 }
 
-
 template <typename D>
 vector<pair<int, int>> get_edge_list(unique_ptr<Graph<D>> &g_ptr, vector<int> &shuffle_map) {
+    // Get the edge list of the graph in the shuffled order
     auto edge_list =vector<pair<int, int>>(num_edges(*g_ptr), make_pair(-1, -1));
     typename boost::graph_traits<Graph<D>>::edge_iterator ei, ei_end;
-
     int cur = 0;
     for (boost::tie(ei, ei_end) = boost::edges(*g_ptr); ei != ei_end; ++ei) {
-        // edge_list.push_back(make_pair(source(*ei, *g_ptr), target(*ei, *g_ptr)));
         edge_list[shuffle_map[cur]] = make_pair(source(*ei, *g_ptr), target(*ei, *g_ptr));
         cur += 1;
     }
     return edge_list;
-}
-
-template<typename D>
-py::array_t<int, py::array::c_style> get_edge_list_np(unique_ptr<Graph<D>> &g_ptr, vector<int> &shuffle_map) {
-    const size_t N = num_edges(*g_ptr);
-    constexpr size_t M = 2;
-    py::array_t<int, py::array::c_style> arr({N, M});
-    auto ra = arr.mutable_unchecked();
-    typename boost::graph_traits<Graph<D>>::edge_iterator ei, ei_end;
-
-    int cur = 0;
-    for (boost::tie(ei, ei_end) = boost::edges(*g_ptr); ei != ei_end; ++ei) {
-        const auto i = source(*ei, *g_ptr);
-        const auto j = target(*ei, *g_ptr);
-        ra(shuffle_map[cur], 0) = i;
-        ra(shuffle_map[cur], 1) = j;
-        cur += 1;
-    }
-    return arr;
-}
-
-
-template <typename T, typename D>
-py::array_t<T, py::array::c_style> convert_matrix(unique_ptr<D> &matrix_ptr,
-                                                    const int N, const int M, T cuttoff = 100000, T max_value = -1) {
-    // distances are in node order so just copy them to the array
-    py::array_t<T, py::array::c_style>  arr = py::array_t<T, py::array::c_style>({N, M});
-    auto ra = arr.mutable_unchecked();
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < M; j++) {
-            if (cuttoff > 0 && (*matrix_ptr)[i][j] >= cuttoff) {
-                ra(i, j) = max_value;
-            } else {
-                ra(i, j) = (*matrix_ptr)[i][j];
-            }
-        }
-    }
-    return arr;
-}
-
-template <typename T, typename D>
-void convert_matrix(unique_ptr<D> &matrix_ptr, unique_ptr<vector<vector<T>>> &arr_ptr,
-    const int N, const int M, T cuttoff = 100000, T max_value = -1) {
-    arr_ptr = make_unique<vector<vector<T>>>(N, vector<T>(M));
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < M; j++) {
-            if (cuttoff > 0 && (*matrix_ptr)[i][j] >= cuttoff) {
-               (*arr_ptr)[i][j] = max_value;
-            } else {
-                (*arr_ptr)[i][j] = (*matrix_ptr)[i][j];
-            }
-        }
-    }
-}
-
-template <typename T>
-py::array_t<T, py::array::c_style> convert_vector(vector<T> &vec, const int N, T cuttoff = 100000, T max_value = -1) {
-    py::array_t<T, py::array::c_style>  arr = py::array_t<T, py::array::c_style>({N});
-    auto ra = arr.mutable_unchecked();
-    for (int i = 0; i < N; i++) {
-        if (cuttoff > 0 && vec[i] >= cuttoff) {
-            ra(i) = max_value;
-        } else {
-            ra(i) = vec[i];
-        }
-    }
-    return arr;
 }
 
 
@@ -208,7 +85,8 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
     const int max_length = 10, const int min_length = 1, int start = -1, int end = -1) {
     /*
      * Uniform sample paths of length between min_length and max_length
-     * return length as vector of nodes
+     * return length as vector of node ids
+     * This is hardcoded for checking for distances of 1 as a connection
      */
     uniform_int_distribution<int> d1(min_length, max_length);
     pair<int, int> start_end;
@@ -248,15 +126,21 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
     vector<int> path;
     path.push_back(start_end.first);
     int cur = start_end.first;
+    // print_matrix(distances_ptr, (*distances_ptr).size(), (*distances_ptr)[0].size(), true, 100000, "n");
     while (cur != start_end.second) {
         // for all neighbors of cur, find the one with the shortest distance to end
         vector<pair<int, int>> neighbors;
-        for (int i = 0; i < (*distances_ptr).size(); i++) {
-            if ((*distances_ptr)[cur][i] == 1 && (*distances_ptr)[i][start_end.second] < (*distances_ptr)[cur][start_end.second]) {
+        for (int i = 0; i < distances_ptr->size(); i++) {
+            if ((*distances_ptr)[cur][i] == 1 &&  // hardcoded, should pass in graph and get edges
+                (*distances_ptr)[i][start_end.second] < (*distances_ptr)[cur][start_end.second]) {
                 neighbors.push_back(make_pair(i, (*distances_ptr)[i][start_end.second]));
             }
         }
         // shuffle neighbors and then sort by distance to end, dumb way to do this
+        if (neighbors.size() == 0) {
+            // print_matrix(distances_ptr, (*distances_ptr).size(), (*distances_ptr)[0].size(), true, 100000, " ");
+            assert (neighbors.size() > 0);
+        }
         std::shuffle(neighbors.begin(), neighbors.end(), gen);
         std::sort(neighbors.begin(), neighbors.end(), [](const pair<int, int> &a, const pair<int, int> &b) {
             return a.second < b.second;
@@ -268,12 +152,26 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
     return path;
 }
 
+template <typename T>
+void non_causal_ground_truths(unique_ptr<vector<vector<T>>> &distance, unique_ptr<vector<vector<T>>> &ground_truths_ptr,
+    vector<pair<int, int>> &edge_list) {
+    // Makes a [E, N] matrix of ground truths where each row is the distance from the edge.first to all other nodes
+    auto N = distance->size();
+    auto E = edge_list.size();
+    ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
+    for (int t = 0; t < E; t++) {
+        for (int i = 0; i < N; i++) {
+            (*ground_truths_ptr)[t][i] = (*distance)[edge_list[t].first][i];
+        }
+    }
+}
 
 template <typename D>
 py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
+                            const int max_length = 10, const int min_length = 1, int start = -1, int end = -1,
                             const bool is_causal = false,
-                            const bool return_full = false,
-                            const bool shuffle_edges = false) {
+                            const bool shuffle_edges = false,
+                            const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
 
 	const auto N = num_vertices(*g_ptr);
     const auto E = num_edges(*g_ptr);
@@ -282,81 +180,112 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     // floyd_warshall(g_ptr, distances_ptr, false);
     johnson<D>(g_ptr, distances_ptr, false);
     // print_matrix(distances_ptr, N, N, true, 100000, " ");
-    auto original_distances = convert_matrix<int, DistanceMatrix<boost::undirectedS>>(distances_ptr, N, N);
 
-    auto shuffle_map = get_edge_shuffle_map(E, shuffle_edges);  // just range if no shuffle
-    auto edge_list = get_edge_list(g_ptr, shuffle_map);
+    auto edge_shuffle_map = get_edge_shuffle_map(E, shuffle_edges);  // just range if no shuffle
+    auto edge_list = get_edge_list(g_ptr, edge_shuffle_map);
 
     unique_ptr<vector<vector<int>>> distances_ptr2;
     unique_ptr<vector<vector<int>>> ground_truths_ptr;
-    floyd_warshall_frydenlund(g_ptr, distances_ptr2, ground_truths_ptr, edge_list, false);
-    // print_matrix(distances_ptr2, N, N, true, 100000, " ");
-    // print_matrix(ground_truths_ptr, E, N, true);
+    if ( is_causal ) {
+        floyd_warshall_frydenlund(g_ptr, distances_ptr2, ground_truths_ptr, edge_list, false);
+        // print_matrix(distances_ptr2, N, N, true, 100000, " ");
+        // print_matrix(ground_truths_ptr, E, N, true);
+    } else {
+        cout << "Non causal graph" << endl;
+        convert_boost_matrix(distances_ptr, distances_ptr2, N, N);
+        non_causal_ground_truths(distances_ptr2, ground_truths_ptr, edge_list);
+    }
+    cout << "path : " << endl;
+    auto path = sample_path(distances_ptr2, max_length, min_length, start, end);
+    cout << "After path  : " << endl;
 
-    auto distances = convert_matrix<int, vector<vector<int>>>(distances_ptr2, N, N);
-    auto ground_truths = convert_matrix<int, vector<vector<int>>>(ground_truths_ptr, E, N);
+    auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
+    auto new_N = *max_element(node_shuffle_map.begin(), node_shuffle_map.end()) + 1;
+
+    auto original_distances = convert_distance_matrix<int, DistanceMatrix<boost::undirectedS>>(distances_ptr, node_shuffle_map, N, new_N);
+    cout << "Original distances: " << endl;
+    auto distances = convert_distance_matrix<int, vector<vector<int>>>(distances_ptr2, node_shuffle_map, N, new_N);
+    cout << "Distances: " << endl;
+    auto ground_truths = convert_ground_truths<int, vector<vector<int>>>(ground_truths_ptr, node_shuffle_map, E, N, new_N);
+    cout << "Ground truths: " << endl;
     // print_np(distances, true);
 
-    auto path = sample_path(distances_ptr2, 10, 3, -1, -1);
-
     py::dict d;
-    d["edge_list"] = get_edge_list_np(g_ptr, shuffle_map);
+    d["edge_list"] = convert_edge_list(edge_list, node_shuffle_map);
     d["original_distances"] = original_distances;
     d["distances"] = distances;
     d["ground-truths"] = ground_truths;
-    d["path"] = convert_vector(path, path.size());
+    d["path"] = convert_path(path, node_shuffle_map);
+    d["node_map"] = convert_vector(node_shuffle_map);
     return d;
 }
 
 
 inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
-    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
-    /*
-	* Expose generation to python
-    */
+    const int max_path_length = 10, const int min_path_length = 1,
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
+
     assert (p < 1.0);  //  boost fails at p = 1.0, way to go boost
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
-    return package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    return package_for_python(g_ptr, max_path_length, min_path_length, -1, -1,
+        is_causal, shuffle_edges, shuffle_nodes, min_vocab, max_vocab);
 }
 
-inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0,
-                          const int c_min = 75, const int c_max = 125,
-    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
-    /*
-     */
+inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
+    const int max_path_length = 10, const int min_path_length = 1,
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
+
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     unique_ptr<vector<vector<float>>> positions_ptr;
     euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
-    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
-
-    //print_matrix(positions_ptr, num_vertices(*g_ptr), 2, true);
-    auto positions = convert_matrix<float, vector<vector<float>>>(positions_ptr, num_vertices(*g_ptr), 2);
-    d["positions"] = positions;
+    auto d = package_for_python(g_ptr, max_path_length, min_path_length, -1, -1,
+        is_causal, shuffle_edges, shuffle_nodes, min_vocab, max_vocab);
+    // Only return valid positions (otherwise nodes have been mapped and I don't want to convert positions)
+    // Positions are only for plotting, when mapping should not be done.
+    // This may not be true if I ever use positions as neural net features
+    if ( !shuffle_nodes && max_vocab == -1 ) {
+        auto N = num_vertices(*g_ptr);
+        constexpr size_t M = 2;
+        auto positions = py::array_t<float, py::array::c_style>({N, M});
+        auto ra = positions.mutable_unchecked();
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < 2; j++) {
+                constexpr float r = 10000;
+                ra(i, j) =  ceil((*positions_ptr)[i][j] * r) / r;;
+            }
+        }
+        d["positions"] = positions;
+    }
     return d;
 }
 
 inline py::dict path_star(const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
-    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
-    /*
-     *
-     */
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
+
     unique_ptr<Graph<boost::directedS>> g_ptr;
     auto start_end = path_star_generator(g_ptr,  min_num_arms, max_num_arms, min_arm_length,max_arm_length, gen, false);
-    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    auto d = package_for_python(g_ptr, -1, -1, start_end.first, start_end.second,
+        is_causal, shuffle_edges, shuffle_nodes, min_vocab, max_vocab);
     d["start"] = start_end.first;
     d["end"] = start_end.second;
     return d;
 }
 
 inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4,
-    const bool is_causal = false, const bool return_full = false, const bool shuffle_edges = false) {
-    /*
-     *
-     */
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
+    cout << "Balanced graph ... " << endl;
     unique_ptr<Graph<boost::directedS>> g_ptr;
+    cout << "Making graph'" << endl;
     auto start_end = balanced_generator(g_ptr, num_nodes, gen, lookahead, min_noise_reserve, max_num_parents, false);
-    auto d = package_for_python(g_ptr, is_causal, return_full, shuffle_edges);
+    cout << "start: " << start_end.first << " end: " << start_end.second << endl;
+
+    auto d = package_for_python(g_ptr, -1, -1, start_end.first, start_end.second,
+        is_causal, shuffle_edges, shuffle_nodes, min_vocab, max_vocab);
     d["start"] = start_end.first;
     d["end"] = start_end.second;
     return d;
@@ -533,7 +462,7 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
         johnson<D>(g_ptr, distances_ptr, false);
         // time_after(path_d, "floyd_warshall");
         unique_ptr<vector<vector<int>>> distances_ptr2;
-        convert_matrix<int, DistanceMatrix<D>>(distances_ptr, distances_ptr2, N, N);
+        convert_boost_matrix<int, DistanceMatrix<D>>(distances_ptr, distances_ptr2, N, N);
         // auto path_t = time_before();
         auto path = sample_path(distances_ptr2, max_length, min_length, -1, -1);
         // time_after(path_t, "sample_path");
@@ -616,22 +545,28 @@ PYBIND11_MODULE(generator, m) {
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi, "Generate a single Erdos Renyi graph", py::arg("num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
-        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+        py::arg("max_path_length") = 10, py::arg("min_path_length") = 3,
+        py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
 
     m.def("euclidian", &euclidian, "Generate a single Euclidian graph", py::arg("num_nodes"),
         py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
-        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+        py::arg("max_path_length") = 10, py::arg("min_path_length") = 3,
+        py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
 
     m.def("path_star", &path_star, "Generate a single path star graph",
         py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
-        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+        py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
 
     m.def("balanced", &balanced, "Generate a single balanced graph.  Note these are done slightly differently from original paper.",
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4,
-        py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false);
+        py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
     // batched graph generation
     m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
