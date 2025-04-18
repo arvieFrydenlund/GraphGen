@@ -124,7 +124,7 @@ int main(){
     // test_pybind("erdos_renyi");
     // test_pybind("euclidian");
     // test_pybind("path_star");
-    test_pybind("balanced");
+    test_pybind("balanced", 25);
 
     //auto t1 = time_before();
     //test_pybind("erdos_renyi_n", 150, 256);

@@ -27,20 +27,18 @@ using namespace std;
 typedef pair<int, int> start_end_pair;
 
 
-inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::directedS>> &g_ptr,
-                                               const vector<int> &node_ids, const vector<int> &reverse_node_ids) {
+inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::directedS>> &g_ptr) {
   /*
     * Get the children of each node in the graph. The children are stored in a vector of unordered sets.
 	* The index of the vector does not correspond to the node id in the original graph.
    */
-
     vector<unordered_set<int>> children(num_vertices(*g_ptr), unordered_set<int>());
     for (int i = 0; i < num_vertices(*g_ptr); i++) {
       	auto children_at_i = children[i];
     	// convert node at idx to graph id
-        for (auto e : boost::make_iterator_range(boost::out_edges(node_ids[i], *g_ptr))) {
+        for (auto e : boost::make_iterator_range(boost::out_edges(i, *g_ptr))) {
          	auto child_of_i = boost::target(e, *g_ptr);
-            children_at_i .insert(reverse_node_ids[child_of_i]);  // reverse back to the index
+            children_at_i .insert(child_of_i);
         }
     }
     return children;
@@ -80,19 +78,6 @@ inline unordered_set<int> get_descendents(const int node, const unique_ptr<Graph
     }
     return decendants;
 }
-
-
-inline vector<int> make_node_ids(const int num_nodes, unique_ptr<Graph<boost::directedS>> &g_ptr, std::mt19937 &gen){
-    // permute graph before we make it
-    auto node_ids = vector<int>(num_nodes);
-    for (int i = 0; i < num_nodes; i++) {
-        node_ids[i] = i;
-        boost::add_vertex(*g_ptr);  // note we are adding vertices here
-    }
-    std::shuffle(node_ids.begin(), node_ids.end(), gen);
-    return node_ids;
- }
-
 
 
 inline start_end_pair path_star_generator(unique_ptr<Graph<boost::directedS>> &g_ptr,
@@ -138,34 +123,26 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
                               const int num_nodes, std::mt19937 &gen, int lookahead, const int min_noise_reserve = 0,
                               const int max_num_parents = 4, const bool verbose = false) {
 
+    assert( num_nodes > 0  &&  num_nodes > lookahead * 2 + min_noise_reserve + 1);
+
     g_ptr = make_unique<Graph<boost::directedS>>();
-    auto node_ids = make_node_ids(num_nodes, g_ptr, gen); // this adds the max to the graph, not all may be used
 
-    vector<int> reverse_node_ids(node_ids.size());
-    for (int i = 0; i < node_ids.size(); i++) {
-        reverse_node_ids[node_ids[i]] = i;
-    }
-
-    const int max_num_path_nodes = num_nodes - min_noise_reserve - 1 - lookahead;
-    if ( max_num_path_nodes  < 0 ) {
-          return pair<int, int>(-1,-1);  // error
-     }
-    int max_num_paths = max_num_path_nodes / lookahead;  // integer division
+    int max_num_paths = (num_nodes - min_noise_reserve - 1 - lookahead) / lookahead;  // integer division
     int num_paths = uniform_int_distribution<int>(1, max_num_paths)(gen);
 
-    int start = node_ids[0];
-    int end = node_ids[lookahead - 1];
-
+    int start = 0;
+    int end = lookahead - 1;
     int cur = 1;
     // make ground-truth path
     int prev_node = start;
     for (int _ = 0; _ < lookahead; _++) {
-        boost::add_edge(prev_node, node_ids[cur], *g_ptr);
-        prev_node = node_ids[cur];
+        boost::add_edge(prev_node, cur, *g_ptr);
+        prev_node = cur;
         cur++;
     }
+
     // make other paths connected to start
-    int available = max_num_path_nodes;
+    int available = num_nodes - min_noise_reserve - 1 - lookahead;
     for ( int _ = 0; _ < num_paths; _++) {
         prev_node = start;
         int extra_length = uniform_int_distribution<int>(0, 1)(gen);
@@ -174,26 +151,28 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
             other_branch_length = available;
         }
         for (int _ = 0; _ < other_branch_length; _++) {
-            boost::add_edge(prev_node, node_ids[cur], *g_ptr);
-            prev_node = node_ids[cur];
+            boost::add_edge(prev_node, cur, *g_ptr);
+            prev_node = cur;
             cur++;
         }
         available -= other_branch_length;
     }
+
     //  build in-arm
     if ( cur < num_nodes - 1 ) {
     	int num_prefix_vertices = uniform_int_distribution<int>(0, min(num_nodes - cur - 1, lookahead))(gen);
     	int next_node = start;
     	for (int _ = 0; _ < num_prefix_vertices; _++) {
-        	boost::add_edge(node_ids[cur], next_node, *g_ptr);
-        	next_node = node_ids[cur];
+        	boost::add_edge(cur, next_node, *g_ptr);
+        	next_node = cur;
         	cur++;
    		}
 	}
 
+
     // sample some parent/ancestor vertices
     // initialize sizes
-    auto children = get_children(g_ptr, node_ids, reverse_node_ids); // these are in indices not node ids
+    auto children = get_children(g_ptr); // these are in indices not node ids
     auto parents = get_parents(children); // these are in indices not node ids
     vector<float> in_degrees(num_nodes);
     vector<float> out_degrees(num_nodes);
@@ -220,13 +199,13 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
             children[i].insert(child_id);
             parents[child_id].insert(i);
             in_degrees[child_id] += 1;
-            boost::add_edge(node_ids[cur], node_ids[child_id], *g_ptr);
+            boost::add_edge(cur, child_id, *g_ptr);
         }
 
         // do not sample descendants of the node
-        auto descendants = get_descendents(node_ids[i], g_ptr);
+        auto descendants = get_descendents(i, g_ptr);
         for (const int descendant : descendants) {
-            probabilities[reverse_node_ids[descendant]] = 0;
+            probabilities[descendant] = 0;
         }
         if (accumulate(probabilities.begin(), probabilities.end(), 0.0) > 0.0) {
             for (int j = 0; j < num_parents; j++) {
@@ -234,9 +213,10 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
                 children[parent_id].insert(i);
                 parents[i].insert(parent_id);
                 out_degrees[parent_id] += 1;
-                boost::add_edge(node_ids[parent_id], node_ids[cur], *g_ptr);
+                boost::add_edge(parent_id, cur, *g_ptr);
             }
         }
+        cur += 1;
     }
     return pair<int, int>(start, end);
 }
