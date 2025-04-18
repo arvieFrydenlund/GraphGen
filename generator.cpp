@@ -550,7 +550,9 @@ PYBIND11_MODULE(generator, m) {
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
 
-    m.def("euclidian", &euclidian, "Generate a single Euclidian graph", py::arg("num_nodes"),
+    m.def("euclidian", &euclidian,
+        "Generate a single Euclidian graph.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).",
+        py::arg("num_nodes"),
         py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_path_length") = 10, py::arg("min_path_length") = 3,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
@@ -567,6 +569,10 @@ PYBIND11_MODULE(generator, m) {
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
+
+    m.def("balanced_graph_size_check", &balanced_graph_size_check, "Check that the balanced graph size is valid.  Will fail assert otherwise.",
+        py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0);
+
 
     // batched graph generation
     m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
