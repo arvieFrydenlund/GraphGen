@@ -83,6 +83,9 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
                           is_casual, true, true, 2,  num_nodes + 5, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
         d = euclidian(num_nodes, 2, -1.0, 75, 125, 10, 3, is_casual, false, false);
+    } else  if ( graph_type == "euclidian_n" ) {
+        //d = euclidian_n(num_nodes, 2, -1.0, 75, 125,  10, 3, true,
+        //                  is_casual, true, true, 2,  num_nodes + 5, batch_size, max_edges);
     } else if ( graph_type == "path_star" ) {  // no need to test this at scale
         d = path_star(3, 3, 5, 5, false, false);
     } else if ( graph_type == "balanced" ) {
@@ -96,7 +99,17 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
     // print the dict
     for (auto item : d)
     {
-        std::cout << "key: " << item.first << ", value=" << item.second << std::endl;
+        std::cout << "key: " << item.first << ", value=" << item.second;
+        // if numpy array print shape
+        if (py::isinstance<py::array>(item.second)) {
+            auto arr = item.second.cast<py::array>();
+            std::cout << " Shape: [";
+            for (size_t i = 0; i < arr.ndim(); i++) {
+                std::cout << arr.shape(i) << " ";
+            }
+            std::cout << "]";
+        }
+        cout << endl;
     };
 }
 
@@ -127,10 +140,11 @@ int main(){
     // test_pybind("path_star");
     // test_pybind("balanced", 25);
 
-    //auto t1 = time_before();
+    auto t1 = time_before();
     test_pybind("erdos_renyi_n", 50, 256, false);
     // test_pybind("erdos_renyi_n", 150, 256);
-    // time_after(t1, "Final");
+    // test_pybind("euclidian_n", 50, 256, false);
+    time_after(t1, "Final");
 
 
 
