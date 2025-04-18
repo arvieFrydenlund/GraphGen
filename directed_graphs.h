@@ -130,7 +130,7 @@ bool balanced_graph_size_check(const int num_nodes, int lookahead, const int min
 
 inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_ptr,
                               const int num_nodes, std::mt19937 &gen, int lookahead, const int min_noise_reserve = 0,
-                              const int max_num_parents = 4, const bool verbose = false) {
+                              const int max_num_parents = 4, int max_noise = -1, const bool verbose = false) {
 
     assert ( balanced_graph_size_check(num_nodes, lookahead, min_noise_reserve) );
 
@@ -190,8 +190,11 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
         out_degrees[i] = alpha + static_cast<float>(parents[i].size());
     }
 
-    while ( cur < num_nodes - 1){  // for (int i = cur; i < num_nodes - 1; i++) {  // if ( cur < num_nodes - 1 )
-        // insert cur in graph this needs to be done before since it may not have child edges
+    int num_noise = 0;
+    if ( max_noise == -1 ) {
+        max_noise = num_nodes - cur - 1;  // max noise is the rest of the nodes
+    }
+    while ( cur < num_nodes && num_noise < max_noise ) {
         const int num_children = uniform_int_distribution<int>(0, max_num_parents)(gen);
         int num_parents = 0;
         if ( num_children != 0 ) {
@@ -199,7 +202,6 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
         } else {
             num_parents = uniform_int_distribution<int>(1, max_num_parents)(gen);
         }
-
         vector<float> probabilities(cur);
         for (int j = 0; j < cur; j++) {
             probabilities[j] = in_degrees[j];  // only looking at nodes before i
@@ -212,7 +214,6 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
             boost::add_edge(cur, child_id, *g_ptr);
         }
 
-        // do not sample descendants of the node
         unordered_set<int> descendants;
         if ( num_children > 0 ) {  // since we are using edge list graphs we can not insert nodes
             // this causes an issue with boost if we are looking for an edge for a node that is not in the graph
@@ -221,9 +222,8 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
             descendants = unordered_set<int>();
         }
         for (const int descendant : descendants) {
-            probabilities[descendant] = 0;
+            probabilities[descendant] = 0;  // do not sample descendants of the node
         }
-
         for (int j = 0; j < num_parents; j++) {
             if (accumulate(probabilities.begin(), probabilities.end(), 0.0) > 0.0) {
                 int parent_id = std::discrete_distribution<int>(probabilities.begin(), probabilities.end())(gen);
@@ -231,9 +231,8 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
                 parents[cur].insert(parent_id);
                 out_degrees[parent_id] += 1;
                 boost::add_edge(parent_id, cur, *g_ptr);
-                probabilities[parent_id] = 0;
+                probabilities[parent_id] = 0;  // zero out so fresh ones are sampled
             }
-
         }
         cur += 1;
     }

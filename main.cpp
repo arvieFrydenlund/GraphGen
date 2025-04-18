@@ -73,20 +73,21 @@ void test_balanced(std::mt19937 &gen, const int num_nodes = 100, const bool verb
 
 }
 
-void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, const int batch_size = 7, const int max_edges = 512) {
+void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, const int batch_size = 7, const bool is_casual = true, const int max_edges = 512) {
 
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {
-        d = erdos_renyi(num_nodes, -1.0, 75, 125, 10, 3, false, true, true, 3, num_nodes + 5);
+        d = erdos_renyi(num_nodes, -1.0, 75, 125, 10, 3, is_casual, true, true, 3, num_nodes + 5);
     } else  if ( graph_type == "erdos_renyi_n" ) {
-        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  10, 3, false, false, true, 10, 3, batch_size, max_edges);
+        d = erdos_renyi_n(num_nodes, -1.0, 75, 125,  10, 3, true,
+                          is_casual, true, true, 2,  num_nodes + 5, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
-        d = euclidian(num_nodes, 2, -1.0, 75, 125, false, false, false);
+        d = euclidian(num_nodes, 2, -1.0, 75, 125, 10, 3, is_casual, false, false);
     } else if ( graph_type == "path_star" ) {  // no need to test this at scale
         d = path_star(3, 3, 5, 5, false, false);
     } else if ( graph_type == "balanced" ) {
         cout << "Balanced Graph Test: " << endl;
-        d = balanced(num_nodes, 7, 5, 4, false, false, false, 0, -1);
+        d = balanced(num_nodes, 7, 5, 4, -1, is_casual, false, false, 0, -1);
     } else {
         cout << "Unknown graph type: " << graph_type << endl;
         return;
@@ -124,10 +125,11 @@ int main(){
     // test_pybind("erdos_renyi");
     // test_pybind("euclidian");
     // test_pybind("path_star");
-    test_pybind("balanced", 25);
+    // test_pybind("balanced", 25);
 
     //auto t1 = time_before();
-    //test_pybind("erdos_renyi_n", 150, 256);
+    test_pybind("erdos_renyi_n", 50, 256, false);
+    // test_pybind("erdos_renyi_n", 150, 256);
     // time_after(t1, "Final");
 
 

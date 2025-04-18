@@ -68,7 +68,10 @@ void print_np(py::array_t<T, py::array::c_style> arr, bool full, const int cutof
 }
 
 
-// converting utils
+/* ************************************************
+ *  Converting utils
+ *  Single graph generation
+ *  ***********************************************/
 
 inline py::array_t<int, py::array::c_style> convert_edge_list(vector<pair<int, int>> &edge_list, vector<int>& node_shuffle_map) {
     // Convert a edge_list [E,2] (which has already been shuffled) to a numpy array and map node ids
@@ -164,6 +167,145 @@ py::array_t<T, py::array::c_style> convert_vector(vector<T> &vec) {
     }
     return arr;
 }
+
+
+/* ************************************************
+ *  Converting utils
+ *  Batched graph generation
+ *  ***********************************************/
+
+template <typename T>
+py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vector<T>>>> &in_matrices,  T pad = -1) {
+    int N = 0;
+    int M = 0;
+    for (auto &m : in_matrices) {
+        if ((*m).size() > N) {
+            N = (*m).size();
+        }
+        if ((*m)[0].size() > M) {
+            M = (*m)[0].size();
+        }
+    }
+    pad = static_cast<T>(pad);
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
+    auto ra = arr.mutable_unchecked();
+    int cur = 0;
+    for (auto &m : in_matrices) {
+        for (int j = 0; j < (*m).size(); j++) {
+            for (int k = 0; k < (*m)[j].size(); k++) {
+                ra(cur, j, k) = (*m)[j][k];
+            }
+            for (int k = (*m)[j].size(); k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        for (int j = (*m).size(); j < N; j++) {
+            for (int k = 0; k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        cur += 1;
+    }
+    return arr;
+}
+
+// what a mess, refactored so this is not needed
+template <typename T, typename T2>
+py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<T2>> &in_matrices,
+    const list<pair<int, int>> &batched_sizes, int pad = -1) {
+    int N = 0;
+    int M = 0;
+    for (auto &m : batched_sizes) {
+        if (m.first > N) {
+            N = m.first;
+        }
+        if (m.second > M) {
+            M = m.second;
+        }
+    }
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
+    auto ra = arr.mutable_unchecked();
+    int cur = 0;
+    auto it1 = in_matrices.begin();
+    auto it2 = batched_sizes.begin();
+    for(; it1 != in_matrices.end() && it2 != batched_sizes.end(); ++it1, ++it2) {
+        auto n = it2->first;
+        auto m = it2->second;
+        for (int j = 0; j < n; j++) {
+            for (int k = 0; k < m; k++) {
+                ra(cur, j, k) = (**it1)[j][k];
+            }
+            for (int k = m; k < M; k++) {
+                ra(cur, j, k) = pad;
+            }
+        }
+        cur += 1;
+    }
+    return arr;
+}
+
+
+template <typename T>
+py::array_t<T, py::array::c_style> batch_edge_list(const list<vector<pair<int, int>>> &batched_edge_list, int pad = -1) {
+    int E = 0;
+    for (auto &m : batched_edge_list) {
+        if (m.size() > E) {
+            E = m.size();
+        }
+    }
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_edge_list.size()), E, 2});
+    auto ra = arr.mutable_unchecked();
+    auto cur = 0;
+    for (auto &m : batched_edge_list) {
+        for (int j = 0; j < m.size(); j++) {
+            ra(cur, j, 0) = m[j].first;
+            ra(cur, j, 1) = m[j].second;
+        }
+        for (int j = m.size(); j < E; j++) {
+            ra(cur, j, 0) = pad;
+            ra(cur, j, 1) = pad;
+        }
+        cur += 1;
+    }
+    return arr;
+}
+
+template <typename T>
+py::array_t<T, py::array::c_style> batch_paths(const list<vector<int>> &batched_paths, int pad = -1) {
+    int L = 0;
+    for (auto &m : batched_paths) {
+        if (m.size() > L) {
+            L = m.size();
+        }
+    }
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_paths.size()), L});
+    auto ra = arr.mutable_unchecked();
+    auto cur = 0;
+    for (auto &m : batched_paths) {
+        for (int j = 0; j < m.size(); j++) {
+            ra(cur, j) = m[j];
+        }
+        for (int j = m.size(); j < L; j++) {
+            ra(cur, j) = pad;
+        }
+        cur += 1;
+    }
+    return arr;
+}
+
+template <typename T>
+py::array_t<T, py::array::c_style> batch_lengths(const list<int> &batched_lengths) {
+
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_lengths.size())});
+    auto ra = arr.mutable_unchecked();
+    int cur = 0;
+    for (auto &m : batched_lengths) {
+        ra(cur) = m;
+        cur += 1;
+    }
+    return arr;
+}
+
 
 
 
