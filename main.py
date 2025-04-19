@@ -12,7 +12,7 @@ def build_module(name):
     if system(f"g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
               f"-fPIC $(python3 -m pybind11 --includes) "
               f"-I/usr/include/boost/graph/ "
-              f"-I. undirected_graphs.h directed_graphs.h generator.cpp "
+              f"-I. undirected_graphs.h directed_graphs.h utils.h generator.cpp "
               f"-o generator$(python3-config --extension-suffix)") != 0:
         print(f"ERROR: Unable to compile `{name}.cpp`.")
         import sys
