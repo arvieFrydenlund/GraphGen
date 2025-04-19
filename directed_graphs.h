@@ -121,7 +121,7 @@ inline start_end_pair path_star_generator(unique_ptr<Graph<boost::directedS>> &g
 }
 
 
-bool balanced_graph_size_check(const int num_nodes, int lookahead, const int min_noise_reserve = 0){
+inline bool balanced_graph_size_check(const int num_nodes, int lookahead, const int min_noise_reserve = 0){
       // need two arms of length lookahead (+1) and min_noise_reserve
       // expose this to python
       return num_nodes > 0  &&  num_nodes > lookahead * 2 + min_noise_reserve + 1;

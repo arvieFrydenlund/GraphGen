@@ -306,70 +306,30 @@ py::array_t<T, py::array::c_style> batch_lengths(const list<int> &batched_length
 }
 
 
-
 template <typename T>
-py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<vector<vector<T>>>> &in_matrices,  T pad = -1) {
+py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<vector<T>>>> &batched_positions,
+                                                   list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                                   const int dim,
+                                                   int pad = -1) {
     int N = 0;
-    int M = 0;
-    for (auto &m : in_matrices) {
+    for (auto &m : batched_positions) {
         if ((*m).size() > N) {
             N = (*m).size();
         }
-        if ((*m)[0].size() > M) {
-            M = (*m)[0].size();
-        }
     }
-    pad = static_cast<T>(pad);
-    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
+    py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_positions.size()), N, dim + 1});
+    arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad);  // initialize array
     auto ra = arr.mutable_unchecked();
+    auto it1 = batched_positions.begin();
+    auto it2 = batched_node_shuffle_map.begin();
     int cur = 0;
-    for (auto &m : in_matrices) {
-        for (int j = 0; j < (*m).size(); j++) {
-            for (int k = 0; k < (*m)[j].size(); k++) {
-                ra(cur, j, k) = (*m)[j][k];
-            }
-            for (int k = (*m)[j].size(); k < M; k++) {
-                ra(cur, j, k) = pad;
-            }
-        }
-        for (int j = (*m).size(); j < N; j++) {
-            for (int k = 0; k < M; k++) {
-                ra(cur, j, k) = pad;
-            }
-        }
-        cur += 1;
-    }
-    return arr;
-}
-
-// what a mess, refactored so this is not needed
-template <typename T, typename T2>
-py::array_t<T, py::array::c_style> batch_matrix(const list<unique_ptr<T2>> &in_matrices,
-    const list<pair<int, int>> &batched_sizes, int pad = -1) {
-    int N = 0;
-    int M = 0;
-    for (auto &m : batched_sizes) {
-        if (m.first > N) {
-            N = m.first;
-        }
-        if (m.second > M) {
-            M = m.second;
-        }
-    }
-    py::array_t<T, py::array::c_style> arr({static_cast<int>(in_matrices.size()), N, M});
-    auto ra = arr.mutable_unchecked();
-    int cur = 0;
-    auto it1 = in_matrices.begin();
-    auto it2 = batched_sizes.begin();
-    for(; it1 != in_matrices.end() && it2 != batched_sizes.end(); ++it1, ++it2) {
-        auto n = it2->first;
-        auto m = it2->second;
-        for (int j = 0; j < n; j++) {
-            for (int k = 0; k < m; k++) {
-                ra(cur, j, k) = (**it1)[j][k];
-            }
-            for (int k = m; k < M; k++) {
-                ra(cur, j, k) = pad;
+    for (; it1 != batched_positions.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+        for (int j = 0; j < (**it1).size(); j++) {
+            cout << "j: " << j << endl;
+            ra(cur, j, 0) = static_cast<T>((**it2)[j]);  // map node id
+            for (int d = 0; d < dim; d++) { // positions
+                constexpr float r = 10000;
+                ra(cur, j, d + 1) =  ceil((**it1)[j][d] * r) / r;;
             }
         }
         cur += 1;

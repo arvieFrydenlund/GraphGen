@@ -394,7 +394,6 @@ inline py::dict erdos_renyi_n(
     if ( max_vocab > 0 ) {
         new_N = max_vocab;
     }
-
     py::dict d;
     d["num_attempts"] = attempts;
     d["vocab_min_size"] = min_vocab;
@@ -402,8 +401,6 @@ inline py::dict erdos_renyi_n(
     if ( attempts >= max_attempts ) {
         return d;
     }
-    cout << "Generated " << num << " graphs of " << batch_size << endl;
-
     d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
     d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
     d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
@@ -415,7 +412,7 @@ inline py::dict erdos_renyi_n(
     return d;
 }
 
-/*
+
 inline py::dict euclidian_n(
     const int num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
     const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true,
@@ -431,7 +428,7 @@ inline py::dict euclidian_n(
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
-    auto batched_paths = list<unique_ptr<vector<int>>>(batch_size);
+    auto batched_paths = list<unique_ptr<vector<int>>>();
     auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
 
@@ -446,6 +443,7 @@ inline py::dict euclidian_n(
         unique_ptr<vector<vector<float>>> positions_ptr;
         // auto graph_t = time_before();
         euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
+        batched_positions.push_back(move(positions_ptr));
         // time_after(graph_t, "graph gen");
         const auto N = num_vertices(*g_ptr);
         const auto E = num_edges(*g_ptr);
@@ -459,6 +457,7 @@ inline py::dict euclidian_n(
         }
         auto edge_shuffle_map = get_edge_shuffle_map(E, shuffle_edges);
         auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
+        batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
 
         // auto pack_t = time_before();
         push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
@@ -469,10 +468,105 @@ inline py::dict euclidian_n(
         num += 1;
     }
 
+    auto new_N = num_nodes;
+    if ( max_vocab > 0 ) {
+        new_N = max_vocab;
+    }
     py::dict d;
+    d["num_attempts"] = attempts;
+    d["vocab_min_size"] = min_vocab;
+    d["vocab_max_size"] = max_vocab;
+    if ( attempts >= max_attempts ) {
+        return d;
+    }
+    cout << "Generated " << num << " graphs of " << batch_size << endl;
+    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
+    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
+    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+
+    if ( sample_target_paths ) {
+        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
+        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
+    }
+    cout << "Generated " << num << " graphs of " << batch_size << endl;
+    d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
+
+    return d;
 
 }
-*/
+
+
+inline py::dict path_star_n(
+    const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
+    const bool sample_target_paths = true,
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
+    const int batch_size = 256, int max_attempts = 1000) {
+    assert ( min_num_arms > 0);
+    assert ( min_arm_length > 0);
+    assert ( batch_size > 0);
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
+    auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
+    auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
+    auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
+    auto batched_paths = list<unique_ptr<vector<int>>>();
+    auto batched_edge_list_lengths = list<int>();
+    auto batched_path_lengths = list<int>();
+
+    int attempts = 0;
+    int num = 0;
+
+    while ( num < batch_size ) {
+        // cout << "Generating graph " << num << " of " << batch_size << endl;
+        unique_ptr<Graph<boost::directedS>> g_ptr;
+        // auto graph_t = time_before();
+        auto start_end = path_star_generator(g_ptr,  min_num_arms, max_num_arms, min_arm_length,max_arm_length, gen, false);
+        // time_after(graph_t, "graph gen");
+        const auto N = num_vertices(*g_ptr);
+        const auto E = num_edges(*g_ptr);
+        if ( E > 512 ) {
+            attempts += 1;
+            if (attempts > max_attempts) {
+                cout << "Failed to generate graph after " << attempts << " attempts" << endl;
+                break;
+            }
+            continue;
+        }
+        auto edge_shuffle_map = get_edge_shuffle_map(E, shuffle_edges);
+        auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
+        batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
+
+        // auto pack_t = time_before();
+        push_back_data<boost::directedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
+            batched_edge_list, batched_edge_list_lengths, batched_distances,
+            batched_ground_truths, batched_paths,  batched_path_lengths,
+            -1, -1, start_end.first, start_end.second);
+        // time_after(pack_t, "pack");
+        num += 1;
+    }
+    auto new_N = max_num_arms * (max_arm_length - 1) + 1;
+    if ( max_vocab > 0 ) {
+        new_N = max_vocab;
+    }
+    py::dict d;
+    d["num_attempts"] = attempts;
+    d["vocab_min_size"] = min_vocab;
+    d["vocab_max_size"] = max_vocab;
+    if ( attempts >= max_attempts ) {
+        return d;
+    }
+    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
+    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
+    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+    if ( sample_target_paths ) {
+        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
+        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
+    }
+    return d;
+}
+
 
 
 PYBIND11_MODULE(generator, m) {
@@ -487,7 +581,6 @@ PYBIND11_MODULE(generator, m) {
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-
     m.def("euclidian", &euclidian,
         "Generate a single Euclidian graph.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).",
         py::arg("num_nodes"),
@@ -496,12 +589,10 @@ PYBIND11_MODULE(generator, m) {
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-
     m.def("path_star", &path_star, "Generate a single path star graph",
         py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
-
 
     m.def("balanced", &balanced, "Generate a single balanced graph.  Note these are done slightly differently from original paper.",
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
@@ -511,14 +602,27 @@ PYBIND11_MODULE(generator, m) {
     m.def("balanced_graph_size_check", &balanced_graph_size_check, "Check that the balanced graph size is valid.  Will fail assert otherwise.",
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0);
 
-
     // batched graph generation
-    //m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
-    //    py::arg("num_nodes"), py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
-    //    py::arg("max_length") = 10, py::arg("min_length") = 1,
-    //    py::arg("is_causal") = false, py::arg("return_full") = false, py::arg("shuffle_edges") = false,
-    //    py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("sample_target_paths") = true,
-    //    py::arg("max_attempts") = 1000);
+    m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
+        py::arg("num_nodes"), py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
+        py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
+        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
+
+    m.def("euclidian_n", &euclidian_n, "Generate a batch of Euclidian graphs",
+        py::arg("num_nodes"), py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
+        py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
+        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
+
+    m.def("path_star_n", &path_star_n, "Generate a batch of path star graphs",
+        py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
+        py::arg("sample_target_paths") = true,
+        py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
+        py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
+        py::arg("batch_size") = 256,  py::arg("max_attempts") = 1000);
 
 
 }
