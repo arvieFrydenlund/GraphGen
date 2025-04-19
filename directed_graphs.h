@@ -150,6 +150,7 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
         cur++;
     }
 
+    // cout << "Making other arms: " << num_paths << endl;
     // make other paths connected to start
     int available = num_nodes - min_noise_reserve - 1 - lookahead;
     for ( int _ = 0; _ < num_paths; _++) {
@@ -167,6 +168,7 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
         available -= other_branch_length;
     }
 
+    // cout << "Making noise: " << num_nodes - cur - 1 << endl;
     //  build in-arm (of max length lookahead)
     if (cur < num_nodes - 1 ) {
     	int num_prefix_vertices = uniform_int_distribution<int>(0, min(num_nodes - cur - 1, lookahead))(gen);
@@ -178,6 +180,7 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
    		}
 	}
 
+    // cout << "Setting up children and parents" << endl;
     // sample some parent/ancestor vertices
     // initialize sizes
     auto children = get_children(g_ptr, num_nodes); // these are in indices not node ids
@@ -194,14 +197,17 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
     if ( max_noise == -1 ) {
         max_noise = num_nodes - cur - 1;  // max noise is the rest of the nodes
     }
+    // cout << "Looping " << num_noise << " times of max " << max_noise << endl;
     while ( cur < num_nodes && num_noise < max_noise ) {
         const int num_children = uniform_int_distribution<int>(0, max_num_parents)(gen);
+        // cout << "Num children: " << num_children << " max_num_parents: " << max_num_parents << endl;
         int num_parents = 0;
         if ( num_children != 0 ) {
             num_parents = uniform_int_distribution<int>(0, max_num_parents)(gen);
         } else {
             num_parents = uniform_int_distribution<int>(1, max_num_parents)(gen);
         }
+        // cout << "Cur: " << cur << " Num children: " << num_children << " Num parents: " << num_parents << endl;
         vector<float> probabilities(cur);
         for (int j = 0; j < cur; j++) {
             probabilities[j] = in_degrees[j];  // only looking at nodes before i
@@ -236,6 +242,7 @@ inline start_end_pair balanced_generator(unique_ptr<Graph<boost::directedS>> &g_
         }
         cur += 1;
     }
+    // cout << "Finished noise" << endl;
     return pair<int, int>(start, end);
 }
 
