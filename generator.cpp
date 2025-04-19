@@ -645,14 +645,56 @@ PYBIND11_MODULE(generator, m) {
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
 
     // single graph generation
-    m.def("erdos_renyi", &erdos_renyi, "Generate a single Erdos Renyi graph", py::arg("num_nodes"),
+    m.def("erdos_renyi", &erdos_renyi,
+        "Generate a single Erdos Renyi graph\nParameters:\n\t"
+        "num_nodes: number of nodes\n\t"
+        "p: probability of edge creation.  If -1 then 1/num_nodes.\n\t"
+        "c_min: min number of sampled edges to form a single connected component\n\t"
+        "c_max: max number of of sampled edges to form a single connected component\n\t"
+        "max_path_length: max length of path to sample\n\t"
+        "min_path_length: min length of path to sample\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [E, 2] of edges\n\t"
+        "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "path: numpy [L] of path\n\t"
+        "node_map: numpy [N] of node map\n\t",
+
+        py::arg("num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_path_length") = 10, py::arg("min_path_length") = 3,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
     m.def("euclidian", &euclidian,
-        "Generate a single Euclidian graph.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).",
+        "Generate a single Euclidian graph.\nParameters:\n\t"
+        "num_nodes: number of nodes\n\t"
+        "dims: number of dimensions\n\t"
+        "radius: radius of graph.  If -1 then 1/sqrt(num_nodes).\n\t"
+        "c_min: min number of sampled edges to form a single connected component\n\t"
+        "c_max: max number of sampled edges to form a single connected component\n\t"
+        "max_path_length: max length of path to sample\n\t"
+        "min_path_length: min length of path to sample\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [E, 2] of edges\n\t"
+        "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "path: numpy [L] of path\n\t"
+        "node_map: numpy [N] of node map\n\t"
+        "positions: numpy [N, dims] of node positions.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).\n\t",
+
         py::arg("num_nodes"),
         py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_path_length") = 10, py::arg("min_path_length") = 3,

@@ -37,7 +37,7 @@ print("C++ module `generator` loaded.")
 
 
 print(f'Random seed is {generator.get_seed()}')
-# generator.set_seed(42)
+generator.set_seed(42)
 # generator.set_seed(3172477368)
 print(f'Random seed is {generator.get_seed()} after setting to 42')
 
