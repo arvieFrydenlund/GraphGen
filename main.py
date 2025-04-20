@@ -47,12 +47,25 @@ print(h)
 # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
 d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
 
-
 for k, v in d.items():
     print(f'{k}: {type(v)}')
     if isinstance(v, np.ndarray):
         print(f'\t {k}: {v.shape}, {v.dtype}')
         print(v)
     print()
+
+print(f'Test size is {generator.get_test_size()}')
+
+d_n = generator.euclidian_n(50, 2, -1, is_causal=True, min_vocab=4, max_vocab=58, shuffle_edges=True, batch_size=8)
+
+
+print(f'Settings hashes')
+hashes = d_n['hashes']
+generator.set_test_hashes(hashes)
+print(f'Test size is {generator.get_test_size()}')
+print(f'Is in {generator.is_in_test(hashes)}')
+
+d_n = generator.euclidian_n(50, 2, -1, is_causal=True, min_vocab=4, max_vocab=58, shuffle_edges=True, batch_size=8)
+print(f"Is in {generator.is_in_test(d_n['hashes'])}")
 
 

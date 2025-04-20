@@ -325,7 +325,6 @@ py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<
     int cur = 0;
     for (; it1 != batched_positions.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
         for (int j = 0; j < (**it1).size(); j++) {
-            cout << "j: " << j << endl;
             ra(cur, j, 0) = static_cast<T>((**it2)[j]);  // map node id
             for (int d = 0; d < dim; d++) { // positions
                 constexpr float r = 10000;
