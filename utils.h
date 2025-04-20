@@ -338,6 +338,31 @@ py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<
 }
 
 
+// Hashing
+// has each distance matrix as a string, return the hashes as a numpy array
+template <typename T>
+py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(const py::array_t<T, py::array::c_style> &batched_distances) {
+    // Convert a distance matrix [N, N] to a numpy array [new_N, new_N] by mapping node ids
+    auto shape = batched_distances.shape();
+    py::array_t<std::uint64_t, py::array::c_style> arr({static_cast<int>(shape[0])});
+    auto ra = arr.mutable_unchecked();
+    auto bd = batched_distances.unchecked();
+    for (int b = 0; b < shape[0]; b++) {
+      	// make string from distance matrix
+        std::string str = "";
+        for (int i = 0; i < shape[1]; i++) {
+            for (int j = 0; j < shape[2]; j++) {
+                str += std::to_string(bd(b, i, j));
+            }
+        }
+        auto hash = std::hash<std::string>{}(str);
+        // auto has2 = static_cast<std::uint64_t>(hash);
+        // cout << "hash: " << hash << " has2: " << has2 << endl;
+        ra(b) = static_cast<std::uint64_t>(hash);
+    }
+    return arr;
+}
+
 
 
 

@@ -155,8 +155,8 @@ int main(){
     // test_pybind("erdos_renyi_n", 50, 256, false);
     // test_pybind("erdos_renyi_n", 150, 256);
     // test_pybind("euclidian_n", 50, 256, false);
-    // test_pybind("path_star_n", -1, 256, false);
-    test_pybind("balanced_n", 50, 256, false);
+    test_pybind("path_star_n", 50, 256, false);
+    // test_pybind("balanced_n", 50, 256, false);
     time_after(t1, "Final");
 
 

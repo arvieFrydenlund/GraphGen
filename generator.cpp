@@ -407,7 +407,9 @@ inline py::dict erdos_renyi_n(
     }
     d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
     d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["distances"] = bd;
+    d["hashs"] = hash_distance_matrix<int>(bd);
     d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
@@ -479,9 +481,10 @@ inline py::dict euclidian_n(
     cout << "Generated " << num << " graphs of " << batch_size << endl;
     d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
     d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["distances"] = bd;
+    d["hashs"] = hash_distance_matrix<int>(bd);
     d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
-
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
         d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
@@ -548,7 +551,9 @@ inline py::dict path_star_n(
     }
     d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
     d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["distances"] = bd;
+    d["hashs"] = hash_distance_matrix<int>(bd);
     d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
@@ -628,7 +633,9 @@ inline py::dict balanced_n(
     }
     d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
     d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    d["distances"] = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
+    d["distances"] = bd;
+    d["hashs"] = hash_distance_matrix<int>(bd);
     d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
@@ -664,7 +671,8 @@ PYBIND11_MODULE(generator, m) {
         "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
         "ground-truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
-        "node_map: numpy [N] of node map\n\t",
+        "node_map: numpy [N] of node map\n\t"
+        "hashs: numpy [N] of uint64_t hash of distances\n\t",
 
         py::arg("num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
@@ -693,6 +701,7 @@ PYBIND11_MODULE(generator, m) {
         "ground-truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
+        "hashs: numpy [N] of uint64_t hash of distances\n\t",
         "positions: numpy [N, dims] of node positions.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).\n\t",
 
         py::arg("num_nodes"),
