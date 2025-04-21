@@ -903,7 +903,7 @@ PYBIND11_MODULE(generator, m) {
         "ground-truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
-        "hashes: numpy [N] of uint64_t hash of distances\n\t",
+        "hashes: numpy [N] of uint64_t hash of distances\n\t"
         "positions: numpy [N, dims] of node positions.  Note: node positions are not returned if using node shuffle or vocab range (and these are needed for plotting).\n\t",
 
         py::arg("num_nodes"),
@@ -912,25 +912,88 @@ PYBIND11_MODULE(generator, m) {
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-    m.def("path_star", &path_star, "Generate a single path star graph",
+    m.def("path_star", &path_star,
+        "Generate a single path star graph\nParameters:\n\t"
+        "min_num_arms: min number of arms.\n\t"
+        "max_num_arms: max number of arms.\n\t"
+        "min_arm_length: min arm length.\n\t"
+        "max_arm_length: max arm length.\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [E, 2] of edges\n\t"
+        "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "path: numpy [L] of path\n\t"
+        "node_map: numpy [N] of node map\n\t"
+        "hashes: numpy [N] of uint64_t hash of distances\n\t",
+
         py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-    m.def("balanced", &balanced, "Generate a single balanced graph.  Note these are done slightly differently from original paper.",
+    m.def("balanced", &balanced,
+        "Generate a single balanced graph.  Note these are done slightly differently from original paper.\nParameters:\n\t"
+        "num_nodes: number of nodes.\n\t"
+        "lookahead: number of lookahead nodes.\n\t"
+        "min_noise_reserve: min noise reserve.\n\t"
+        "max_num_parents: max number of parents.\n\t"
+        "max_noise: max noise.\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [E, 2] of edges\n\t"
+        "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "path: numpy [L] of path\n\t"
+        "node_map: numpy [N] of node map\n\t"
+        "hashes: numpy [N] of uint64_t hash of distances\n\t",
+
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-    m.def("balanced_graph_size_check", &balanced_graph_size_check, "Check that the balanced graph size is valid.  Will fail assert otherwise.",
+    m.def("balanced_graph_size_check", &balanced_graph_size_check,
+        "Check that the balanced graph size is valid.  Will fail assert otherwise.",
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0);
 
     // batched graph generation
     m.def("erdos_renyi_n", &erdos_renyi_n,
-
         "Generate a batch of Erdos Renyi graphs\nParameters:\n\t"
         "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
-        "max_num_nodes: min number of nodes.  If -1 use min only.\n\t",
+        "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
+        "p: probability of edge creation.  If -1 then 1/num_nodes.\n\t"
+        "c_min: min number of sampled edges to form a single connected component\n\t"
+        "c_max: max number of sampled edges to form a single connected component\n\t"
+        "max_length: max length of path to sample\n\t"
+        "min_length: min length of path to sample\n\t"
+        "sample_target_paths: if true then sample target paths\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [B, E, 2] of edges\n\t"
+        "edge_list_lengths: numpy [B] of edge list lengths\n\t"
+        "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "paths: numpy [B, L] of paths\n\t"
+        "path_lengths: numpy [B] of path lengths\n\t"
+        "node_map: numpy [B, N] of node map\n\t"
+        "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
+        "num_attempts: int of number of attempts to generate the graph\n\t"
+        "vocab_min_size: int of min vocab size\n\t"
+        "vocab_max_size: int of max vocab size\n\t",
 
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
@@ -939,7 +1002,37 @@ PYBIND11_MODULE(generator, m) {
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
         py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
 
-    m.def("euclidian_n", &euclidian_n, "Generate a batch of Euclidian graphs",
+    m.def("euclidian_n", &euclidian_n,
+        "Generate a batch of Euclidian graphs\nParameters:\n\t"
+        "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
+        "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
+        "dims: number of dimensions\n\t"
+        "radius: radius of graph.  If -1 then 1/sqrt(num_nodes).\n\t"
+        "c_min: min number of sampled edges to form a single connected component\n\t"
+        "c_max: max number of sampled edges to form a single connected component\n\t"
+        "max_length: max length of path to sample\n\t"
+        "min_length: min length of path to sample\n\t"
+        "sample_target_paths: if true then sample target paths\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [B, E, 2] of edges\n\t"
+        "edge_list_lengths: numpy [B] of edge list lengths\n\t"
+        "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "paths: numpy [B, L] of paths\n\t"
+        "path_lengths: numpy [B] of path lengths\n\t"
+        "node_map: numpy [B, N] of node map\n\t"
+        "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
+        "positions: numpy [B, N, dims] of node positions\n\t"
+        "num_attempts: int of number of attempts to generate the graph\n\t"
+        "vocab_min_size: int of min vocab size\n\t"
+        "vocab_max_size: int of max vocab size\n\t",
+
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
@@ -947,14 +1040,67 @@ PYBIND11_MODULE(generator, m) {
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
         py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
 
-    m.def("path_star_n", &path_star_n, "Generate a batch of path star graphs",
+    m.def("path_star_n", &path_star_n,
+        "Generate a batch of path star graphs\nParameters:\n\t"
+        "min_num_arms: min number of arms.\n\t"
+        "max_num_arms: max number of arms.\n\t"
+        "min_arm_length: min arm length.\n\t"
+        "max_arm_length: max arm length.\n\t"
+        "sample_target_paths: if true then sample target paths\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+        "shuffle_edges: if true then shuffle edges\n\t"
+        "shuffle_nodes: if true then shuffle nodes\n\t"
+        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+        "max_vocab: max vocab size to map nodes into.\n"
+        "Returns a dict with the following keys (N is the max_vocab):\n\t"
+        "edge_list: numpy [B, E, 2] of edges\n\t"
+        "edge_list_lengths: numpy [B] of edge list lengths\n\t"
+        "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
+        "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
+        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "paths: numpy [B, L] of paths\n\t"
+        "path_lengths: numpy [B] of path lengths\n\t"
+        "node_map: numpy [B, N] of node map\n\t"
+        "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
+        "num_attempts: int of number of attempts to generate the graph\n\t"
+        "vocab_min_size: int of min vocab size\n\t"
+        "vocab_max_size: int of max vocab size\n\t",
+
         py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
         py::arg("sample_target_paths") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
         py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000);
 
-    m.def("balanced_n", &balanced_n, "Generate a batch of balanced graphs",
+    m.def("balanced_n", &balanced_n,
+        "Generate a batch of balanced graphs\nParameters:\n\t"
+        "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
+        "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
+        "min_lookahead: min number of lookahead nodes.\n\t"
+        "max_lookahead: max number of lookahead nodes.\n\t"
+        "min_noise_reserve: min noise reserve.\n\t"
+        "max_num_parents: max number of parents.\n\t"
+        "max_noise: max noise.\n\t"
+        "sample_target_paths: if true then sample target paths\n\t"
+        "is_causal: if true then return causally masked ground-truths\n\t"
+       "shuffle_edges: if true then shuffle edges\n\t"
+       "shuffle_nodes: if true then shuffle nodes\n\t"
+       "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+       "max_vocab: max vocab size to map nodes into.\n"
+       "Returns a dict with the following keys (N is the max_vocab):\n\t"
+       "edge_list: numpy [B, E, 2] of edges\n\t"
+       "edge_list_lengths: numpy [B] of edge list lengths\n\t"
+       "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
+       "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
+       "ground-truths: numpy [B, E, N] of ground truths\n\t"
+       "paths: numpy [B, L] of paths\n\t"
+       "path_lengths: numpy [B] of path lengths\n\t"
+       "node_map: numpy [B, N] of node map\n\t"
+       "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
+       "num_attempts: int of number of attempts to generate the graph\n\t"
+       "vocab_min_size: int of min vocab size\n\t"
+       "vocab_max_size: int of max vocab size\n\t",
+
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
         py::arg("sample_target_paths") = true,
