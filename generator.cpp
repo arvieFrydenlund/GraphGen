@@ -73,7 +73,7 @@ inline void set_test_hashes(const py::array_t<std::uint64_t, py::array::c_style>
 }
 
 
-inline py::array_t<std::uint64_t, py::array::c_style> is_in_validation(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
+inline py::array_t<bool, py::array::c_style> is_in_validation(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
     py::array_t<bool, py::array::c_style> arr({static_cast<int>(hashes.size())});
     auto ra = arr.mutable_unchecked();
     auto rh = hashes.unchecked();
@@ -88,7 +88,7 @@ inline py::array_t<std::uint64_t, py::array::c_style> is_in_validation(const py:
     return arr;
 }
 
-inline py::array_t<std::uint64_t, py::array::c_style> is_in_test(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
+inline py::array_t<bool, py::array::c_style> is_in_test(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
     py::array_t<bool, py::array::c_style> arr({static_cast<int>(hashes.size())});
     auto ra = arr.mutable_unchecked();
     auto rh = hashes.unchecked();
@@ -103,7 +103,7 @@ inline py::array_t<std::uint64_t, py::array::c_style> is_in_test(const py::array
     return arr;
 }
 
-inline py::array_t<std::uint64_t, py::array::c_style> is_invalid_example(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
+inline py::array_t<bool, py::array::c_style> is_invalid_example(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
     py::array_t<bool, py::array::c_style> arr({static_cast<int>(hashes.size())});
     auto ra = arr.mutable_unchecked();
     arr[py::make_tuple(py::ellipsis())] = false;  // initialize array
