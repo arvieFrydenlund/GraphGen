@@ -36,6 +36,11 @@ inline void set_seed(const unsigned int seed = 0) {
     seed_ = seed;
 }
 
+inline int rand_int(int min, int max) {
+    std::uniform_int_distribution<int> d(min, max);
+    return d(gen);
+}
+
 /* ************************************************
  *  Test and valid datasets and hashing
  *  ***********************************************/
@@ -93,6 +98,22 @@ inline py::array_t<std::uint64_t, py::array::c_style> is_in_test(const py::array
             ra(i) = true;
         } else {
             ra(i) = false;
+        }
+    }
+    return arr;
+}
+
+inline py::array_t<std::uint64_t, py::array::c_style> is_invalid_example(const py::array_t<std::uint64_t, py::array::c_style> &hashes) {
+    py::array_t<bool, py::array::c_style> arr({static_cast<int>(hashes.size())});
+    auto ra = arr.mutable_unchecked();
+    arr[py::make_tuple(py::ellipsis())] = false;  // initialize array
+    auto rh = hashes.unchecked();
+    auto shape = hashes.shape();
+    for (int i = 0; i < shape[0]; i++) {
+        if (validation_hashes.find(rh(i)) != validation_hashes.end()) {
+            ra(i) = true;
+        } else if (test_hashes.find(rh(i)) != test_hashes.end()) {
+            ra(i) = true;
         }
     }
     return arr;
@@ -779,6 +800,7 @@ PYBIND11_MODULE(generator, m) {
     // seeding
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
+    m.def("rand_int", &rand_int, "Gets random int (unique to thread)", py::arg("min") = 0, py::arg("max") = 100);
 
     // hashing test and validation sets
     m.def("get_validation_size", &get_validation_size,
@@ -821,6 +843,14 @@ PYBIND11_MODULE(generator, m) {
         "hashes: numpy [N] of uint64_t hashes\n\t"
         "Returns:\n\t"
         "numpy [N] True if the graph generation is correct, False otherwise\n",
+        py::arg("hashes"));
+
+    m.def("is_invalid_example", &is_invalid_example,
+        "Validation and test sets check\n"
+        "Parameters:\n\t"
+        "hashes: numpy [N] of uint64_t hashes\n\t"
+        "Returns:\n\t"
+        "numpy [N] True if the graph is in the validation or test sets, False otherwise\n",
         py::arg("hashes"));
 
     // single graph generation
