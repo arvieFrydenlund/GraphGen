@@ -107,7 +107,9 @@ inline py::array_t<std::uint64_t, py::array::c_style> is_in_test(const py::array
 vector<int> get_node_shuffle_map(const int N, const int min_vocab, int max_vocab, const bool shuffle = false) {
     // Shuffle nodes and map to the new range [min_vocab, max_vocab)
     if ( max_vocab > 0 ) {
+        // asserts do not work on python side, use throws
         assert( (max_vocab - min_vocab) >= N && max_vocab - min_vocab > 0 && min_vocab >= 0);
+        if ( max_vocab - min_vocab < N ) { throw std::invalid_argument("max_vocab - min_vocab < N"); }
     } else {
         assert ( min_vocab == 0 );
         max_vocab = N;
@@ -203,6 +205,7 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
         if (neighbors.size() == 0) {
             // print_matrix(distances_ptr, (*distances_ptr).size(), (*distances_ptr)[0].size(), true, 100000, " ");
             assert (neighbors.size() > 0);
+            throw std::invalid_argument("No neighbors found.  This should never happen.");
         }
         std::shuffle(neighbors.begin(), neighbors.end(), gen);
         std::sort(neighbors.begin(), neighbors.end(), [](const pair<int, int> &a, const pair<int, int> &b) {
@@ -281,6 +284,7 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
 
     assert (p < 1.0);  //  boost fails at p = 1.0, way to go boost
+    if ( p >= 1.0 ) { throw::invalid_argument("p >= 1.0"); }
     unique_ptr<Graph<boost::undirectedS>> g_ptr;
     erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
     return package_for_python(g_ptr, max_path_length, min_path_length, -1, -1,
@@ -414,16 +418,30 @@ inline int attempt_check(const int E, const int max_edges, const int attempts, c
 
 
 inline py::dict erdos_renyi_n(
-    const int num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
+    const int min_num_nodes, int max_num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
     const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
 
-    assert ( p < 1.0);  //  boost fails at p = 1.0, way to go boost
-    assert ( c_min <= c_max);
-    assert ( batch_size > 0);
-    assert ( min_length <= max_length);
+
+    if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
+    if ( max_num_nodes == -1 ) {
+        max_num_nodes = min_num_nodes;
+    }
+    if ( max_vocab == -1 ) {
+        max_vocab = max_num_nodes;
+    }
+    if ( max_vocab - min_vocab < max_num_nodes) {
+        auto s = "Invalid arguments: max_vocab - min_vocab < max_num_nodes:  " +
+            to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
+        throw std::invalid_argument(s);
+    }
+    if ( p > 1.0 ){ throw std::invalid_argument("Invalid arguments: p > 1.0"); }
+    if ( c_min > c_max){ throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
+    if ( batch_size <= 0){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+    if ( min_length > max_length ){ throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
+
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
@@ -435,6 +453,13 @@ inline py::dict erdos_renyi_n(
     int attempts = 0;
     int num = 0;
     while ( num < batch_size && attempts < max_attempts ) {
+        int num_nodes;
+        if ( max_num_nodes == min_num_nodes ) {
+            num_nodes = max_num_nodes;
+        } else {
+            uniform_int_distribution<int> d(min_num_nodes, max_num_nodes);
+            num_nodes = d(gen);
+        }
         unique_ptr<Graph<boost::undirectedS>> g_ptr;
         // auto graph_t = time_before();
         erdos_renyi_generator(g_ptr,  num_nodes, gen, p, c_min, c_max, false);
@@ -457,7 +482,7 @@ inline py::dict erdos_renyi_n(
         num += 1;
     }
 
-    auto new_N = num_nodes;
+    auto new_N = max_num_nodes;
     if ( max_vocab > 0 ) {
         new_N = max_vocab;
     }
@@ -483,16 +508,29 @@ inline py::dict erdos_renyi_n(
 
 
 inline py::dict euclidian_n(
-    const int num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
+    const int min_num_nodes, int max_num_nodes,  const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
     const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
 
-    assert ( dim > 0);
-    assert ( c_min <= c_max);
-    assert ( batch_size > 0);
-    assert ( min_length <= max_length);
+    if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
+    if ( max_num_nodes == -1 ) {
+        max_num_nodes = min_num_nodes;
+    }
+    if ( max_vocab == -1 ) {
+        max_vocab = max_num_nodes;
+    }
+    if ( max_vocab - min_vocab < max_num_nodes) {
+        auto s = "Invalid arguments: max_vocab - min_vocab < max_num_nodes:  " +
+            to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
+        throw std::invalid_argument(s);
+    }
+    if ( dim < 0 ){ throw std::invalid_argument("Invalid arguments: dim < 0"); }
+    if ( c_min > c_max){ throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
+    if ( batch_size <= 0){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+    if ( min_length > max_length ){ throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
+
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
@@ -506,6 +544,13 @@ inline py::dict euclidian_n(
     int attempts = 0;
     int num = 0;
     while ( num < batch_size && attempts < max_attempts ) {
+        int num_nodes;
+        if ( max_num_nodes == min_num_nodes ) {
+            num_nodes = max_num_nodes;
+        } else {
+            uniform_int_distribution<int> d(min_num_nodes, max_num_nodes);
+            num_nodes = d(gen);
+        }
         unique_ptr<Graph<boost::undirectedS>> g_ptr;
         unique_ptr<vector<vector<float>>> positions_ptr;
         // auto graph_t = time_before();
@@ -530,7 +575,7 @@ inline py::dict euclidian_n(
         num += 1;
     }
 
-    auto new_N = num_nodes;
+    auto new_N = max_num_nodes;
     if ( max_vocab > 0 ) {
         new_N = max_vocab;
     }
@@ -564,9 +609,11 @@ inline py::dict path_star_n(
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
-    assert ( min_num_arms > 0);
-    assert ( min_arm_length > 0);
-    assert ( batch_size > 0);
+
+    if ( min_num_arms <= 0 ){ throw std::invalid_argument("Invalid arguments: min_num_arms <= 0"); }
+    if ( min_arm_length <= 0 ){ throw std::invalid_argument("Invalid arguments: min_arm_length <= 0"); }
+    if ( batch_size <= 0 ){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
@@ -625,15 +672,32 @@ inline py::dict path_star_n(
 
 
 inline py::dict balanced_n(
-    const int num_nodes, const int min_lookahead, const int max_lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
+    const int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
     const bool sample_target_paths = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
-    assert ( num_nodes > 0);
-    assert ( min_lookahead > 0 && max_lookahead > 0 );
-    assert ( batch_size > 0 );
-    assert ( max_num_parents >= 0 );
+
+    if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
+    if ( max_num_nodes == -1 ) {
+        max_num_nodes = min_num_nodes;
+    }
+    if ( max_vocab == -1 ) {
+        max_vocab = max_num_nodes;
+    }
+    if ( max_vocab - min_vocab < max_num_nodes) {
+        auto s = "Invalid arguments: max_vocab - min_vocab < max_num_nodes:  " +
+            to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
+        throw std::invalid_argument(s);
+    }
+    if ( min_lookahead <= 0 ) { throw std::invalid_argument("Invalid arguments: min_lookahead <= 0"); }
+    if ( max_lookahead <= 0 ) { throw std::invalid_argument("Invalid arguments: max_lookahead <= 0"); }
+    if ( max_num_parents <= 0 ){ throw std::invalid_argument("Invalid arguments: max_num_parents <= 0"); }
+    if ( ! balanced_graph_size_check(min_num_nodes, max_lookahead, min_noise_reserve ) ) {
+        throw std::invalid_argument("Invalid arguments: balanced_graph_size_check failed");
+    }
+    if ( batch_size <= 0 ){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
@@ -645,13 +709,14 @@ inline py::dict balanced_n(
     int attempts = 0;
     int num = 0;
 
-    if ( ! balanced_graph_size_check(num_nodes, max_lookahead, min_noise_reserve ) ) {
-        assert( false && "Graph size check failed" );
-    }
-
     while ( num < batch_size && attempts < max_attempts ) {
-        unique_ptr<Graph<boost::directedS>> g_ptr;
-        // this is the only method which samples here, this was done to keep the main function similar to the original code.
+        int num_nodes;
+        if ( max_num_nodes == min_num_nodes ) {
+            num_nodes = max_num_nodes;
+        } else {
+            uniform_int_distribution<int> d(min_num_nodes, max_num_nodes);
+            num_nodes = d(gen);
+        }
         auto lookahead = uniform_int_distribution<int>(min_lookahead, max_lookahead)(gen);
         int max_noise_sample;
         if ( max_noise > 0) {
@@ -659,6 +724,7 @@ inline py::dict balanced_n(
         } else {
             max_noise_sample = uniform_int_distribution<int>(-1, lookahead)(gen);  // -1 means all remaining
         }
+        unique_ptr<Graph<boost::directedS>> g_ptr;
         // auto graph_t = time_before();
         auto start_end = balanced_generator(g_ptr, num_nodes, gen, lookahead, min_noise_reserve, max_num_parents, max_noise_sample);
 
@@ -681,7 +747,7 @@ inline py::dict balanced_n(
         num += 1;
     }
 
-    auto new_N = num_nodes;
+    auto new_N = max_num_nodes;
     if ( max_vocab > 0 ) {
         new_N = max_vocab;
     }
@@ -760,7 +826,7 @@ PYBIND11_MODULE(generator, m) {
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,
         "Generate a single Erdos Renyi graph\nParameters:\n\t"
-        "num_nodes: number of nodes\n\t"
+        "num_nodes: number of nodes.\n\t"
         "p: probability of edge creation.  If -1 then 1/num_nodes.\n\t"
         "c_min: min number of sampled edges to form a single connected component\n\t"
         "c_max: max number of of sampled edges to form a single connected component\n\t"
@@ -788,7 +854,7 @@ PYBIND11_MODULE(generator, m) {
 
     m.def("euclidian", &euclidian,
         "Generate a single Euclidian graph.\nParameters:\n\t"
-        "num_nodes: number of nodes\n\t"
+        "num_nodes: number of nodes.\n\t"
         "dims: number of dimensions\n\t"
         "radius: radius of graph.  If -1 then 1/sqrt(num_nodes).\n\t"
         "c_min: min number of sampled edges to form a single connected component\n\t"
@@ -830,15 +896,22 @@ PYBIND11_MODULE(generator, m) {
         py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0);
 
     // batched graph generation
-    m.def("erdos_renyi_n", &erdos_renyi_n, "Generate a batch of Erdos Renyi graphs",
-        py::arg("num_nodes"), py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+    m.def("erdos_renyi_n", &erdos_renyi_n,
+
+        "Generate a batch of Erdos Renyi graphs\nParameters:\n\t"
+        "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
+        "max_num_nodes: min number of nodes.  If -1 use min only.\n\t",
+
+        py::arg("min_num_nodes"), py::arg("max_num_nodes"),
+        py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
         py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
 
     m.def("euclidian_n", &euclidian_n, "Generate a batch of Euclidian graphs",
-        py::arg("num_nodes"), py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+        py::arg("min_num_nodes"), py::arg("max_num_nodes"),
+        py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
@@ -852,7 +925,8 @@ PYBIND11_MODULE(generator, m) {
         py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000);
 
     m.def("balanced_n", &balanced_n, "Generate a batch of balanced graphs",
-        py::arg("num_nodes"), py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
+        py::arg("min_num_nodes"), py::arg("max_num_nodes"),
+        py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
         py::arg("sample_target_paths") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,

@@ -53,19 +53,28 @@ for k, v in d.items():
         print(f'\t {k}: {v.shape}, {v.dtype}')
         print(v)
     print()
-
+print('\n\nTesting N generator')
 print(f'Test size is {generator.get_test_size()}')
 
-d_n = generator.euclidian_n(50, 2, -1, is_causal=True, min_vocab=4, max_vocab=58, shuffle_edges=True, batch_size=8)
+d_n = generator.euclidian_n(50, 56, 2, -1, is_causal=True, shuffle_nodes=True, min_vocab=4, max_vocab=60, shuffle_edges=True, batch_size=8)
+
+for k, v in d_n.items():
+    print(f'{k}: {type(v)}', end='')
+    if isinstance(v, np.ndarray):
+        print(f'\t {k}: {v.shape}, {v.dtype}')
+    else:
+        print()
 
 
 print(f'Settings hashes')
 hashes = d_n['hashes']
 generator.set_test_hashes(hashes)
 print(f'Test size is {generator.get_test_size()}')
-print(f'Is in {generator.is_in_test(hashes)}')
+print(f'Is in same: {generator.is_in_test(hashes)}')
+hashes[1] = 0  # fake a different hash
+print(f'Is in with 2nd faked: {generator.is_in_test(hashes)}')
 
-d_n = generator.euclidian_n(50, 2, -1, is_causal=True, min_vocab=4, max_vocab=58, shuffle_edges=True, batch_size=8)
-print(f"Is in {generator.is_in_test(d_n['hashes'])}")
+d_n = generator.euclidian_n(50, 55, 2, -1, is_causal=True, min_vocab=4, max_vocab=59, shuffle_edges=True, batch_size=8)
+print(f"Is in with new hashes: {generator.is_in_test(d_n['hashes'])}")
 
 
