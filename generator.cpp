@@ -292,7 +292,7 @@ py::dict package_for_python(unique_ptr<Graph<D>> &g_ptr,
     d["edge_list"] = convert_edge_list(edge_list, node_shuffle_map);
     d["original_distances"] = original_distances;
     d["distances"] = distances;
-    d["ground-truths"] = ground_truths;
+    d["ground_truths"] = ground_truths;
     d["path"] = convert_path(path, node_shuffle_map);
     d["node_map"] = convert_vector(node_shuffle_map);
     return d;
@@ -519,7 +519,7 @@ inline py::dict erdos_renyi_n(
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
         d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
@@ -612,7 +612,7 @@ inline py::dict euclidian_n(
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
         d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
@@ -683,7 +683,7 @@ inline py::dict path_star_n(
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
         d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
@@ -784,7 +784,7 @@ inline py::dict balanced_n(
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground-truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
     if ( sample_target_paths ) {
         d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
         d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
@@ -862,7 +862,7 @@ PYBIND11_MODULE(generator, m) {
         "c_max: max number of of sampled edges to form a single connected component\n\t"
         "max_path_length: max length of path to sample\n\t"
         "min_path_length: min length of path to sample\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -871,7 +871,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list: numpy [E, 2] of edges\n\t"
         "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
         "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "ground_truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
         "hashes: numpy [N] of uint64_t hash of distances\n\t",
@@ -891,7 +891,7 @@ PYBIND11_MODULE(generator, m) {
         "c_max: max number of sampled edges to form a single connected component\n\t"
         "max_path_length: max length of path to sample\n\t"
         "min_path_length: min length of path to sample\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -900,7 +900,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list: numpy [E, 2] of edges\n\t"
         "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
         "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "ground_truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
         "hashes: numpy [N] of uint64_t hash of distances\n\t"
@@ -918,7 +918,7 @@ PYBIND11_MODULE(generator, m) {
         "max_num_arms: max number of arms.\n\t"
         "min_arm_length: min arm length.\n\t"
         "max_arm_length: max arm length.\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -927,7 +927,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list: numpy [E, 2] of edges\n\t"
         "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
         "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "ground_truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
         "hashes: numpy [N] of uint64_t hash of distances\n\t",
@@ -943,7 +943,7 @@ PYBIND11_MODULE(generator, m) {
         "min_noise_reserve: min noise reserve.\n\t"
         "max_num_parents: max number of parents.\n\t"
         "max_noise: max noise.\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -952,7 +952,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list: numpy [E, 2] of edges\n\t"
         "original_distances: numpy [N, N] of original distances (boost calc)\n\t"
         "distances: numpy [N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [E, N] of ground truths\n\t"
+        "ground_truths: numpy [E, N] of ground truths\n\t"
         "path: numpy [L] of path\n\t"
         "node_map: numpy [N] of node map\n\t"
         "hashes: numpy [N] of uint64_t hash of distances\n\t",
@@ -976,7 +976,7 @@ PYBIND11_MODULE(generator, m) {
         "max_length: max length of path to sample\n\t"
         "min_length: min length of path to sample\n\t"
         "sample_target_paths: if true then sample target paths\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -986,7 +986,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list_lengths: numpy [B] of edge list lengths\n\t"
         "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
         "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "ground_truths: numpy [B, E, N] of ground truths\n\t"
         "paths: numpy [B, L] of paths\n\t"
         "path_lengths: numpy [B] of path lengths\n\t"
         "node_map: numpy [B, N] of node map\n\t"
@@ -1013,7 +1013,7 @@ PYBIND11_MODULE(generator, m) {
         "max_length: max length of path to sample\n\t"
         "min_length: min length of path to sample\n\t"
         "sample_target_paths: if true then sample target paths\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -1023,7 +1023,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list_lengths: numpy [B] of edge list lengths\n\t"
         "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
         "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "ground_truths: numpy [B, E, N] of ground truths\n\t"
         "paths: numpy [B, L] of paths\n\t"
         "path_lengths: numpy [B] of path lengths\n\t"
         "node_map: numpy [B, N] of node map\n\t"
@@ -1047,7 +1047,7 @@ PYBIND11_MODULE(generator, m) {
         "min_arm_length: min arm length.\n\t"
         "max_arm_length: max arm length.\n\t"
         "sample_target_paths: if true then sample target paths\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
         "shuffle_edges: if true then shuffle edges\n\t"
         "shuffle_nodes: if true then shuffle nodes\n\t"
         "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -1057,7 +1057,7 @@ PYBIND11_MODULE(generator, m) {
         "edge_list_lengths: numpy [B] of edge list lengths\n\t"
         "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
         "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
-        "ground-truths: numpy [B, E, N] of ground truths\n\t"
+        "ground_truths: numpy [B, E, N] of ground truths\n\t"
         "paths: numpy [B, L] of paths\n\t"
         "path_lengths: numpy [B] of path lengths\n\t"
         "node_map: numpy [B, N] of node map\n\t"
@@ -1082,7 +1082,7 @@ PYBIND11_MODULE(generator, m) {
         "max_num_parents: max number of parents.\n\t"
         "max_noise: max noise.\n\t"
         "sample_target_paths: if true then sample target paths\n\t"
-        "is_causal: if true then return causally masked ground-truths\n\t"
+        "is_causal: if true then return causally masked ground_truths\n\t"
        "shuffle_edges: if true then shuffle edges\n\t"
        "shuffle_nodes: if true then shuffle nodes\n\t"
        "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
@@ -1092,7 +1092,7 @@ PYBIND11_MODULE(generator, m) {
        "edge_list_lengths: numpy [B] of edge list lengths\n\t"
        "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
        "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
-       "ground-truths: numpy [B, E, N] of ground truths\n\t"
+       "ground_truths: numpy [B, E, N] of ground truths\n\t"
        "paths: numpy [B, L] of paths\n\t"
        "path_lengths: numpy [B] of path lengths\n\t"
        "node_map: numpy [B, N] of node map\n\t"
