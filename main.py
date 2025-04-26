@@ -78,3 +78,9 @@ d_n = generator.euclidian_n(50, 55, 2, -1, is_causal=True, min_vocab=4, max_voca
 print(f"Is in with new hashes: {generator.is_in_test(d_n['hashes'])}")
 
 
+print('\n\nSetting dictionary')
+fake_dict = {str(i): i for i in range(12)}
+generator.set_dictionary(fake_dict)
+
+
+print('\n\nDone')

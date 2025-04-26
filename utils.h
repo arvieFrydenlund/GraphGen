@@ -363,6 +363,25 @@ py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(const py::ar
 }
 
 
+/* ************************************************
+ *  Converting utils
+ *  Batched graph generation for input into network
+ *  ***********************************************/
+
+
+
+inline py::dict package_for_model(const bool is_flat_model=true){
+  /*
+   *  Package the data for either an decoder-only or encoder-only model i.e. same layers over src and tgt
+   *
+   *
+   */
+
+
+	py::dict d;
+    return d;
+
+}
 
 
 

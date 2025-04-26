@@ -121,6 +121,24 @@ inline py::array_t<bool, py::array::c_style> is_invalid_example(const py::array_
 
 
 /* ************************************************
+ *  Dictionary for mapping to models vocabulary
+ *  ***********************************************/
+
+static map<std::string, int> dictionary; // token to idx map
+
+inline void set_dictionary(py::dict &py_dictionary)
+{
+    for (std::pair<py::handle, py::handle> item : py_dictionary)
+    {
+        auto key = item.first.cast<std::string>();
+        auto value = item.second.cast<int>();
+        cout << "key: " << key << ", value=" << value << endl;
+        dictionary[key] = value;
+    }
+}
+
+
+/* ************************************************
  *  Constructing inputs and targets for model
  *  Single graph generation
  *  ***********************************************/
@@ -237,6 +255,36 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
         path.push_back(cur);
     }
     return path;
+}
+
+
+inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
+
+    vector<int> &given_query,
+    int max_query_length = -1, const int min_query_length = 0, const bool is_center = true) {
+
+    auto N = static_cast<int>(distances_ptr->size());
+    if (max_query_length == -1 || max_query_length > N) {
+        max_query_length = N;
+    }
+    auto new_query = vector<int>();
+    if ( given_query.empty() ) { //sample query
+        // stackoverflow.com/questions/33802205/how-to-sample-without-replacement-using-c-uniform-int-distribution
+        uniform_int_distribution<int> d1(min_query_length, max_query_length);
+        auto query_length = d1(gen);
+        auto gen = std::mt19937{std::random_device{}()};
+        auto nodes = std::vector<int>(N);
+        std::iota(nodes.begin(), nodes.end(), 0);
+        sample(nodes.begin(), nodes.end(),  std::back_inserter(new_query), query_length, gen);
+        // std::ranges::shuffle(new_query, gen);  // so that nodes are out of order, this doesn't matter with permute
+    } else { // copy over elements from given query
+        for (auto i : given_query) {
+            new_query.push_back(i);
+        }
+    }
+    // calculate center or centroid of graph given queries
+
+
 }
 
 template <typename T>
@@ -852,6 +900,15 @@ PYBIND11_MODULE(generator, m) {
         "Returns:\n\t"
         "numpy [N] True if the graph is in the validation or test sets, False otherwise\n",
         py::arg("hashes"));
+
+    // dictionary/vocabulary
+    m.def("set_dictionary", &set_dictionary,
+        "Sets the dictionary/vocabulary of token to token_idx.\n"
+        "Parameters:\n\t"
+        "dictionary: of str -> int\n\t"
+        "Returns:\n\t"
+        "None\n",
+        py::arg("dictionary"));
 
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,
