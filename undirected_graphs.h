@@ -31,6 +31,8 @@ using namespace std;
 typedef int t_weight;
 typedef boost::property<boost::edge_weight_t, t_weight> EdgeWeightProperty;
 
+const int inf = std::numeric_limits<int>::max() / 8;  // careful because we add max + 1 + max -> overflow
+
 template <typename D>  // undirectedS  or directedS
 using Graph = boost::adjacency_list<
                                     boost::vecS            // edge list
@@ -160,7 +162,6 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
     // assume edge weights of 1, no need to make them in the graph (unlike boost)
   	auto N = num_vertices(*g_ptr);
     auto E = num_edges(*g_ptr);
-    int inf = std::numeric_limits<int>::max() / 8;  // careful because we add max + 1 + max -> overflow
     distances_ptr = make_unique<vector<vector<int>>>(N, vector<int>(N, inf));
     ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
 

@@ -257,9 +257,74 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
     return path;
 }
 
+template <typename T>
+inline int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path){
+    // -1 if not a valid path, 0 if valid path but not a shortest path, 1 if valid path but is a shortest path
+    auto start = path[0];
+    auto end = path[path.size() - 1];
+    auto shortest_distance = distances.at(start, end);
+    if ( shortest_distance < 0 ) {
+        return -1;
+    }
+    // validate path
+    auto cur = start;
+    for (int i = 1; i < path.size(); i++) {
+        auto next = path[i];
+        if (distances.at(cur, next) != 1) { // hardcoded for distance of 1
+            return -1;
+        }
+        cur = next;
+    }
+    if (path.size() > shortest_distance) {
+        return 0;
+    }
+    return 1;
+}
+
+template <typename T>
+py::array_t<int, py::array::c_style> varify_path(py::array_t<T, py::array::c_style> &distances, py::array_t<T, py::array::c_style> &paths,
+    py::array_t<T, py::array::c_style> &lengths) {
+    //batch version
+    auto batch_size = paths.shape(0);
+
+    auto out = py::array_t<int, py::array::c_style>({static_cast<int>(batch_size)});
+    out[py::make_tuple(py::ellipsis())] = -1;  // initialize array
+    auto ra = out.mutable_unchecked();
+    for (auto b = 0; b < batch_size; b++) {
+        bool has_been_set = false;
+        for (auto i = 0; i < lengths.at(b); i++) {
+            auto start = paths.at(b, i);
+            auto end = paths.at(b, i + 1);
+            auto shortest_distance = distances.at(start, end);
+            if (shortest_distance < 0) {
+                ra(b) = -1;
+                has_been_set = true;
+                break;
+            }
+            // validate path
+            auto cur = start;
+            for (int j = 1; j < lengths.at(b); j++) {
+                auto next = paths.at(b, j);
+                if (distances.at(cur, next) != 1) { // hardcoded for distance of 1
+                    ra(b) = -1;
+                    has_been_set = true;
+                    break;
+                }
+                cur = next;
+            }
+            if (!has_been_set && lengths.at(b) > shortest_distance) {
+                ra(b) = 0;
+            } else {
+                ra(b) = 1;
+            }
+        }
+    }
+
+
+    return out
+}
 
 inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
-
     vector<int> &given_query,
     int max_query_length = -1, const int min_query_length = 0, const bool is_center = true) {
 
@@ -282,10 +347,45 @@ inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<ve
             new_query.push_back(i);
         }
     }
+    auto Q = new_query.size();
     // calculate center or centroid of graph given queries
-
-
+    auto outputs = vector<int>();
+    auto values = vector<float>(N, static_cast<float>(inf));
+    for (int v = 0; v < N; v++) {
+        auto d = vector<float>(Q, 0);
+        for (auto q : new_query) {
+            d[q] = static_cast<float>((*distances_ptr)[v][q]);
+        }
+        if (is_center) { // get max of d
+            values[v] = *std::max_element(d.begin(), d.end());
+        } else { // get average
+            values[v] = static_cast<float>(std::accumulate(d.begin(), d.end(), 0.0) / Q);
+        }
+    }
+    // uses equality of floats, so not great
+    auto min_value = *std::min_element(values.begin(), values.end());
+    for (int i = 0; i < N; i++) {
+        if (values[i] == min_value) {
+            outputs.push_back(i);
+        }
+    }
+    if (outputs.empty()) {  // this will be due to float equality and means function needs to be rethought
+        auto s = "Center/centroid error no outputs found for min value " + std::to_string(min_value);
+        throw std::invalid_argument(s);
+    }
+    return make_pair(new_query, outputs);
 }
+
+inline pair<vector<int>, vector<int>> sample_center(const unique_ptr<vector<vector<int>>> &distances_ptr,
+    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 0) {
+    return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, true);
+}
+
+inline pair<vector<int>, vector<int>> sample_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
+    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 0) {
+    return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, false);
+}
+
 
 template <typename T>
 void non_causal_ground_truths(unique_ptr<vector<vector<T>>> &distance, unique_ptr<vector<vector<T>>> &ground_truths_ptr,
