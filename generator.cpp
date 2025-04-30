@@ -282,9 +282,9 @@ inline int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int
 }
 
 template <typename T>
-py::array_t<int, py::array::c_style> varify_path(py::array_t<T, py::array::c_style> &distances, py::array_t<T, py::array::c_style> &paths,
+py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_style> &distances, py::array_t<T, py::array::c_style> &paths,
     py::array_t<T, py::array::c_style> &lengths) {
-    //batch version
+    //batch version [batch_size, vocab_size, vocab_size]
     auto batch_size = paths.shape(0);
 
     auto out = py::array_t<int, py::array::c_style>({static_cast<int>(batch_size)});
@@ -319,14 +319,12 @@ py::array_t<int, py::array::c_style> varify_path(py::array_t<T, py::array::c_sty
             }
         }
     }
-
-
-    return out
+    return out;
 }
 
 inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
     vector<int> &given_query,
-    int max_query_length = -1, const int min_query_length = 0, const bool is_center = true) {
+    int max_query_length = -1, const int min_query_length = 2, const bool is_center = true) {
 
     auto N = static_cast<int>(distances_ptr->size());
     if (max_query_length == -1 || max_query_length > N) {
@@ -377,12 +375,12 @@ inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<ve
 }
 
 inline pair<vector<int>, vector<int>> sample_center(const unique_ptr<vector<vector<int>>> &distances_ptr,
-    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 0) {
+    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 2) {
     return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, true);
 }
 
 inline pair<vector<int>, vector<int>> sample_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
-    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 0) {
+    vector<int> &given_query, int max_query_length = -1, const int min_query_length = 2) {
     return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, false);
 }
 
@@ -525,14 +523,20 @@ inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise
 template <typename D>
 void push_back_data(unique_ptr<Graph<D>> &g_ptr,
                     vector<int> &edge_shuffle_map,
-                    const bool is_causal, const bool sample_target_paths,
                     list<unique_ptr<vector<pair<int, int>>>> &batched_edge_list,
                     list<int> &batched_edge_list_lengths,
                     list<unique_ptr<vector<vector<int>>>> &batched_distances,
                     list<unique_ptr<vector<vector<int>>>> &batched_ground_truths,
+                    const bool is_causal,
                     list<unique_ptr<vector<int>>> &batched_paths,
                     list<int> &batched_path_lengths,
-                    const int max_length = 10, const int min_length = 1, int start = -1, int end = -1) {
+                    const bool sample_target_paths,
+                    const int max_length = 10, const int min_length = 1, int start = -1, int end = -1.
+                    list<unique_ptr<pair<vector<int>, vector<int>>>> &batched_centers,
+                    list<pair<int, int>> &batched_center_lengths,
+                    const bool sample_center = true, const bool sample_centroid = true,
+                    int max_query_length = -1, const int min_query_length = 0,
+                    ) {
 
     const auto E = num_edges(*g_ptr);
     auto edge_list = get_edge_list<D>(g_ptr, edge_shuffle_map);
@@ -588,10 +592,13 @@ inline int attempt_check(const int E, const int max_edges, const int attempts, c
 
 inline py::dict erdos_renyi_n(
     const int min_num_nodes, int max_num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
-    const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true,
+    const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true, // task is shortest path
+    int max_query_length = -1, const int min_query_length = 2, const bool sample_center = true, const bool sample_centroid = true,  // task is center/centroid
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
-    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool is_flat_model = true,
+    const bool package_for_plotting = false) {
 
 
     if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
@@ -610,14 +617,17 @@ inline py::dict erdos_renyi_n(
     if ( c_min > c_max){ throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
     if ( batch_size <= 0){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
     if ( min_length > max_length ){ throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
+    if ( sample_center && sample_centroid ) { throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true"); }
 
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     auto batched_paths = list<unique_ptr<vector<int>>>();
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
     auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
+    auto batched_center_lengths = list<pair<int, int>>();
 
     int attempts = 0;
     int num = 0;
@@ -655,24 +665,18 @@ inline py::dict erdos_renyi_n(
     if ( max_vocab > 0 ) {
         new_N = max_vocab;
     }
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if ( attempts >= max_attempts ) {
-        return d;
+    if ( package_for_plotting ){
+        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+            batched_node_shuffle_map,
+            batched_edge_list,
+            batched_edge_list_lengths,
+            batched_distances,
+            batched_ground_truths,
+            batched_paths,
+            batched_path_lengths
+            );
     }
-    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
-    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
-    if ( sample_target_paths ) {
-        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
-        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
-    }
-    return d;
+    return package_for_model();
 }
 
 

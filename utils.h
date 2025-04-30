@@ -176,7 +176,8 @@ py::array_t<T, py::array::c_style> convert_vector(vector<T> &vec) {
 
 template <typename T>
 py::array_t<T, py::array::c_style> batch_edge_list(const list<unique_ptr<vector<pair<int, int>>>> &batched_edge_list,
-                                                   list<unique_ptr<vector<int>>> &batched_node_shuffle_map, int pad = -1) {
+                                                   const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                                   int pad = -1) {
     int E = 0;
     for (auto &m : batched_edge_list) {
         if ((*m).size() > E) {
@@ -205,7 +206,7 @@ py::array_t<T, py::array::c_style> batch_edge_list(const list<unique_ptr<vector<
 
 template <typename T>
 py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<vector<T>>>> &batched_distances,
-                                                   list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                                   const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
                                                    const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
 
     py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_distances.size()), new_N, new_N});
@@ -235,8 +236,8 @@ py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<
 
 template <typename T>
 py::array_t<T, py::array::c_style> batch_ground_truths(const list<unique_ptr<vector<vector<T>>>> &batched_ground_truths,
-                                                   list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
-                                                   const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+                                                       const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                                       const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
     // indices are nodes, values are distances
     auto max_E = 0;
     for (auto &m : batched_ground_truths) {
@@ -269,7 +270,8 @@ py::array_t<T, py::array::c_style> batch_ground_truths(const list<unique_ptr<vec
 
 template <typename T>
 py::array_t<T, py::array::c_style> batch_paths(const list<unique_ptr<vector<int>>> &batched_paths,
-                                               list<unique_ptr<vector<int>>> &batched_node_shuffle_map, int pad = -1) {
+                                               const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                               int pad = -1) {
 
     int N = 0;
     for (auto &m : batched_paths) {
@@ -308,7 +310,7 @@ py::array_t<T, py::array::c_style> batch_lengths(const list<int> &batched_length
 
 template <typename T>
 py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<vector<T>>>> &batched_positions,
-                                                   list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                                   const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
                                                    const int dim,
                                                    int pad = -1) {
     int N = 0;
@@ -368,13 +370,57 @@ py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(const py::ar
  *  Batched graph generation for input into network
  *  ***********************************************/
 
+inline py::dict package_for_plotting(
+                                     const int attempts, const int max_attempts,
+                                     const int min_vocab, const int max_vocab,
+    								 const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                     const list<unique_ptr<vector<pair<int, int>>>> &batched_edge_list,
+                                     const list<int> &batched_edge_list_lengths,
+                                     const list<unique_ptr<vector<vector<int>>>> &batched_distances,
+                                     const list<unique_ptr<vector<vector<int>>>> &batched_ground_truths,
+                                     const list<unique_ptr<vector<int>>> &batched_paths,
+                                     const list<int> &batched_path_lengths
+                                     ){
+
+	py::dict d;
+    d["num_attempts"] = attempts;
+    d["vocab_min_size"] = min_vocab;
+    d["vocab_max_size"] = max_vocab;
+    if ( attempts >= max_attempts ) {
+        return d;
+    }
+    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
+    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
+    d["distances"] = bd;
+    d["hashes"] = hash_distance_matrix<int>(bd);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    if ( ! batched_paths.empty() ) {
+        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
+        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
+    }
+    return d;
+
+}
 
 
-inline py::dict package_for_model(const bool is_flat_model=true){
+
+inline py::dict package_for_model(const bool is_flat_model = true){
   /*
-   *  Package the data for either an decoder-only or encoder-only model i.e. same layers over src and tgt
+   *  Package the data for either a flat encoder- or decoder-only model i.e. same layers over src and tgt
+   *  or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
    *
-   *
+   *  src_tokens [batch_size, seq_len, num_input_tokens]
+   *  src_lengths [batch_size] in range [0, seq_len]
+   *  prev_output_tokens [batch_size, task_len, max_k], where k is fore label smooth, i.e. task_inputs and tagets
+   *  src_ground_truths [batch_size, num_edges, vocab_size]
+   *  graph_start_index [batch_size]
+   *  graph_length [batch_size]
+   *  query_start_index [batch_size]
+   *  query_length [batch_size]
+   *  task_start_index [batch_size]
+   *  task_length [batch_size]
+   *  distances [batch_size, vocab_size, vocab_size]
    */
 
 
