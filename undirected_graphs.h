@@ -148,7 +148,8 @@ int johnson(unique_ptr<Graph<D>> &g_ptr, unique_ptr<DistanceMatrix<D>> &distance
     //  much faster than floyd_warshall for sparse graphs
 	// https://stackoverflow.com/questions/47757973/obtain-predecessors-with-boost-bgl-for-an-all-pair-shortest-path-search
     distances_ptr = make_unique<DistanceMatrix<D>>(num_vertices(*g_ptr));
-    auto weight_pmap = make_edge_weights(*g_ptr, false);
+    // auto weight_pmap = make_edge_weights(*g_ptr, false);
+    make_edge_weights(*g_ptr, false);
     DistanceMatrixMap<D> dm(*distances_ptr, *g_ptr);
     johnson_all_pairs_shortest_paths(*g_ptr, *distances_ptr);
 	return 0;
@@ -166,11 +167,11 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
     ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
 
     auto connected_components = vector(N, shared_ptr<set<int>>());
-    for (int i = 0; i < N; i++) {  // initialize distance matrix and connected components
+    for (int i = 0; i < static_cast<int>(N); i++) {  // initialize distance matrix and connected components
         (*distances_ptr)[i][i] = 0;
         connected_components[i] = make_shared<set<int>>(initializer_list<int>{i});
     }
-    for (int t = 0; t < E; t++) {  // stream edges as pivot instead of nodes
+    for (int t = 0; t < static_cast<int>(E); t++) {  // stream edges as pivot instead of nodes
     	auto node_i = edge_list[t].first;
         auto node_j = edge_list[t].second;
         if (node_i == node_j) {
@@ -204,7 +205,7 @@ inline int floyd_warshall_frydenlund(unique_ptr<Graph<D>> &g_ptr,
         }
         connected_components[node_j] = connected_components[node_i];  // make node_j's the same as node_i's
         // copy current distances to ground truths for node i in edge t after observing <= t edges
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < static_cast<int>(N); i++) {
             if ((*distances_ptr)[node_i][i] >= inf) {
                 (*ground_truths_ptr)[t][i] = -1;
             } else {
@@ -342,7 +343,7 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
                 return get<2>(left) < get<2>(right);
             });
             auto num_connected = sample_num_connected(gen, num_nodes, c_min, c_max);
-            for (size_t k = 0; k < num_connected && k < closest.size(); k++) {
+            for (size_t k = 0; k < static_cast<size_t>(num_connected) && k < closest.size(); k++) {
                 // cout << "Adding edge " << k << " " << num_connected << " " << closest.size() << endl;
                 int u = get<0>(closest[k]);
                 int v = get<1>(closest[k]);

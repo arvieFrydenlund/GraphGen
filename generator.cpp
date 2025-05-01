@@ -203,8 +203,8 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
             auto len_ = d1(gen);
             // get all paths of that length
             auto set_of_paths = vector<pair<int, int>>();
-            for (int i = 0; i < (*distances_ptr).size(); i++) {
-                for (int j = 0; j < (*distances_ptr)[i].size(); j++) {
+            for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
+                for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
                     if ((*distances_ptr)[i][j] == len_) {
                         set_of_paths.push_back(make_pair(i, j));
                     }
@@ -234,7 +234,7 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int>>> &distances_
     while (cur != start_end.second) {
         // for all neighbors of cur, find the one with the shortest distance to end
         vector<pair<int, int>> neighbors;
-        for (int i = 0; i < distances_ptr->size(); i++) {
+        for (int i = 0; i < static_cast<int>(distances_ptr->size()); i++) {
             if ((*distances_ptr)[cur][i] == 1 &&  // hardcoded, should pass in graph and get edges
                 (*distances_ptr)[i][start_end.second] < (*distances_ptr)[cur][start_end.second]) {
                 neighbors.push_back(make_pair(i, (*distances_ptr)[i][start_end.second]));
@@ -284,21 +284,18 @@ inline int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int
 template <typename T>
 py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_style> &distances, py::array_t<T, py::array::c_style> &paths,
     py::array_t<T, py::array::c_style> &lengths) {
-    //batch version [batch_size, vocab_size, vocab_size]
+    // batch version [batch_size, vocab_size, vocab_size]
     auto batch_size = paths.shape(0);
-
     auto out = py::array_t<int, py::array::c_style>({static_cast<int>(batch_size)});
-    out[py::make_tuple(py::ellipsis())] = -1;  // initialize array
+    out[py::make_tuple(py::ellipsis())] = 1;  // initialize array
     auto ra = out.mutable_unchecked();
     for (auto b = 0; b < batch_size; b++) {
-        bool has_been_set = false;
         for (auto i = 0; i < lengths.at(b); i++) {
             auto start = paths.at(b, i);
             auto end = paths.at(b, i + 1);
             auto shortest_distance = distances.at(start, end);
             if (shortest_distance < 0) {
                 ra(b) = -1;
-                has_been_set = true;
                 break;
             }
             // validate path
@@ -307,16 +304,15 @@ py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_st
                 auto next = paths.at(b, j);
                 if (distances.at(cur, next) != 1) { // hardcoded for distance of 1
                     ra(b) = -1;
-                    has_been_set = true;
                     break;
                 }
                 cur = next;
             }
-            if (!has_been_set && lengths.at(b) > shortest_distance) {
+            if (ra(b) != -1 && lengths.at(b) > shortest_distance) {
                 ra(b) = 0;
-            } else {
-                ra(b) = 1;
-            }
+            } //else {
+            //    ra(b) = 1;
+            //}
         }
     }
     return out;
@@ -374,12 +370,12 @@ inline pair<vector<int>, vector<int>> sample_center_centroid(const unique_ptr<ve
     return make_pair(new_query, outputs);
 }
 
-inline pair<vector<int>, vector<int>> sample_center(const unique_ptr<vector<vector<int>>> &distances_ptr,
+inline pair<vector<int>, vector<int>> sample_center_from_graph(const unique_ptr<vector<vector<int>>> &distances_ptr,
     vector<int> &given_query, int max_query_length = -1, const int min_query_length = 2) {
     return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, true);
 }
 
-inline pair<vector<int>, vector<int>> sample_centroid(const unique_ptr<vector<vector<int>>> &distances_ptr,
+inline pair<vector<int>, vector<int>> sample_centroid_from_graph(const unique_ptr<vector<vector<int>>> &distances_ptr,
     vector<int> &given_query, int max_query_length = -1, const int min_query_length = 2) {
     return   sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length, false);
 }
@@ -392,8 +388,8 @@ void non_causal_ground_truths(unique_ptr<vector<vector<T>>> &distance, unique_pt
     auto N = distance->size();
     auto E = edge_list.size();
     ground_truths_ptr = make_unique<vector<vector<int>>>(E, vector<int>(N, -1));
-    for (int t = 0; t < E; t++) {
-        for (int i = 0; i < N; i++) {
+    for (int t = 0; t < static_cast<int>(E); t++) {
+        for (int i = 0; i < static_cast<int>(N); i++) {
             (*ground_truths_ptr)[t][i] = (*distance)[edge_list[t].first][i];
         }
     }
@@ -476,7 +472,7 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
         constexpr size_t M = 2;
         auto positions = py::array_t<float, py::array::c_style>({N, M});
         auto ra = positions.mutable_unchecked();
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < static_cast<int>(N); i++) {
             for (int j = 0; j < 2; j++) {
                 constexpr float r = 10000;
                 ra(i, j) =  ceil((*positions_ptr)[i][j] * r) / r;;
@@ -531,11 +527,11 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
                     list<unique_ptr<vector<int>>> &batched_paths,
                     list<int> &batched_path_lengths,
                     const bool sample_target_paths,
-                    const int max_length = 10, const int min_length = 1, int start = -1, int end = -1.
+                    const int max_length, const int min_length, int start, int end,
                     list<unique_ptr<pair<vector<int>, vector<int>>>> &batched_centers,
                     list<pair<int, int>> &batched_center_lengths,
-                    const bool sample_center = true, const bool sample_centroid = true,
-                    int max_query_length = -1, const int min_query_length = 0,
+                    const bool sample_center, const bool sample_centroid,
+                    int max_query_length, const int min_query_length
                     ) {
 
     const auto E = num_edges(*g_ptr);
@@ -572,8 +568,17 @@ void push_back_data(unique_ptr<Graph<D>> &g_ptr,
             // time_after(path_t, "sample_path");
             batched_path_lengths.push_back(path.size());
             batched_paths.push_back(make_unique<vector<int>>(path));
-
         }
+        if ( sample_center || sample_centroid ) { // can only be one of these
+            auto given_query = vector<int>();
+            // auto center_t = time_before();
+            auto q_c_pair = sample_center_centroid(distances_ptr, given_query, max_query_length, min_query_length,
+                sample_center);
+            // time_after(center_t, "sample_center");
+            batched_center_lengths.push_back(make_pair(q_c_pair.first.size(), q_c_pair.second.size()));
+            batched_centers.push_back(make_unique<pair<vector<int>, vector<int>>>(q_c_pair));
+        }
+
         batched_distances.push_back(move(distances_ptr));
         batched_ground_truths.push_back(move(ground_truths_ptr));
     }
@@ -598,7 +603,7 @@ inline py::dict erdos_renyi_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool is_flat_model = true,
-    const bool package_for_plotting = false) {
+    const bool for_plotting = false) {
 
 
     if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
@@ -619,14 +624,14 @@ inline py::dict erdos_renyi_n(
     if ( min_length > max_length ){ throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
     if ( sample_center && sample_centroid ) { throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true"); }
 
-    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
+    auto batched_edge_list_lengths = list<int>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     auto batched_paths = list<unique_ptr<vector<int>>>();
-    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
-    auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
     auto batched_center_lengths = list<pair<int, int>>();
 
     int attempts = 0;
@@ -653,19 +658,17 @@ inline py::dict erdos_renyi_n(
         auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
         batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
         // auto pack_t = time_before();
-        push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
-            batched_edge_list, batched_edge_list_lengths, batched_distances,
-            batched_ground_truths, batched_paths,  batched_path_lengths,
-            max_length, min_length);
+        push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,
+            batched_edge_list, batched_edge_list_lengths,
+            batched_distances, batched_ground_truths, is_causal,
+            batched_paths,  batched_path_lengths, sample_target_paths, max_length, min_length, -1, -1,
+            batched_centers, batched_center_lengths, sample_center, sample_centroid, max_query_length, min_query_length
+            );
         // time_after(pack_t, "pack");
         num += 1;
     }
 
-    auto new_N = max_num_nodes;
-    if ( max_vocab > 0 ) {
-        new_N = max_vocab;
-    }
-    if ( package_for_plotting ){
+    if ( for_plotting ){
         return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
             batched_node_shuffle_map,
             batched_edge_list,
@@ -683,9 +686,12 @@ inline py::dict erdos_renyi_n(
 inline py::dict euclidian_n(
     const int min_num_nodes, int max_num_nodes,  const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
     const int max_length = 10, const int min_length = 1, const bool sample_target_paths = true,
+    int max_query_length = -1, const int min_query_length = 2, const bool sample_center = true, const bool sample_centroid = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
-    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool is_flat_model = true,
+    const bool for_plotting = false) {
 
     if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if ( max_num_nodes == -1 ) {
@@ -703,15 +709,18 @@ inline py::dict euclidian_n(
     if ( c_min > c_max){ throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
     if ( batch_size <= 0){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
     if ( min_length > max_length ){ throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
+    if ( sample_center && sample_centroid ) { throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true"); }
 
-    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
+    auto batched_edge_list_lengths = list<int>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     auto batched_paths = list<unique_ptr<vector<int>>>();
-    auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
-
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
+    auto batched_center_lengths = list<pair<int, int>>();
+    // this one is different from the rest
     auto batched_positions = list<unique_ptr<vector<vector<float>>>>();  // [batch_size, dim + 1] of node_id, x, y etc.
 
     int attempts = 0;
@@ -740,60 +749,60 @@ inline py::dict euclidian_n(
         auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
         batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
         // auto pack_t = time_before();
-        push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
-            batched_edge_list, batched_edge_list_lengths, batched_distances,
-            batched_ground_truths, batched_paths,  batched_path_lengths,
-            max_length, min_length);
+
+        push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,
+                    batched_edge_list, batched_edge_list_lengths,
+                    batched_distances, batched_ground_truths, is_causal,
+                    batched_paths,  batched_path_lengths, sample_target_paths, max_length, min_length, -1, -1,
+                    batched_centers, batched_center_lengths, sample_center, sample_centroid, max_query_length, min_query_length
+                    );
         // time_after(pack_t, "pack");
         num += 1;
     }
 
-    auto new_N = max_num_nodes;
-    if ( max_vocab > 0 ) {
-        new_N = max_vocab;
-    }
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if ( attempts >= max_attempts ) {
+    if ( for_plotting ){
+        auto d = package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+            batched_node_shuffle_map,
+            batched_edge_list,
+            batched_edge_list_lengths,
+            batched_distances,
+            batched_ground_truths,
+            batched_paths,
+            batched_path_lengths
+            );
+        d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
         return d;
     }
-    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
-    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
-    if ( sample_target_paths ) {
-        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
-        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
-    }
+    auto d = package_for_model();
     d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
-
     return d;
-
 }
 
 
 inline py::dict path_star_n(
     const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
-    const bool sample_target_paths = true,
+    const bool sample_target_paths = true,  // task is shortest path
+    int max_query_length = -1, const int min_query_length = 2, const bool sample_center = true, const bool sample_centroid = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
-    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool is_flat_model = true,
+    const bool for_plotting = false) {
 
     if ( min_num_arms <= 0 ){ throw std::invalid_argument("Invalid arguments: min_num_arms <= 0"); }
     if ( min_arm_length <= 0 ){ throw std::invalid_argument("Invalid arguments: min_arm_length <= 0"); }
     if ( batch_size <= 0 ){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+    if ( sample_center && sample_centroid ) { throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true"); }
 
-    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
+    auto batched_edge_list_lengths = list<int>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     auto batched_paths = list<unique_ptr<vector<int>>>();
-    auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
+    auto batched_center_lengths = list<pair<int, int>>();
 
     int attempts = 0;
     int num = 0;
@@ -812,45 +821,40 @@ inline py::dict path_star_n(
         auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
         batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
         // auto pack_t = time_before();
-        push_back_data<boost::directedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
-            batched_edge_list, batched_edge_list_lengths, batched_distances,
-            batched_ground_truths, batched_paths,  batched_path_lengths,
-            -1, -1, start_end.first, start_end.second);
+        push_back_data<boost::directedS>(g_ptr, edge_shuffle_map,
+                    batched_edge_list, batched_edge_list_lengths,
+                    batched_distances, batched_ground_truths, is_causal,
+                    batched_paths,  batched_path_lengths, sample_target_paths, -1, -1, start_end.first, start_end.second,
+                    batched_centers, batched_center_lengths, sample_center, sample_centroid, max_query_length, min_query_length
+                    );
         // time_after(pack_t, "pack");
         num += 1;
     }
-    auto new_N = max_num_arms * (max_arm_length - 1) + 1;
-    if ( max_vocab > 0 ) {
-        new_N = max_vocab;
+
+    if ( for_plotting ){
+        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+            batched_node_shuffle_map,
+            batched_edge_list,
+            batched_edge_list_lengths,
+            batched_distances,
+            batched_ground_truths,
+            batched_paths,
+            batched_path_lengths
+            );
     }
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if ( attempts >= max_attempts ) {
-        return d;
-    }
-    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
-    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
-    if ( sample_target_paths ) {
-        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
-        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
-    }
-    return d;
+    return package_for_model();
 }
 
 
 inline py::dict balanced_n(
     const int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead, const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
     const bool sample_target_paths = true,
+    int max_query_length = -1, const int min_query_length = 2, const bool sample_center = true, const bool sample_centroid = true,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
-    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000) {
-
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool is_flat_model = true,
+    const bool for_plotting = false) {
     if ( min_num_nodes <= 0 ) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if ( max_num_nodes == -1 ) {
         max_num_nodes = min_num_nodes;
@@ -870,14 +874,17 @@ inline py::dict balanced_n(
         throw std::invalid_argument("Invalid arguments: balanced_graph_size_check failed");
     }
     if ( batch_size <= 0 ){ throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+    if ( sample_center && sample_centroid ) { throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true"); }
 
-    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
     auto batched_node_shuffle_map = list<unique_ptr<vector<int>>>();
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int>>>>();
+    auto batched_edge_list_lengths = list<int>();
     auto batched_distances = list<unique_ptr<vector<vector<int>>>>();
     auto batched_ground_truths = list<unique_ptr<vector<vector<int>>>>();
     auto batched_paths = list<unique_ptr<vector<int>>>();
-    auto batched_edge_list_lengths = list<int>();
     auto batched_path_lengths = list<int>();
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int>>>>();
+    auto batched_center_lengths = list<pair<int, int>>();
 
     int attempts = 0;
     int num = 0;
@@ -912,36 +919,28 @@ inline py::dict balanced_n(
         auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
         batched_node_shuffle_map.push_back(make_unique<vector<int>>(node_shuffle_map));
         // auto pack_t = time_before();
-        push_back_data<boost::directedS>(g_ptr, edge_shuffle_map,  is_causal, sample_target_paths,
-            batched_edge_list, batched_edge_list_lengths, batched_distances,
-            batched_ground_truths, batched_paths,  batched_path_lengths,
-            -1, -1, start_end.first, start_end.second);
+        push_back_data<boost::directedS>(g_ptr, edge_shuffle_map,
+                    batched_edge_list, batched_edge_list_lengths,
+                    batched_distances, batched_ground_truths, is_causal,
+                    batched_paths,  batched_path_lengths, sample_target_paths, -1, -1, start_end.first, start_end.second,
+                    batched_centers, batched_center_lengths, sample_center, sample_centroid, max_query_length, min_query_length
+                    );
         // time_after(pack_t, "pack");
         num += 1;
     }
 
-    auto new_N = max_num_nodes;
-    if ( max_vocab > 0 ) {
-        new_N = max_vocab;
+    if ( for_plotting ){
+        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+            batched_node_shuffle_map,
+            batched_edge_list,
+            batched_edge_list_lengths,
+            batched_distances,
+            batched_ground_truths,
+            batched_paths,
+            batched_path_lengths
+            );
     }
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if ( attempts >= max_attempts ) {
-        return d;
-    }
-    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
-    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, new_N);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, new_N);
-    if ( sample_target_paths ) {
-        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
-        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
-    }
-    return d;
+    return package_for_model();
 }
 
 
@@ -1159,9 +1158,11 @@ PYBIND11_MODULE(generator, m) {
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
         py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
+        py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true, py::arg("sample_centroid") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
+        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000,
+        py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
     m.def("euclidian_n", &euclidian_n,
         "Generate a batch of Euclidian graphs\nParameters:\n\t"
@@ -1196,10 +1197,12 @@ PYBIND11_MODULE(generator, m) {
 
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
-        py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
+        py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true, py::arg("sample_centroid") = true,
+        py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true,
         py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000);
+        py::arg("batch_size") = 256, py::arg("max_edges") = 512,  py::arg("max_attempts") = 1000,
+        py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
     m.def("path_star_n", &path_star_n,
         "Generate a batch of path star graphs\nParameters:\n\t"
@@ -1229,9 +1232,11 @@ PYBIND11_MODULE(generator, m) {
 
         py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
         py::arg("sample_target_paths") = true,
+        py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true, py::arg("sample_centroid") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-        py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000);
+        py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
+        py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
     m.def("balanced_n", &balanced_n,
         "Generate a batch of balanced graphs\nParameters:\n\t"
@@ -1265,9 +1270,10 @@ PYBIND11_MODULE(generator, m) {
         py::arg("min_num_nodes"), py::arg("max_num_nodes"),
         py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0, py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
         py::arg("sample_target_paths") = true,
+        py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true, py::arg("sample_centroid") = true,
         py::arg("is_causal") = false,  py::arg("shuffle_edges") = false,
         py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-        py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000);
-
+        py::arg("batch_size") = 256,  py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
+        py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
 }

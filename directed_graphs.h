@@ -33,7 +33,7 @@ inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::dir
 	* The index of the vector does not correspond to the node id in the original graph.
    */
     vector<unordered_set<int>> children(N, unordered_set<int>());
-    for (int i = 0; i < num_vertices(*g_ptr); i++) {
+    for (auto i = 0; i < static_cast<int>(num_vertices(*g_ptr)); i++) {
       	auto children_at_i = children[i];
     	// convert node at idx to graph id
         for (auto e : boost::make_iterator_range(boost::out_edges(i, *g_ptr))) {
@@ -47,7 +47,7 @@ inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::dir
 
 inline vector<unordered_set<int>> get_parents(const vector<unordered_set<int>> &children){
     vector<unordered_set<int>> parents(children.size(), unordered_set<int>());
-    for (int i = 0; i < children.size(); i++) {
+    for (int i = 0; i < static_cast<int>(children.size()); i++) {
         for (int j : children[i]) {
             parents[j].insert(i);
         }
@@ -98,7 +98,7 @@ inline start_end_pair path_star_generator(unique_ptr<Graph<boost::directedS>> &g
         arm_length = std::uniform_int_distribution<int>(min_arm_length, max_arm_length)(gen);
     }
 
-    const int num_nodes = num_arms * (arm_length - 1) + 1;
+    // const int num_nodes = num_arms * (arm_length - 1) + 1;
 
     // add start node
     int start = 0;

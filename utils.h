@@ -129,7 +129,7 @@ template <typename T, typename D>
 py::array_t<T, py::array::c_style> convert_ground_truths(unique_ptr<D> &matrix_ptr, vector<int>& node_shuffle_map,
     const int E, const int N, const int new_N, T cuttoff = 100000, T max_value = -1, T mask_value = -1) {
     // indices are nodes, values are distances
-    auto new_M = *max_element(node_shuffle_map.begin(), node_shuffle_map.end()) + 1;
+    // auto new_M = *max_element(node_shuffle_map.begin(), node_shuffle_map.end()) + 1;
     py::array_t<T, py::array::c_style>  arr = py::array_t<T, py::array::c_style>({E, new_N});
     arr[py::make_tuple(py::ellipsis())] = mask_value;  // initialize array
     auto ra = arr.mutable_unchecked();
@@ -180,7 +180,7 @@ py::array_t<T, py::array::c_style> batch_edge_list(const list<unique_ptr<vector<
                                                    int pad = -1) {
     int E = 0;
     for (auto &m : batched_edge_list) {
-        if ((*m).size() > E) {
+        if (static_cast<int>((*m).size()) > E) {
             E = (*m).size();
         }
     }
@@ -193,7 +193,7 @@ py::array_t<T, py::array::c_style> batch_edge_list(const list<unique_ptr<vector<
     auto it2 = batched_node_shuffle_map.begin();
     for (; it1 != batched_edge_list.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
     // for (; it1 != batched_edge_list.end(); ++it1) {
-        for (int j = 0; j < (**it1).size(); j++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
             ra(cur, j, 0) = (**it2)[(**it1)[j].first];
             ra(cur, j, 1) = (**it2)[(**it1)[j].second];
             // ra(cur, j, 0) = (*it1)[j].first;
@@ -217,8 +217,8 @@ py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<
     auto it2 = batched_node_shuffle_map.begin();
     int cur = 0;
     for (; it1 != batched_distances.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-        for (int j = 0; j < (**it1).size(); j++) {
-            for (int k = 0; k < (**it1)[j].size(); k++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+            for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
                 auto mapped_j = (**it2)[j];
                 auto mapped_k = (**it2)[k];
                 if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
@@ -241,7 +241,7 @@ py::array_t<T, py::array::c_style> batch_ground_truths(const list<unique_ptr<vec
     // indices are nodes, values are distances
     auto max_E = 0;
     for (auto &m : batched_ground_truths) {
-        if ((*m).size() > max_E) {
+        if (static_cast<int>((*m).size()) > max_E) {
             max_E = (*m).size();
         }
     }
@@ -253,8 +253,8 @@ py::array_t<T, py::array::c_style> batch_ground_truths(const list<unique_ptr<vec
     auto it2 = batched_node_shuffle_map.begin();
     int cur = 0;
     for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-        for (int j = 0; j < (**it1).size(); j++) {
-            for (int k = 0; k < (**it1)[j].size(); k++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+            for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
                 if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
                     ra(cur, j, (**it2)[k]) = max_value;
                 } else {
@@ -275,7 +275,7 @@ py::array_t<T, py::array::c_style> batch_paths(const list<unique_ptr<vector<int>
 
     int N = 0;
     for (auto &m : batched_paths) {
-        if ((*m).size() > N) {
+        if (static_cast<int>((*m).size()) > N) {
             N = (*m).size();
         }
     }
@@ -286,7 +286,7 @@ py::array_t<T, py::array::c_style> batch_paths(const list<unique_ptr<vector<int>
     auto it2 = batched_node_shuffle_map.begin();
     int cur = 0;
     for (; it1 != batched_paths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-        for (int j = 0; j < (**it1).size(); j++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
             ra(cur, j) = (**it2)[(**it1)[j]];
         }
         cur += 1;
@@ -315,7 +315,7 @@ py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<
                                                    int pad = -1) {
     int N = 0;
     for (auto &m : batched_positions) {
-        if ((*m).size() > N) {
+        if (static_cast<int>((*m).size()) > N) {
             N = (*m).size();
         }
     }
@@ -326,7 +326,7 @@ py::array_t<T, py::array::c_style> batch_positions(const list<unique_ptr<vector<
     auto it2 = batched_node_shuffle_map.begin();
     int cur = 0;
     for (; it1 != batched_positions.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-        for (int j = 0; j < (**it1).size(); j++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
             ra(cur, j, 0) = static_cast<T>((**it2)[j]);  // map node id
             for (int d = 0; d < dim; d++) { // positions
                 constexpr float r = 10000;
@@ -370,8 +370,7 @@ py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(const py::ar
  *  Batched graph generation for input into network
  *  ***********************************************/
 
-inline py::dict package_for_plotting(
-                                     const int attempts, const int max_attempts,
+inline py::dict package_for_plotting(const int attempts, const int max_attempts,
                                      const int min_vocab, const int max_vocab,
     								 const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
                                      const list<unique_ptr<vector<pair<int, int>>>> &batched_edge_list,
@@ -381,7 +380,6 @@ inline py::dict package_for_plotting(
                                      const list<unique_ptr<vector<int>>> &batched_paths,
                                      const list<int> &batched_path_lengths
                                      ){
-
 	py::dict d;
     d["num_attempts"] = attempts;
     d["vocab_min_size"] = min_vocab;
@@ -405,7 +403,20 @@ inline py::dict package_for_plotting(
 
 
 
-inline py::dict package_for_model(const bool is_flat_model = true){
+inline py::dict package_for_model(const int attempts, const int max_attempts,
+                                  const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
+    							  const list<unique_ptr<vector<int>>> &batched_node_shuffle_map,
+                                  const list<unique_ptr<vector<pair<int, int>>>> &batched_edge_list,
+                                  const list<int> &batched_edge_list_lengths,
+                                  const list<unique_ptr<vector<vector<int>>>> &batched_distances,
+                                  const list<unique_ptr<vector<vector<int>>>> &batched_ground_truths,
+                                  const list<unique_ptr<vector<int>>> &batched_paths,
+                                  const list<int> &batched_path_lengths,
+                                  const list<unique_ptr<pair<vector<int>, vector<int>>>> &batched_centers,
+                                  const list<pair<int, int>> &batched_center_lengths,
+                                  const bool is_flat_model = true,
+                                  const bool concat_edges = true,
+                                  const bool query_at_end = true){
   /*
    *  Package the data for either a flat encoder- or decoder-only model i.e. same layers over src and tgt
    *  or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
@@ -421,7 +432,106 @@ inline py::dict package_for_model(const bool is_flat_model = true){
    *  task_start_index [batch_size]
    *  task_length [batch_size]
    *  distances [batch_size, vocab_size, vocab_size]
+   *
+   * dictionary symbols:
+   * '<s>', '<pad>', '</s>', '<unk>', '|', '!', '=', '.',
+   * 't1', 't2', 't3', 't4', 't5',
+   * '/', '?', '@', '#',
+   * 's1', 's2', 's3', 's4', 's5',
+   * '0', '1', '2', ....
    */
+
+	auto batch_size = static_cast<int>(batched_edge_list.size());
+
+  	vector<vector<int>> query;
+    py::array_t<int, py::array::c_style> query_lengths(batch_size);
+    py::array_t<int, py::array::c_style> task;  // tgt-side groud-truths
+    py::array_t<int, py::array::c_style> task_lengths(batch_size);
+    auto padding = static_cast<int>(dictionary["<pad>"]);
+    auto query_start_marker = dictionary["/"];
+	auto query_end_marker = dictionary["?"];
+    auto task_start_marker = dictionary["="];
+    auto task_end_marker = dictionary["."];
+  	if ( not batched_path_lengths.empty() ) {
+          auto max_path_length = *max_element(batched_path_lengths.begin(), batched_path_lengths.end());
+          task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, 1});
+          task[py::make_tuple(py::ellipsis())] = padding;  // initialize array
+          query_lengths[py::make_tuple(py::ellipsis())] = 4;  // initialize array
+          query = vector<vector<int>>(batch_size, vector<int>(4));
+          auto ra = task.mutable_unchecked();
+          auto ra_t_lengths = task_lengths.mutable_unchecked();
+    	  auto it1 = batched_paths.begin();
+    	  auto it2 = batched_node_shuffle_map.begin();
+
+          int cur = 0;
+    	  for (; it1 != batched_paths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+             auto path_length = static_cast<int>((**it1).size());
+             query[cur][0] = query_start_marker;
+             query[cur][1] = (**it2)[(**it1)[0]];  // startnode
+             query[cur][2] = (**it2)[(**it1)[path_length - 1]];  // end node
+             query[cur][3] = query_end_marker;
+
+             ra(cur, 0, 0) = task_start_marker;
+             for (int j = 0; j < path_length; j++) {
+          		ra(cur, j + 1, 0) = (**it2)[(**it1)[j]];
+          	 }
+             ra(cur, path_length + 1, 0) = task_end_marker;
+             ra_t_lengths(cur) = path_length + 2;
+          	 cur += 1;
+          }
+  	} else if ( not batched_center_lengths.empty() ) {
+          // batched_center_lengths is a list of queries and tasks
+          auto max_center_task_len = 0;
+          for (auto &m : batched_center_lengths) {
+              if (static_cast<int>(m.second) > max_center_task_len) {
+                  max_center_task_len = m.second;
+              }
+          }
+          // only one token but has label smoothing, so 3 is special tokens
+          task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len});
+  		  task[py::make_tuple(py::ellipsis())] = padding;  // initialize array
+          task_lengths[py::make_tuple(py::ellipsis())] = 1;  // initialize array
+          query = vector<vector<int>>(batch_size);
+          auto ra = task.mutable_unchecked();
+          auto ra_q_lengths = query_lengths.mutable_unchecked();
+    	  auto it1 = batched_centers.begin();
+    	  auto it2 = batched_node_shuffle_map.begin();
+
+          int cur = 0;
+          for (; it1 != batched_centers.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+              // auto query_length = static_cast<int>((*it1)->first.size());
+              auto task_length = static_cast<int>((*it1)->second.size());
+              auto cur_query = (*it1)->first;
+              cur_query.insert(cur_query.begin(), query_start_marker);
+              cur_query.push_back(query_end_marker);
+              query[cur] = cur_query;
+
+              ra(cur, 0, 0) = task_start_marker;
+              for (int j = 0; j < task_length; j++) {
+                auto node = (*it1)->second[j];
+              	ra(cur, 1, j) = (**it2)[node];
+              }
+              ra(cur, 2, 0) = task_end_marker;
+              ra_q_lengths(cur) = task_length + 2;
+              cur += 1;
+          }
+  	}
+
+    // src_tokens [batch_size, seq_len, num_input_tokens] if concat_edges num_input_tokens = 2, else 1
+    py::array_t<int, py::array::c_style> src_tokens;  // tgt-side groud-truths
+    auto max_query_length = 0;
+    for (auto &m : query) {
+        if (static_cast<int>(m.size()) > max_query_length) {
+            max_query_length = static_cast<int>(m.size());
+        }
+    }
+    auto max_task_length = 0;
+
+
+    auto E = static_cast<int>(*max_element(batched_edge_list_lengths.begin(), batched_edge_list_lengths.end()));
+    int num_input_tokens = (concat_edges) ? 2 : 1;
+    int E_len = (concat_edges) ? E : E * 3;
+
 
 
 	py::dict d;

@@ -115,7 +115,7 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
         if (py::isinstance<py::array>(item.second)) {
             auto arr = item.second.cast<py::array>();
             std::cout << " Shape: [";
-            for (size_t i = 0; i < arr.ndim(); i++) {
+            for (size_t i = 0; i < static_cast<size_t>(arr.ndim()); i++) {
                 std::cout << arr.shape(i) << " ";
             }
             std::cout << "]";
