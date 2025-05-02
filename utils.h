@@ -416,7 +416,8 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
                                   const list<pair<int, int>> &batched_center_lengths,
                                   const bool is_flat_model = true,
                                   const bool concat_edges = true,
-                                  const bool query_at_end = true){
+                                  const bool query_at_end = true,
+                                  const int num_thinking_tokens = 0){
   /*
    *  Package the data for either a flat encoder- or decoder-only model i.e. same layers over src and tgt
    *  or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
@@ -441,17 +442,22 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
    * '0', '1', '2', ....
    */
 
+    auto padding = static_cast<int>(dictionary["<pad>"]);
+    auto start_marker = static_cast<int>(dictionary["<s>"]);
+    auto end_marker = static_cast<int>(dictionary["</s>"]);
+    auto edge_marker = static_cast<int>(dictionary["|"]);
+    auto query_start_marker = dictionary["/"];
+	auto query_end_marker = dictionary["?"];
+    auto task_start_marker = dictionary["="];
+    auto task_end_marker = dictionary["."];
+
 	auto batch_size = static_cast<int>(batched_edge_list.size());
 
   	vector<vector<int>> query;
     py::array_t<int, py::array::c_style> query_lengths(batch_size);
     py::array_t<int, py::array::c_style> task;  // tgt-side groud-truths
     py::array_t<int, py::array::c_style> task_lengths(batch_size);
-    auto padding = static_cast<int>(dictionary["<pad>"]);
-    auto query_start_marker = dictionary["/"];
-	auto query_end_marker = dictionary["?"];
-    auto task_start_marker = dictionary["="];
-    auto task_end_marker = dictionary["."];
+
   	if ( not batched_path_lengths.empty() ) {
           auto max_path_length = *max_element(batched_path_lengths.begin(), batched_path_lengths.end());
           task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, 1});
@@ -518,7 +524,6 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
   	}
 
     // src_tokens [batch_size, seq_len, num_input_tokens] if concat_edges num_input_tokens = 2, else 1
-    py::array_t<int, py::array::c_style> src_tokens;  // tgt-side groud-truths
     auto max_query_length = 0;
     for (auto &m : query) {
         if (static_cast<int>(m.size()) > max_query_length) {
@@ -526,11 +531,28 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
         }
     }
     auto max_task_length = 0;
-
-
     auto E = static_cast<int>(*max_element(batched_edge_list_lengths.begin(), batched_edge_list_lengths.end()));
     int num_input_tokens = (concat_edges) ? 2 : 1;
     int E_len = (concat_edges) ? E : E * 3;
+    int seq_len = E_len + max_query_length + num_thinking_tokens + max_task_length + 2; // 2 for start and end markers
+    auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, seq_len, num_input_tokens});  // tgt-side groud-truths
+    src_tokens[py::make_tuple(py::ellipsis())] = padding;  // initialize array
+    auto ra = src_tokens.mutable_unchecked();
+
+    for ( auto b = 0; b < batch_size; b++ ) {
+        ra(b, 0, 0) = task_start_marker
+    }
+    auto curs = vector<int>(batch_size, 1); // current position in src_tokens
+
+    if ( ! query_at_end ) { // write in query if at start
+      for ( auto b = 0; b < batch_size; b++ ) {
+        auto cur = curs[b];
+        for ( int j = 0; j < static_cast<int>(query[b].size()); j++ ) {
+            ra(b, cur, 0) = query[b][j];
+            curs[b] += 1;
+        }
+      }
+    }
 
 
 
