@@ -8,6 +8,7 @@ np.finfo(np.dtype("float64"))
 
 class GraphPlotter(object):
     def __init__(self, G=None, d=None, is_undirected=True):
+        self.d = d
         self.G = G
         if d is not None:
             pos = d['positions'] if 'positions' in d else None
@@ -24,6 +25,13 @@ class GraphPlotter(object):
             self.G = nx.Graph()
         else:
             self.G = nx.DiGraph()
+        nodes = set()
+        for edge in edge_list:
+            nodes.add(edge[0])
+            nodes.add(edge[1])
+        nodes = list(nodes)
+        sorted(nodes)
+        self.G.add_nodes_from(nodes)
         self.G.add_edges_from(edge_list)
         if pos is not None:
             pos = pos.tolist() if isinstance(pos, np.ndarray) else pos
@@ -95,9 +103,34 @@ class GraphPlotter(object):
                 spring_k = 1 / np.sqrt(len(self.G.nodes)) * spring_k
             return nx.spring_layout(self.G, k=spring_k, scale=spring_scale)
 
-    def plot_graph(self, node_size=12,  with_labels=True, **kwargs):
+    def set_colours(self):
+        for i in range(len(self.G.nodes)): # default blue
+            self.G.nodes.get(i)['color'] = np.array([0, 0, 1])
+
+        for i, (u, v, d) in enumerate(self.G.edges(data=True)):
+            self.G.edges.get((u, v))['color'] = np.array([0, 0, 0])
+
+        if 'center_query' in self.d: # queries are purple and center is green
+            center_query = self.d['center_query']
+            center_center = self.d['center_center']
+            for qn in center_query:
+                self.G.nodes.get(qn)['color'] = np.array([0.5, 0, 0.5])
+            for cn in center_center:
+                self.G.nodes.get(cn)['color'] = np.array([0, 1, 0])
+
+        if 'path' in self.d:   # colour edges red
+            path = self.d['path']
+            for i in range(1, len(path)):
+                u, v = path[i - 1], path[i]
+                self.G.edges.get((u, v))['color'] = np.array([1, 0, 0])
+
+    def plot_graph(self, node_size=20,  with_labels=True, **kwargs):
         pos = self.make_plot_positions_for_layout(**kwargs)
-        nx.draw(self.G, with_labels=with_labels, pos=pos, node_size=node_size)
+        self.set_colours()
+        node_colours = [c for i, c in enumerate(nx.get_node_attributes(self.G, 'color').values())]
+        edge_colours = [c for i, c in enumerate(nx.get_edge_attributes(self.G, 'color').values())]
+        nx.draw(self.G, with_labels=with_labels, pos=pos, node_size=node_size,
+                node_color=node_colours, edge_color=edge_colours, **kwargs)
         plt.show()
 
 
@@ -109,15 +142,26 @@ def _try_networkx_plot():
     plotter.plot_graph()
 
 def try_cpp_plot(graph_type='erdos_renyi'):
-    # Assuming you have a C++ function that generates a graph and returns an edge list
-    # For example, let's say you have a function `generate_graph` in your C++ module
-    import generator  # Assuming this is your C++ module
+    from get_generator_module import get_generator_module
+    get_generator_module()
+    import generator
+
+
     if graph_type == 'erdos_renyi':
-        d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
+        d = generator.erdos_renyi(25, -1.0, 75, 125, is_causal=False, shuffle_edges=False, shuffle_nodes=False, is_center=True)
     elif graph_type == 'euclidean':
-        d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
+        d = generator.euclidian(25, 2, -1, shuffle_edges=False)
     else:
         raise ValueError("Unsupported graph type. Use 'erdos_renyi' or 'euclidean'.")
+
+    for k, v in d.items():
+        print(f'{k}: {type(v)}')
+        if isinstance(v, np.ndarray):
+            print(f'\t {k}: {v.shape}, {v.dtype}')
+            print(v, end='')
+        print(end='\n', flush=True)
+
+
     plotter = GraphPlotter(d=d)
     plotter.plot_graph()
 

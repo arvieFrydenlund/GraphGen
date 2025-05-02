@@ -7,6 +7,7 @@ Generate graphs and distances in C++ for use in Python via pybind11
 
 Note this works if using the primary system python, if you have multiple versions of python installed [see here where python3-config --extension-suffix fails](https://stackoverflow.com/questions/77112605/what-is-the-prefered-way-of-generating-extension-module-filename-suffix-in-virtu) 
 
+Note to self: running with `-fsanitize=address -g` helps with debugging.  
 
 You need to include python library and pybind11 to the compiler options, for Clion include
 examples:

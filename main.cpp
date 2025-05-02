@@ -78,27 +78,27 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {
         cout << "Erdos Renyi Graph Test: " << endl;
-        d = erdos_renyi(num_nodes, -1.0, 75, 125, 10, 3, is_casual, true, true, 3, num_nodes + 5);
+        d = erdos_renyi(num_nodes, -1.0, 75, 125, 10, 3, -1, 2, true, is_casual, true, true, 3, num_nodes + 5);
     } else  if ( graph_type == "erdos_renyi_n" ) {
         cout << "Erdos Renyi Graph Test: " << endl;
         d = erdos_renyi_n(num_nodes, num_nodes + 5, -1.0, 75, 125,  10, 3, true,
                           is_casual, true, true, 2,  num_nodes + 10, batch_size, max_edges);
     } else if ( graph_type == "euclidian" ) {
         cout << "Euclidian Graph Test: " << endl;
-        d = euclidian(num_nodes, 2, -1.0, 75, 125, 10, 3, is_casual, false, false);
+        d = euclidian(num_nodes, 2, -1.0, 75, 125, 10, 3, -1, 2, true, is_casual, false, false);
     } else  if ( graph_type == "euclidian_n" ) {
         cout << "Euclidian Graph Test: " << endl;
         d = euclidian_n(num_nodes, num_nodes + 5, 2, -1.0, 75, 125,  10, 3, true,
             is_casual, true, true, 2,  num_nodes + 10, batch_size, max_edges);
     } else if ( graph_type == "path_star" ) {  // no need to test this at scale
         cout << "Path Star Graph Test: " << endl;
-        d = path_star(3, 3, 5, 5, false, false);
+        d = path_star(3, 3, 5, 5, -1, 2, true, false, false);
     } else if ( graph_type == "path_star_n" ) {
         cout << "Path Star Graph Test: " << endl;
         d = path_star_n(2, 3, 5, 7, true, is_casual, true, true, 3, num_nodes + 10, batch_size);
     } else if ( graph_type == "balanced" ) {
         cout << "Balanced Graph Test: " << endl;
-        d = balanced(num_nodes, 7, 5, 4, -1, is_casual, false, false, 0, -1);
+        d = balanced(num_nodes, 7, 5, 4, -1, -1, 2, true, is_casual, false, false, 0, -1);
     } else if ( graph_type == "balanced_n" ) {
         cout << "Balanced Graph Test: " << endl;
         d = balanced_n(num_nodes, num_nodes + 5,  3, 8, 4, 4, -1, true, is_casual, true, true, 3, num_nodes + 15, batch_size);
@@ -121,7 +121,7 @@ void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, co
             std::cout << "]";
         }
         cout << endl;
-    };
+    }
 }
 
 
@@ -146,13 +146,14 @@ int main(){
     // cout << "Dict: " << &d << endl;
 
     cout << "Seed: " << get_seed() << endl;
-    // test_pybind("erdos_renyi");
+    set_seed(3344391079);
+    test_pybind("erdos_renyi");
     // test_pybind("euclidian");
     // test_pybind("path_star");
     // test_pybind("balanced", 25);
 
     auto t1 = time_before();
-    test_pybind("erdos_renyi_n", 50, 256, false);
+    // test_pybind("erdos_renyi_n", 50, 256, false);
     // test_pybind("erdos_renyi_n", 150, 256);
     // test_pybind("euclidian_n", 50, 256, false);
     // test_pybind("path_star_n", 50, 256, false);
