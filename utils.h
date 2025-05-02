@@ -448,8 +448,10 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
     auto edge_marker = static_cast<int>(dictionary["|"]);
     auto query_start_marker = dictionary["/"];
 	auto query_end_marker = dictionary["?"];
+    auto thinking_token = dictionary["!"];
     auto task_start_marker = dictionary["="];
     auto task_end_marker = dictionary["."];
+
 
 	auto batch_size = static_cast<int>(batched_edge_list.size());
 
@@ -540,7 +542,7 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
     auto ra = src_tokens.mutable_unchecked();
 
     for ( auto b = 0; b < batch_size; b++ ) {
-        ra(b, 0, 0) = task_start_marker
+        ra(b, 0, 0) = task_start_marker;
     }
     auto curs = vector<int>(batch_size, 1); // current position in src_tokens
 
