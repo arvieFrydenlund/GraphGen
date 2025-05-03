@@ -73,7 +73,12 @@ void test_balanced(std::mt19937 &gen, const int num_nodes = 100, const bool verb
 
 }
 
-void test_pybind(string graph_type = "erdos_renyi", const int num_nodes = 15, const int batch_size = 7, const bool is_casual = true, const int max_edges = 512) {
+void test_pybind(string graph_type = "erdos_renyi",
+  const int num_nodes = 15, const int batch_size = 7,
+  const bool is_casual = true, const bool shuffle_edges = false,
+  const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
+  const bool is_flat_model = true, const bool for_plotting = false,
+  const int max_edges = 512) {
 
     py::dict d;
     if ( graph_type == "erdos_renyi" ) {

@@ -426,6 +426,30 @@ inline py::dict package_for_plotting(const int attempts, const int max_attempts,
 }
 
 
+inline vector<vector<int> >
+label_smooth_path(const vector<vector<int> > &distances_ptr, vector<int> &path) {
+    /* Return a vector of labels for each node in the path if they are alternative valid shortest paths
+     * The labels for at labels[:][0] are just the original path
+     */
+    auto labels = vector<vector<int> >(path.size(), vector<int>());
+    labels[0].push_back(path[0]); // start
+    auto end = path[path.size() - 1];
+    labels[path.size() - 1].push_back(end); // end
+    for (int i = 1; i < static_cast<int>(path.size() - 1); i++) {
+        auto prev = path[i - 1];
+        auto path_node = path[i];
+        labels[i].push_back(path_node); // add true path
+        for (int j = 0; j < static_cast<int>(distances_ptr.size()); j++) {
+            if (distances_ptr[prev][j] == 1 &&  j != path_node &&
+                distances_ptr[j][end] == distances_ptr[path_node][end]) {
+                labels[i].push_back(j);
+                }
+        }
+    }
+    return labels;
+}
+
+
 inline py::dict package_for_flat_model(const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
                                   const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
@@ -482,31 +506,56 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
 
     vector<vector<int> > query;
     py::array_t<int, py::array::c_style> query_lengths(batch_size);
-    py::array_t<int, py::array::c_style> task; // tgt-side groud-truths
+    py::array_t<int, py::array::c_style> task; // tgt-side ground-truths
     py::array_t<int, py::array::c_style> task_lengths(batch_size);
 
     if (not batched_path_lengths.empty()) {
-        auto max_path_length = *max_element(batched_path_lengths.begin(), batched_path_lengths.end());
-        task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, 1});
+
+        // The issue here is that we need to know the size of max label before making tensor
+        // thus the smoothing values need to be calculated first
+        auto batched_label_smoothing = vector<vector<vector<int> > >(batch_size);
+        auto max_path_length = 0;
+        auto max_k = 0;
+
+        int cur = 0;
+        auto it1 = batched_paths.begin();
+        auto it2 = batched_distances.begin();
+        for (; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2) {
+            auto labels = label_smooth_path(**it2, **it1);
+            if (static_cast<int>(labels.size()) > max_path_length) {
+                max_path_length = labels.size();
+            }
+            for (auto &m: labels) {
+                if (static_cast<int>(m.size()) > max_k) {
+                    max_k = m.size();
+                }
+            }
+            batched_label_smoothing[cur] = labels;
+            cur += 1;
+        }
+
+        task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         query_lengths[py::make_tuple(py::ellipsis())] = 4; // initialize array
         query = vector<vector<int> >(batch_size, vector<int>(4));
         auto ra = task.mutable_unchecked();
         auto ra_t_lengths = task_lengths.mutable_unchecked();
-        auto it1 = batched_paths.begin();
-        auto it2 = batched_node_shuffle_map.begin();
 
-        int cur = 0;
-        for (; it1 != batched_paths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-            auto path_length = static_cast<int>((**it1).size());
+        cur = 0;
+        auto it3 = batched_node_shuffle_map.begin();
+        for (; it3 != batched_node_shuffle_map.end(); ++it3) {
+            auto labels = batched_label_smoothing[cur];
+            auto path_length = static_cast<int>(labels.size());
             query[cur][0] = query_start_marker;
-            query[cur][1] = (**it2)[(**it1)[0]]; // startnode
-            query[cur][2] = (**it2)[(**it1)[path_length - 1]]; // end node
+            query[cur][1] = (**it3)[labels[0][0]]; // start node
+            query[cur][2] = (**it3)[labels[path_length - 1][0]]; // end node
             query[cur][3] = query_end_marker;
 
             ra(cur, 0, 0) = task_start_marker;
             for (int j = 0; j < path_length; j++) {
-                ra(cur, j + 1, 0) = (**it2)[(**it1)[j]];
+                for (int k = 0; k < static_cast<int>(labels[j].size()); k++) {
+                    ra(cur, j + 1, k) = (**it3)[labels[j][k]];
+                }
             }
             ra(cur, path_length + 1, 0) = task_end_marker;
             ra_t_lengths(cur) = path_length + 2;
@@ -722,7 +771,7 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
                                 batched_centers, batched_center_lengths, concat_edges, query_at_end,
                                 num_thinking_tokens);
     }
-
+    return package_for_model();
 }
 
 

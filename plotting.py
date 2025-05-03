@@ -104,33 +104,51 @@ class GraphPlotter(object):
             return nx.spring_layout(self.G, k=spring_k, scale=spring_scale)
 
     def set_colours(self):
+        # https://matplotlib.org/stable/users/explain/colors/colors.html
         for i in range(len(self.G.nodes)): # default blue
-            self.G.nodes.get(i)['color'] = np.array([0, 0, 1])
+            self.G.nodes.get(i)['color'] = "w" # "tab:blue"
+            self.G.nodes.get(i)['edge_color'] = "k" # "tab:blue"
 
         for i, (u, v, d) in enumerate(self.G.edges(data=True)):
-            self.G.edges.get((u, v))['color'] = np.array([0, 0, 0])
+            self.G.edges.get((u, v))['color'] = "k"
+            self.G.edges.get((u, v))['width'] = 1
+            self.G.edges.get((u, v))['alpha'] = 0.8
 
-        if 'center_query' in self.d: # queries are purple and center is green
+        if 'center_query' in self.d:
             center_query = self.d['center_query']
             center_center = self.d['center_center']
             for qn in center_query:
-                self.G.nodes.get(qn)['color'] = np.array([0.5, 0, 0.5])
+                self.G.nodes.get(qn)['color'] = "tab:purple" # "tab:cyan" # "tab:purple"
             for cn in center_center:
-                self.G.nodes.get(cn)['color'] = np.array([0, 1, 0])
+                self.G.nodes.get(cn)['color'] = "tab:cyan" #"tab:green"
 
         if 'path' in self.d:   # colour edges red
             path = self.d['path']
-            for i in range(1, len(path)):
-                u, v = path[i - 1], path[i]
-                self.G.edges.get((u, v))['color'] = np.array([1, 0, 0])
 
-    def plot_graph(self, node_size=20,  with_labels=True, **kwargs):
+            self.G.nodes.get(path[0])['edge_color'] = "w"
+            for i in range(1, len(path)):
+                self.G.nodes.get(path[i])['edge_color'] = "tab:red"
+                u, v = path[i - 1], path[i]
+                self.G.edges.get((u, v))['color'] = "tab:red"
+                self.G.edges.get((u, v))['width'] = 4
+
+    def plot_graph(self, node_size=200,  font_size=8, with_labels=True, **kwargs):
         pos = self.make_plot_positions_for_layout(**kwargs)
         self.set_colours()
+        # https://networkx.org/documentation/stable/reference/generated/networkx.drawing.nx_pylab.draw_networkx_nodes.html
+        # node_list = list(self.G.nodes)  # only specific nodes
         node_colours = [c for i, c in enumerate(nx.get_node_attributes(self.G, 'color').values())]
+        node_edge_colors = [c for i, c in enumerate(nx.get_node_attributes(self.G, 'edge_color').values())]
         edge_colours = [c for i, c in enumerate(nx.get_edge_attributes(self.G, 'color').values())]
-        nx.draw(self.G, with_labels=with_labels, pos=pos, node_size=node_size,
-                node_color=node_colours, edge_color=edge_colours, **kwargs)
+        edge_widths = [c for i, c in enumerate(nx.get_edge_attributes(self.G, 'width').values())]
+        edge_alphas = [c for i, c in enumerate(nx.get_edge_attributes(self.G, 'alpha').values())]
+        #nx.draw(self.G, with_labels=with_labels, pos=pos, node_size=node_size, node_color=node_colours,
+        #        edge_color=edge_colours, edge_width=edge_widths, edge_alpha=edge_alphas, **kwargs)
+
+        nx.draw_networkx_nodes(self.G, pos=pos, node_size=node_size, node_color=node_colours, edgecolors=node_edge_colors)
+        nx.draw_networkx_edges(self.G, pos=pos, edge_color=edge_colours, width=edge_widths, alpha=edge_alphas)
+        if with_labels:
+            nx.draw_networkx_labels(self.G, pos, font_size=font_size) # font_color="whitesmoke")
         plt.show()
 
 

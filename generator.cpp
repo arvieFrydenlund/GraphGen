@@ -293,6 +293,7 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
     return path;
 }
 
+
 template<typename T>
 int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path) {
     // -1 if not a valid path, 0 if valid path but not a shortest path, 1 if valid path but is a shortest path
@@ -317,6 +318,7 @@ int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path
     }
     return 1;
 }
+
 
 template<typename T>
 py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_style> &distances,
@@ -361,18 +363,12 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
                                                               vector<int> &given_query,
                                                               int max_query_length = -1, const int min_query_length = 2,
                                                               const bool is_center = true) {
-    // -fsanitize=address -g
     auto N = static_cast<int>(distances_ptr->size());
     if (max_query_length == -1 || max_query_length > N) {
         max_query_length = N;
     }
-    for (auto i: given_query) {
-        cout << "given query: " << i << endl;
-    }
-    cout << "given query size: " << given_query.size() << " is empty " << given_query.empty() << " N  " << N <<  endl;
     auto new_query = vector<int>();
     if (given_query.empty()) {
-        cout << "here!!! " << min_query_length << " " << max_query_length << endl;
         //sample query
         // stackoverflow.com/questions/33802205/how-to-sample-without-replacement-using-c-uniform-int-distribution
         uniform_int_distribution<int> d1(min_query_length, max_query_length);
@@ -390,17 +386,17 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
     }
     auto Q = static_cast<int>(new_query.size());
     // calculate center or centroid of graph given queries
-    cout << "N: " << N << " Q: " << Q << endl;
-
     auto values = vector<float>(N, static_cast<float>(inf));
     auto d = vector<float>(Q, 0.0);
     for (int v = 0; v < N; v++) {
         for (int q = 0; q < Q; q++) {
             d[q] = static_cast<float>((*distances_ptr)[v][new_query[q]]);
         }
-        if (is_center) {// get max of d
+        if (is_center) {
+            // get max of d
             values[v] = *std::max_element(d.begin(), d.end());
-        } else {// get average
+        } else {
+            // get average
             values[v] = static_cast<float>(std::accumulate(d.begin(), d.end(), 0.0) / Q);
         }
     }
@@ -413,7 +409,7 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
         }
     }
     if (outputs.empty()) {
-        // this will be due to float equality and means function needs to be rethought
+        // this will be due to float equality and means function needs to be reimplemented
         auto s = "Center/centroid error no outputs found for min value " + std::to_string(min_value);
         throw std::invalid_argument(s);
     }
@@ -519,7 +515,7 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
                             int max_query_length = -1, const int min_query_length = 2, const bool is_center = true,
                             const bool is_causal = false, const bool shuffle_edges = false,
                             const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1) {
-    if (p >= 1.0) { throw::invalid_argument("p >= 1.0"); }  //  boost fails at p = 1.0, way to go boost
+    if (p >= 1.0) { throw::invalid_argument("p >= 1.0"); } //  boost fails at p = 1.0, way to go boost
     unique_ptr<Graph<boost::undirectedS> > g_ptr;
     erdos_renyi_generator(g_ptr, num_nodes, gen, p, c_min, c_max, false);
     return package_for_python(g_ptr, max_path_length, min_path_length, -1, -1,
@@ -684,6 +680,9 @@ inline py::dict erdos_renyi_n(
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
     const bool for_plotting = false) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
@@ -763,7 +762,20 @@ inline py::dict erdos_renyi_n(
                                     batched_path_lengths
         );
     }
-    return package_for_model();
+    return package_for_model(attempts, max_attempts,
+                            min_vocab, max_vocab, dictionary,
+                            batched_node_shuffle_map,
+                            batched_edge_list,
+                            batched_edge_list_lengths,
+                            batched_distances,
+                            batched_ground_truths,
+                            batched_paths,
+                            batched_path_lengths,
+                            batched_centers,
+                            batched_center_lengths,
+                            concat_edges, query_at_end, num_thinking_tokens,
+                            is_flat_model
+    );
 }
 
 
@@ -1264,11 +1276,11 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_num_nodes"), py::arg("max_num_nodes"),
           py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
           py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true,
-          py::arg("sample_centroid") = true,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true, py::arg("query_at_end") = true, py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
     m.def("euclidian_n", &euclidian_n,
@@ -1305,8 +1317,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_num_nodes"), py::arg("max_num_nodes"),
           py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
           py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
-          py::arg("sample_centroid") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
@@ -1340,8 +1351,7 @@ PYBIND11_MODULE(generator, m) {
 
           py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true,
-          py::arg("sample_centroid") = true,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
@@ -1380,8 +1390,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0,
           py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = true,
-          py::arg("sample_centroid") = true,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
