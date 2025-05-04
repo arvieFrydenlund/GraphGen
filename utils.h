@@ -489,13 +489,20 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
      * '0', '1', '2', ....
      */
 
+    py::dict d;
+    d["num_attempts"] = attempts;
+    d["vocab_min_size"] = min_vocab;
+    d["vocab_max_size"] = max_vocab;
+    if (attempts >= max_attempts) {
+        return d;
+    }
+
     auto padding = static_cast<int>(dictionary["<pad>"]);
     auto start_marker = static_cast<int>(dictionary["<s>"]);
     auto end_marker = static_cast<int>(dictionary["</s>"]);
     auto edge_marker = static_cast<int>(dictionary["|"]);
     auto query_start_marker = dictionary["/"];
     auto query_end_marker = dictionary["?"];
-    auto thinking_token = dictionary["!"];
     // auto task_1_marker = dictionary["t1"];
     // auto task_2_marker = dictionary["t2"];
     auto task_start_marker = dictionary["="];
@@ -508,7 +515,10 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     py::array_t<int, py::array::c_style> query_lengths(batch_size);
     py::array_t<int, py::array::c_style> task; // tgt-side ground-truths
     py::array_t<int, py::array::c_style> task_lengths(batch_size);
+    //calculate lengths as  edge_len + query_length + num_thinking_tokens + task_length + 2 per instance in batch
+    auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
 
+    auto src_len_ra = src_lengths.mutable_unchecked();
     if (not batched_path_lengths.empty()) {
 
         // The issue here is that we need to know the size of max label before making tensor
@@ -522,6 +532,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
         auto it2 = batched_distances.begin();
         for (; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2) {
             auto labels = label_smooth_path(**it2, **it1);
+            cout << "labels size: " << labels.size() << endl;
             if (static_cast<int>(labels.size()) > max_path_length) {
                 max_path_length = labels.size();
             }
@@ -534,6 +545,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             cur += 1;
         }
 
+        cout << "Init task with " << max_path_length << " " << max_k << endl;
         task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         query_lengths[py::make_tuple(py::ellipsis())] = 4; // initialize array
@@ -559,6 +571,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             }
             ra(cur, path_length + 1, 0) = task_end_marker;
             ra_t_lengths(cur) = path_length + 2;
+            src_len_ra(cur) = path_length + 2 + static_cast<int>(query[cur].size());
             cur += 1;
         }
     } else if (not batched_center_lengths.empty()) {
@@ -570,7 +583,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             }
         }
         // only one token but has label smoothing, so 3 is special tokens
-        task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len});
+        task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len + 2});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         task_lengths[py::make_tuple(py::ellipsis())] = 1; // initialize array
         query = vector<vector<int> >(batch_size);
@@ -595,30 +608,36 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             }
             ra(cur, 2, 0) = task_end_marker;
             ra_q_lengths(cur) = task_length + 2;
+            src_len_ra(cur) = task_length + 2 + static_cast<int>(query[cur].size());
             cur += 1;
         }
     }
 
-    // src_tokens [batch_size, seq_len, num_input_tokens] if concat_edges num_input_tokens = 2, else 1
-    auto max_query_length = 0;
-    for (auto &m: query) {
-        if (static_cast<int>(m.size()) > max_query_length) {
-            max_query_length = static_cast<int>(m.size());
+    // add edge sizes and thinking tokens to src_lengths
+    auto it0 = batched_edge_list_lengths.begin();
+    for (int b = 0; b < batch_size; b++) {
+        if (concat_edges) {
+            src_len_ra(b) += static_cast<int>(*it0) + num_thinking_tokens + 2;
+        } else {
+            src_len_ra(b) += static_cast<int>(*it0) * 3 + num_thinking_tokens + 2;
+        }
+        ++it0;
+    }
+
+    auto num_input_tokens = (concat_edges) ? 2 : 1;
+    int max_seq_len = 0;
+    for (int b = 0; b < batch_size; b++) {
+        if (src_len_ra(b) > max_seq_len) {
+            max_seq_len = src_len_ra(b);
         }
     }
-    auto max_task_length = 0;
-    auto E = static_cast<int>(*max_element(batched_edge_list_lengths.begin(), batched_edge_list_lengths.end()));
-    int num_input_tokens = (concat_edges) ? 2 : 1;
-    int E_len = (concat_edges) ? E : E * 3;
-    int seq_len = E_len + max_query_length + num_thinking_tokens + max_task_length + 2; // 2 for start and end markers
-
-    auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, seq_len, num_input_tokens});
+    auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, max_seq_len, num_input_tokens});
     py::array_t<int, py::array::c_style> query_start_indices;
     py::array_t<int, py::array::c_style> graph_start_indices;
     py::array_t<int, py::array::c_style> graph_lengths;
     py::array_t<int, py::array::c_style> task_start_indices;
 
-    // tgt-side groud-truths
+    // tgt-side ground-truths
     src_tokens[py::make_tuple(py::ellipsis())] = padding; // initialize array
     auto ra = src_tokens.mutable_unchecked();
 
@@ -631,13 +650,13 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     auto curs = vector<int>(batch_size, 1); // current position in src_tokens
 
     if (!query_at_end) {  // write in query before graph
-        query_start_indices = py::array_t<int, py::array::c_style>(curs);
+        query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>(query[b].size()); j++) {
-                ra(b, cur, 0) = query[b][j];
+                ra(b, cur + j, 0) = query[b][j];
                 if (concat_edges) {
-                    ra(b, cur, 1) = query[b][j];
+                    ra(b, cur + j, 1) = query[b][j];
                 }
                 curs[b] += 1;
             }
@@ -645,16 +664,20 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     }
 
     auto it1 = batched_edge_list.begin();
-    graph_start_indices = py::array_t<int, py::array::c_style>(curs);
+    auto it2 = batched_node_shuffle_map.begin();
+    graph_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
     if (concat_edges) {  // not there are no graph markers
-        graph_lengths = py::array_t<int, py::array::c_style>(batched_edge_list_lengths);
+        graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
-                ra(b, cur, 0) = (*it1)->at(j).first;
-                ra(b, cur, 1) = (*it1)->at(j).second;
+                ra(b, cur + j, 0) = (**it2)[(*it1)->at(j).first];
+                ra(b, cur + j, 1) =(**it2)[(*it1)->at(j).second];
                 curs[b] += 1;
+
             }
+            ++it1;
+            ++it2;
         }
     } else {
         auto ra_gl = graph_lengths.mutable_unchecked();
@@ -662,22 +685,24 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             ra_gl[b] = static_cast<int>((*it1)->size()) * 3;
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
-                ra(b, cur, 0) = (*it1)->at(j).first;
-                ra(b, cur + 1, 0) = (*it1)->at(j).second;
-                ra(b, cur + 2, 0) = edge_marker;
+                ra(b, cur + j, 0) = (*it1)->at(j).first;
+                ra(b, cur + j + 1, 0) = (*it1)->at(j).second;
+                ra(b, cur + j + 2, 0) = edge_marker;
                 curs[b] += 3;
             }
+            ++it1;
+            ++it2;
         }
     }
 
     if (query_at_end) {  // write in query if after graph
-        query_start_indices = py::array_t<int, py::array::c_style>(curs);
+        query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>(query[b].size()); j++) {
-                ra(b, cur, 0) = query[b][j];
+                ra(b, cur + j, 0) = query[b][j];
                 if (concat_edges) {
-                    ra(b, cur, 1) = query[b][j];
+                    ra(b, cur + j, 1) = query[b][j];
                 }
                 curs[b] += 1;
             }
@@ -685,12 +710,13 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     }
 
     if (num_thinking_tokens > 0) { // write in thinking tokens between query and task
+        auto thinking_token = dictionary["!"];
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < num_thinking_tokens; j++) {
-                ra(b, cur, 0) = thinking_token;
+                ra(b, cur + j, 0) = thinking_token;
                 if (concat_edges) {
-                    ra(b, cur, 1) = thinking_token;
+                    ra(b, cur + j, 1) = thinking_token;
                 }
                 curs[b] += 1;
             }
@@ -698,13 +724,13 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     }
 
     if (not batched_path_lengths.empty() || not batched_center_lengths.empty()) {
-        task_start_indices = py::array_t<int, py::array::c_style>(curs);
+        task_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
-            for (int j = 0; j < static_cast<int>(task.shape(1)); j++) {  // includes special tokens already
-                ra(b, cur, 0) = task.at(b, j, 0);
+            for (int j = 0; j < task_lengths.at(b); j++) {  // includes special tokens already
+                ra(b, cur + j, 0) = task.at(b, j, 0);
                 if (concat_edges) {
-                    ra(b, cur, 1) = task.at(b, j, 0);
+                    ra(b, cur + j, 1) = task.at(b, j, 0);
                 }
                 curs[b] += 1;
             }
@@ -712,17 +738,15 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             if (concat_edges) {
                 ra(b, curs[b], 1) = end_marker; // end marker
             }
+            // curs[b]++; // for correct length
         }
     }
-    auto src_lengths = py::array_t<int, py::array::c_style>(curs);
 
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if (attempts >= max_attempts) {
-        return d;
-    }
+    // print out curs
+        for (auto b = 0; b < batch_size; b++) {
+                cout << "curs[" << b << "] = " << curs[b] << endl;
+        }
+
     d["src_tokens"] = src_tokens;
     d["src_lengths"] = src_lengths;
     d["prev_output_tokens"] = task;
@@ -734,10 +758,10 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     d["graph_lengths"] = graph_lengths;
     d["task_start_indices"] = task_start_indices;
 
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    // auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
+    // d["distances"] = bd;
+    // d["hashes"] = hash_distance_matrix<int>(bd);
+    // d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
 
     return d;
 }

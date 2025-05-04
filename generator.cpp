@@ -704,6 +704,12 @@ inline py::dict erdos_renyi_n(
     if (sample_center && sample_centroid) {
         throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true");
     }
+    if (num_thinking_tokens < 0) {
+        throw std::invalid_argument("Invalid arguments: num_thinking_tokens < 0");
+    }
+    if (!for_plotting && dictionary.empty()) {
+        throw std::invalid_argument("Invalid arguments: dictionary is empty.  Please set it first.");
+    }
 
     auto batched_node_shuffle_map = list<unique_ptr<vector<int> > >();
     auto batched_edge_list = list<unique_ptr<vector<pair<int, int> > > >();
