@@ -470,8 +470,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
      *
      *  src_tokens [batch_size, seq_len, num_input_tokens]
      *  src_lengths [batch_size] in range [0, seq_len]
-     *  prev_output_tokens [batch_size, task_len, max_k], where k is fore label smooth, i.e. task_inputs and tagets
-     *  src_ground_truths [batch_size, num_edges, vocab_size]
+     *  prev_output_tokens [batch_size, task_len, max_k], i.e. targets, where k is for label smoothing
      *  graph_start_indices [batch_size]
      *  graph_length [batch_size]
      *  query_start_indices [batch_size]
@@ -481,12 +480,6 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
      *  distances [batch_size, vocab_size, vocab_size]
      *  ground_truths [batch_size, num_edges, vocab_size], graph reconstruction
      *
-     * dictionary symbols:
-     * '<s>', '<pad>', '</s>', '<unk>', '|', '!', '=', '.',
-     * 't1', 't2', 't3', 't4', 't5',
-     * '/', '?', '@', '#',
-     * 's1', 's2', 's3', 's4', 's5',
-     * '0', '1', '2', ....
      */
 
     py::dict d;
@@ -758,6 +751,25 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     return d;
 }
 
+inline py::dict package_for_non_flat_model(const int attempts, const int max_attempts,
+                                  const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
+                                  const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+                                  const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
+                                  const list<int> &batched_edge_list_lengths,
+                                  const list<unique_ptr<vector<vector<int> > > > &batched_distances,
+                                  const list<unique_ptr<vector<vector<int> > > > &batched_ground_truths,
+                                  const list<unique_ptr<vector<int> > > &batched_paths,
+                                  const list<int> &batched_path_lengths,
+                                  const list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
+                                  const list<pair<int, int> > &batched_center_lengths,
+                                  const bool concat_edges = true,
+                                  const bool query_at_end = true,
+                                  const int num_thinking_tokens = 0) {
+
+    py::dict d;
+    return d;
+}
+
 
 inline py::dict package_for_model() {
     py::dict d;
@@ -787,7 +799,11 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
                                 batched_centers, batched_center_lengths, concat_edges, query_at_end,
                                 num_thinking_tokens);
     }
-    return package_for_model();
+    return package_for_non_flat_model(attempts, max_attempts, min_vocab, max_vocab, dictionary,
+                                batched_node_shuffle_map, batched_edge_list, batched_edge_list_lengths,
+                                batched_distances, batched_ground_truths, batched_paths, batched_path_lengths,
+                                batched_centers, batched_center_lengths, concat_edges, query_at_end,
+                                num_thinking_tokens);
 }
 
 
