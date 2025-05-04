@@ -497,17 +497,16 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
         return d;
     }
 
-    auto padding = static_cast<int>(dictionary["<pad>"]);
-    auto start_marker = static_cast<int>(dictionary["<s>"]);
-    auto end_marker = static_cast<int>(dictionary["</s>"]);
-    auto edge_marker = static_cast<int>(dictionary["|"]);
+    auto padding = dictionary["<pad>"];
+    auto start_marker = dictionary["<s>"];
+    auto end_marker = dictionary["</s>"];
+    auto edge_marker = dictionary["|"];
     auto query_start_marker = dictionary["/"];
     auto query_end_marker = dictionary["?"];
     // auto task_1_marker = dictionary["t1"];
     // auto task_2_marker = dictionary["t2"];
     auto task_start_marker = dictionary["="];
     auto task_end_marker = dictionary["."];
-
 
     auto batch_size = static_cast<int>(batched_edge_list.size());
 
@@ -532,7 +531,6 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
         auto it2 = batched_distances.begin();
         for (; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2) {
             auto labels = label_smooth_path(**it2, **it1);
-            cout << "labels size: " << labels.size() << endl;
             if (static_cast<int>(labels.size()) > max_path_length) {
                 max_path_length = labels.size();
             }
@@ -545,7 +543,6 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             cur += 1;
         }
 
-        cout << "Init task with " << max_path_length << " " << max_k << endl;
         task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         query_lengths[py::make_tuple(py::ellipsis())] = 4; // initialize array
@@ -666,7 +663,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     auto it1 = batched_edge_list.begin();
     auto it2 = batched_node_shuffle_map.begin();
     graph_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
-    if (concat_edges) {  // not there are no graph markers
+    if (concat_edges) {  // note: there are no graph markers
         graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -723,6 +720,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
         }
     }
 
+    // write in the task
     if (not batched_path_lengths.empty() || not batched_center_lengths.empty()) {
         task_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
@@ -742,11 +740,6 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
         }
     }
 
-    // print out curs
-        for (auto b = 0; b < batch_size; b++) {
-                cout << "curs[" << b << "] = " << curs[b] << endl;
-        }
-
     d["src_tokens"] = src_tokens;
     d["src_lengths"] = src_lengths;
     d["prev_output_tokens"] = task;
@@ -758,11 +751,10 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     d["graph_lengths"] = graph_lengths;
     d["task_start_indices"] = task_start_indices;
 
-    // auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
-    // d["distances"] = bd;
-    // d["hashes"] = hash_distance_matrix<int>(bd);
-    // d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
-
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
+    d["distances"] = bd;
+    d["hashes"] = hash_distance_matrix<int>(bd);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
     return d;
 }
 
