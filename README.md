@@ -1,6 +1,24 @@
 Generate graphs and distances in C++ for use in Python via pybind11
 
 
+## Code
+
+This repository contains:
+1. C++ code to generate batches of graphs in C++ and pass them to Python via pybind11
+2. Python code to create datastreams for training and testing
+3. Python code for the loss functions for training models (criterion.py)
+4. Python code to plot graphs
+
+This does not include the training code, but you can use the datastreams and loss functions to train your own models.
+Full code will not be provided for some time, but the setup is very easy to reproduce given the code provided here.
+
+
+#### C++ code
+
+#### Python code
+
+
+
 ## Build
 
  `g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) -I/usr/include/boost/graph/ -I. undirected_graphs.h directed_graphs.h utils.h generator.cpp -o generator$(python3-config --extension-suffix)`

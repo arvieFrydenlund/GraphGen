@@ -395,37 +395,6 @@ py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(
  *  Batched graph generation for input into network
  *  ***********************************************/
 
-inline py::dict package_for_plotting(const int attempts, const int max_attempts,
-                                     const int min_vocab, const int max_vocab,
-                                     const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-                                     const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
-                                     const list<int> &batched_edge_list_lengths,
-                                     const list<unique_ptr<vector<vector<int> > > > &batched_distances,
-                                     const list<unique_ptr<vector<vector<int> > > > &batched_ground_truths,
-                                     const list<unique_ptr<vector<int> > > &batched_paths,
-                                     const list<int> &batched_path_lengths
-) {
-    py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
-    if (attempts >= max_attempts) {
-        return d;
-    }
-    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
-    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
-    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
-    d["distances"] = bd;
-    d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
-    if (!batched_paths.empty()) {
-        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
-        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
-    }
-    return d;
-}
-
-
 inline vector<vector<int> >
 label_smooth_path(const vector<vector<int> > &distances_ptr, vector<int> &path) {
     /* Return a vector of labels for each node in the path if they are alternative valid shortest paths
@@ -447,6 +416,63 @@ label_smooth_path(const vector<vector<int> > &distances_ptr, vector<int> &path) 
         }
     }
     return labels;
+}
+
+
+inline void add_arguments_to_dict(py::dict &d,
+    const int attempts, const int max_attempts,
+    const int min_vocab, const int max_vocab,
+    const bool concat_edges,
+    const bool query_at_end,
+    const int num_thinking_tokens,
+    const bool is_flat_model,
+    const bool for_plotting) {
+
+    d["num_attempts"] = attempts;
+    d["vocab_min_size"] = min_vocab;
+    d["vocab_max_size"] = max_vocab;
+    if (attempts >= max_attempts) {
+        d["success"] = false;
+    } else {
+        d["success"] = true;
+    }
+    d["concat_edges"] = concat_edges;
+    d["query_at_end"] = query_at_end;
+    d["num_thinking_tokens"] = num_thinking_tokens;
+    d["is_flat_model"] = is_flat_model;
+    d["for_plotting"] = for_plotting;
+}
+
+
+inline py::dict package_for_plotting(const int attempts, const int max_attempts,
+                                     const int min_vocab, const int max_vocab,
+                                     const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+                                     const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
+                                     const list<int> &batched_edge_list_lengths,
+                                     const list<unique_ptr<vector<vector<int> > > > &batched_distances,
+                                     const list<unique_ptr<vector<vector<int> > > > &batched_ground_truths,
+                                     const list<unique_ptr<vector<int> > > &batched_paths,
+                                     const list<int> &batched_path_lengths
+) {
+    py::dict d;
+    add_arguments_to_dict(d, attempts, max_attempts, min_vocab, max_vocab,
+        false, false, 0, true, true);
+    if (attempts >= max_attempts) {
+        return d;
+    }
+    d["edge_list"] = batch_edge_list<int>(batched_edge_list, batched_node_shuffle_map);
+    d["edge_list_lengths"] = batch_lengths<int>(batched_edge_list_lengths);
+    auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
+    d["distances"] = bd;
+    d["hashes"] = hash_distance_matrix<int>(bd);
+    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    if (!batched_paths.empty()) {
+        d["paths"] = batch_paths<int>(batched_paths, batched_node_shuffle_map);
+        d["path_lengths"] = batch_lengths<int>(batched_path_lengths);
+        // TODO label smoothing for paths
+    }
+    // todo center
+    return d;
 }
 
 
@@ -483,9 +509,8 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
      */
 
     py::dict d;
-    d["num_attempts"] = attempts;
-    d["vocab_min_size"] = min_vocab;
-    d["vocab_max_size"] = max_vocab;
+    add_arguments_to_dict(d, attempts, max_attempts, min_vocab, max_vocab,
+        concat_edges, query_at_end, num_thinking_tokens, true, false);
     if (attempts >= max_attempts) {
         return d;
     }
@@ -512,7 +537,9 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
 
     auto src_len_ra = src_lengths.mutable_unchecked();
     if (not batched_path_lengths.empty()) {
-
+        if (not batched_centers.empty()) {  // can only do one task
+            throw std::runtime_error("Cannot do both path and center tasks");
+        }
         // The issue here is that we need to know the size of max label before making tensor
         // thus the smoothing values need to be calculated first
         auto batched_label_smoothing = vector<vector<vector<int> > >(batch_size);

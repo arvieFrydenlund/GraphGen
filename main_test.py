@@ -4,7 +4,9 @@ import numpy as np
 np.set_printoptions(threshold=np.inf, edgeitems=10, linewidth=np.inf, precision=2, suppress=True,)
 
 
-
+"""
+Minimal example of pybind compiling
+"""
 
 def build_module(name):
     from os import system

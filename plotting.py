@@ -10,9 +10,12 @@ class GraphPlotter(object):
     def __init__(self, G=None, d=None, is_undirected=True):
         self.d = d
         self.G = G
-        if d is not None:
+        if d is not None and G is None:
             pos = d['positions'] if 'positions' in d else None
             self.G = self.make_graph(d['edge_list'], pos=pos, is_undirected=True)
+
+    def save(self):
+        pass  # save the graph with the plot incase we ever want to load it up again.  Do not save as class just data.
 
     def make_graph(self, edge_list, pos=None, is_undirected=True):
         """
@@ -114,7 +117,7 @@ class GraphPlotter(object):
             self.G.edges.get((u, v))['width'] = 1
             self.G.edges.get((u, v))['alpha'] = 0.8
 
-        if 'center_query' in self.d:
+        if self.d and 'center_query' in self.d:
             center_query = self.d['center_query']
             center_center = self.d['center_center']
             for qn in center_query:
@@ -122,7 +125,7 @@ class GraphPlotter(object):
             for cn in center_center:
                 self.G.nodes.get(cn)['color'] = "tab:cyan" #"tab:green"
 
-        if 'path' in self.d:   # colour edges red
+        if self.d and 'path' in self.d:   # colour edges red
             path = self.d['path']
 
             self.G.nodes.get(path[0])['edge_color'] = "w"

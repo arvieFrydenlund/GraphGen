@@ -128,11 +128,16 @@ inline py::array_t<bool, py::array::c_style> is_invalid_example(
 
 static map<std::string, int> dictionary; // token to idx map
 
-inline void set_dictionary(py::dict &py_dictionary) {
+inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) {
+    if (verbose) {
+        cout << "Setting dictionary" << endl;
+    }
     for (std::pair<py::handle, py::handle> item: py_dictionary) {
         auto key = item.first.cast<std::string>();
         auto value = item.second.cast<int>();
-        cout << "key: " << key << ", value=" << value << endl;
+        if (verbose){
+            cout << "\tkey: " << key << ", value=" << value << endl;
+        }
         dictionary[key] = value;
     }
 }
@@ -550,6 +555,8 @@ inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius =
             }
         }
         d["positions"] = positions;
+        // d["positions_reminder"] = "Remember that these are not the mapped positions, but the original positions";
+        // TODO fix
     }
     return d;
 }
@@ -794,6 +801,9 @@ inline py::dict euclidian_n(
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
     const bool for_plotting = false) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
@@ -814,6 +824,12 @@ inline py::dict euclidian_n(
     if (min_length > max_length) { throw std::invalid_argument("Invalid arguments: min_length > max_length"); }
     if (sample_center && sample_centroid) {
         throw std::invalid_argument("Invalid arguments: sample_center and sample_centroid both true");
+    }
+    if (num_thinking_tokens < 0) {
+        throw std::invalid_argument("Invalid arguments: num_thinking_tokens < 0");
+    }
+    if (!for_plotting && dictionary.empty()) {
+        throw std::invalid_argument("Invalid arguments: dictionary is empty.  Please set it first.");
     }
 
     auto batched_node_shuffle_map = list<unique_ptr<vector<int> > >();
@@ -881,7 +897,19 @@ inline py::dict euclidian_n(
         d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
         return d;
     }
-    auto d = package_for_model();
+    auto d = package_for_model(attempts, max_attempts,
+                            min_vocab, max_vocab, dictionary,
+                            batched_node_shuffle_map,
+                            batched_edge_list,
+                            batched_edge_list_lengths,
+                            batched_distances,
+                            batched_ground_truths,
+                            batched_paths,
+                            batched_path_lengths,
+                            batched_centers,
+                            batched_center_lengths,
+                            concat_edges, query_at_end, num_thinking_tokens,
+                            is_flat_model);
     d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
     return d;
 }
@@ -1130,7 +1158,14 @@ PYBIND11_MODULE(generator, m) {
           "dictionary: of str -> int\n\t"
           "Returns:\n\t"
           "None\n",
-          py::arg("dictionary"));
+          py::arg("dictionary"), py::arg("verbose") = false);
+
+    m.def("set_default_dictionary", &set_default_dictionary,
+          "Sets the dictionary/vocabulary of token to token_idx.\n"
+          "Parameters:\n\t"
+          "None\n",
+          "Returns:\n\t"
+          "None\n");
 
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,
@@ -1327,6 +1362,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true, py::arg("query_at_end") = true, py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
 
     m.def("path_star_n", &path_star_n,
