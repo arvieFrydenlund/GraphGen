@@ -1163,9 +1163,19 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_default_dictionary", &set_default_dictionary,
           "Sets the dictionary/vocabulary of token to token_idx.\n"
           "Parameters:\n\t"
-          "None\n",
+          "None\n"
           "Returns:\n\t"
           "None\n");
+
+    m.def("varify_paths", &varify_paths<int>,
+        "Batch varies the that any predicted paths are valid given the distance matrices.\n"
+        "Parameters:\n\t"
+        "distances: [batch_size, vocab_size, vocab_size]\n\t"
+        "paths: [batch_size, max_path_length]\n\t"
+        "path_lengths: [batch_size]\n\t"
+        "Returns:\n\t"
+        "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
+        py::arg("distances"), py::arg("paths"), py::arg("path_lengths"));
 
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,
