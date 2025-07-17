@@ -83,7 +83,7 @@ def _t_batched_graphs_flat_model():
                                 shuffle_edges=True,
                                 batch_size=3,
                                 is_flat_model=True, concat_edges=False, query_at_end=False)
-    batch_pprint(d_n, title='Flat model with concat edges and query at start')
+    batch_pprint(d_n, title='Flat model without concat edges and query at start')
 
 
     d_n = generator.euclidian_n(min_num_nodes, max_num_nodes,
