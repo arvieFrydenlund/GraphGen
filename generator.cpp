@@ -135,7 +135,7 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
     for (std::pair<py::handle, py::handle> item: py_dictionary) {
         auto key = item.first.cast<std::string>();
         auto value = item.second.cast<int>();
-        if (verbose){
+        if (verbose) {
             cout << "\tkey: " << key << ", value=" << value << endl;
         }
         dictionary[key] = value;
@@ -776,18 +776,18 @@ inline py::dict erdos_renyi_n(
         );
     }
     return package_for_model(attempts, max_attempts,
-                            min_vocab, max_vocab, dictionary,
-                            batched_node_shuffle_map,
-                            batched_edge_list,
-                            batched_edge_list_lengths,
-                            batched_distances,
-                            batched_ground_truths,
-                            batched_paths,
-                            batched_path_lengths,
-                            batched_centers,
-                            batched_center_lengths,
-                            concat_edges, query_at_end, num_thinking_tokens,
-                            is_flat_model
+                             min_vocab, max_vocab, dictionary,
+                             batched_node_shuffle_map,
+                             batched_edge_list,
+                             batched_edge_list_lengths,
+                             batched_distances,
+                             batched_ground_truths,
+                             batched_paths,
+                             batched_path_lengths,
+                             batched_centers,
+                             batched_center_lengths,
+                             concat_edges, query_at_end, num_thinking_tokens,
+                             is_flat_model
     );
 }
 
@@ -898,18 +898,18 @@ inline py::dict euclidian_n(
         return d;
     }
     auto d = package_for_model(attempts, max_attempts,
-                            min_vocab, max_vocab, dictionary,
-                            batched_node_shuffle_map,
-                            batched_edge_list,
-                            batched_edge_list_lengths,
-                            batched_distances,
-                            batched_ground_truths,
-                            batched_paths,
-                            batched_path_lengths,
-                            batched_centers,
-                            batched_center_lengths,
-                            concat_edges, query_at_end, num_thinking_tokens,
-                            is_flat_model);
+                               min_vocab, max_vocab, dictionary,
+                               batched_node_shuffle_map,
+                               batched_edge_list,
+                               batched_edge_list_lengths,
+                               batched_distances,
+                               batched_ground_truths,
+                               batched_paths,
+                               batched_path_lengths,
+                               batched_centers,
+                               batched_center_lengths,
+                               concat_edges, query_at_end, num_thinking_tokens,
+                               is_flat_model);
     d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
     return d;
 }
@@ -1168,14 +1168,14 @@ PYBIND11_MODULE(generator, m) {
           "None\n");
 
     m.def("varify_paths", &varify_paths<int>,
-        "Batch varies the that any predicted paths are valid given the distance matrices.\n"
-        "Parameters:\n\t"
-        "distances: [batch_size, vocab_size, vocab_size]\n\t"
-        "paths: [batch_size, max_path_length]\n\t"
-        "path_lengths: [batch_size]\n\t"
-        "Returns:\n\t"
-        "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
-        py::arg("distances"), py::arg("paths"), py::arg("path_lengths"));
+          "Batch varies the that any predicted paths are valid given the distance matrices.\n"
+          "Parameters:\n\t"
+          "distances: [batch_size, vocab_size, vocab_size]\n\t"
+          "paths: [batch_size, max_path_length]\n\t"
+          "path_lengths: [batch_size]\n\t"
+          "Returns:\n\t"
+          "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
+          py::arg("distances"), py::arg("paths"), py::arg("path_lengths"));
 
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,
@@ -1305,6 +1305,9 @@ PYBIND11_MODULE(generator, m) {
           "max_length: max length of path to sample\n\t"
           "min_length: min length of path to sample\n\t"
           "sample_target_paths: if true then sample target paths\n\t"
+          "max_query_length: max length of query to sample i.e. size of subset of graph for center\n\t"
+          "min_query_length: min length of query to sample i.e. size of subset of graph for center\n\t"
+          "sample_center: if true then sample a center node for the query\n\t"
           "is_causal: if true then return causally masked ground_truths\n\t"
           "shuffle_edges: if true then shuffle edges\n\t"
           "shuffle_nodes: if true then shuffle nodes\n\t"
@@ -1324,15 +1327,31 @@ PYBIND11_MODULE(generator, m) {
           "vocab_min_size: int of min vocab size\n\t"
           "vocab_max_size: int of max vocab size\n\t",
 
-          py::arg("min_num_nodes"), py::arg("max_num_nodes"),
-          py::arg("p") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
-          py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
-          py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
-          py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-          py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
-          py::arg("concat_edges") = true, py::arg("query_at_end") = true, py::arg("num_thinking_tokens") = 0,
-          py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
+          py::arg("min_num_nodes"),
+          py::arg("max_num_nodes"),
+          py::arg("p") = -1.0,
+          py::arg("c_min") = 75,
+          py::arg("c_max") = 125,
+          py::arg("max_length") = 10,
+          py::arg("min_length") = 1,
+          py::arg("sample_target_paths") = true,
+          py::arg("max_query_length") = -1,
+          py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false,
+          py::arg("sample_centroid") = false,
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
 
     m.def("euclidian_n", &euclidian_n,
           "Generate a batch of Euclidian graphs\nParameters:\n\t"
@@ -1366,9 +1385,11 @@ PYBIND11_MODULE(generator, m) {
           "vocab_max_size: int of max vocab size\n\t",
 
           py::arg("min_num_nodes"), py::arg("max_num_nodes"),
-          py::arg("dims") = 2, py::arg("radius") = -1.0, py::arg("c_min") = 75, py::arg("c_max") = 125,
+          py::arg("dims") = 2, py::arg("radius") = -1.0,
+          py::arg("c_min") = 75, py::arg("c_max") = 125,
           py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false, py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
@@ -1403,7 +1424,8 @@ PYBIND11_MODULE(generator, m) {
 
           py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false,
+          py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
@@ -1442,7 +1464,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0,
           py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false, py::arg("sample_centroid") = false,
+          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false,
+          py::arg("sample_centroid") = false,
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,

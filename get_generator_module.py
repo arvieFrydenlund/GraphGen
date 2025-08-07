@@ -4,6 +4,12 @@ import time
 import pydoc
 import numpy as np
 
+"""
+All code belonging to the generator is in here.  This is the python interface to the C++ code.
+
+TThere is also code for recreating the graphs in python for plotting and statistics.
+"""
+
 
 # Extra generator functions
 

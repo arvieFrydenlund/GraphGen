@@ -96,13 +96,16 @@ def _t_batched_graphs_flat_model():
 
 
 
-def _t_reconstruct():
+def _t_reconstruct(args):
     pass
 
 
 
 
 if __name__ == '__main__':
+
+    import argparse
+
 
     h = pydoc.render_doc(generator, "Help on %s")
     print(h + '\n\n\n')
@@ -114,7 +117,53 @@ if __name__ == '__main__':
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     #_t_batched_graphs_for_plotting_and_hashes()
-    _t_batched_graphs_flat_model()
+    # _t_batched_graphs_flat_model()
+
+    """
+    py::arg("min_num_nodes"),
+          py::arg("max_num_nodes"),
+          py::arg("p") = -1.0,
+          py::arg("c_min") = 75,
+          py::arg("c_max") = 125,
+          py::arg("max_length") = 10,
+          py::arg("min_length") = 1,
+          py::arg("sample_target_paths") = true,
+          py::arg("max_query_length") = -1,
+          py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false,
+          py::arg("sample_centroid") = false,
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
+    """
+
+    parser = argparse.ArgumentParser(description='Test generator functions')
+    parser.add_argument('--graph_type', type=str, default='euclidean')
+    parser.add_argument('--max_num_nodes', type=int, default=50)
+    parser.add_argument('--p', type=float, default=-1.0)
+    parser.add_argument('--c_min', type=int, default=75)
+    parser.add_argument('--c_max', type=int, default=125)
+    parser.add_argument('--max_length', type=int, default=10)
+    parser.add_argument('--min_length', type=int, default=1)
+    parser.add_argument('--sample_target_paths', action='store_true', default=True)
+    parser.add_argument('--max_query_length', type=int, default=-1)
+    parser.add_argument('--min_query_length', type=int, default=2)
+
+
+
+
+
+    _t_reconstruct()
 
 
 
