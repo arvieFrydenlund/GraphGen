@@ -142,7 +142,7 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
     }
 }
 
-inline void set_default_dictionary() {
+inline void set_default_dictionary(const int max_vocab = 100) {
     /* Sets a default dictionary
     * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
     * '|': 4, '!': 5, '=': 6, '.': 7,
@@ -174,6 +174,13 @@ inline void set_default_dictionary() {
         {"s4", 20},
         {"s5", 21}
     };
+
+    if (max_vocab > 0) {
+        assert(max_vocab >= static_cast<int>(dictionary.size()));
+        for (int i = 0; i < max_vocab - static_cast<int>(dictionary.size()); i++) {
+            dictionary[std::to_string(i)] = static_cast<int>(dictionary.size()) + i;
+        }
+    }
 }
 
 
@@ -691,7 +698,8 @@ inline py::dict erdos_renyi_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
-    const bool for_plotting = false) {
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -805,7 +813,8 @@ inline py::dict euclidian_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
-    const bool for_plotting = false) {
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -924,7 +933,8 @@ inline py::dict path_star_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool is_flat_model = true,
-    const bool for_plotting = false) {
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
     if (min_num_arms <= 0) { throw std::invalid_argument("Invalid arguments: min_num_arms <= 0"); }
     if (min_arm_length <= 0) { throw std::invalid_argument("Invalid arguments: min_arm_length <= 0"); }
     if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
@@ -997,7 +1007,8 @@ inline py::dict balanced_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool is_flat_model = true,
-    const bool for_plotting = false) {
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -1165,7 +1176,8 @@ PYBIND11_MODULE(generator, m) {
           "Parameters:\n\t"
           "None\n"
           "Returns:\n\t"
-          "None\n");
+          "None\n",
+          py::arg("max_vocab") = 100);
 
     m.def("varify_paths", &varify_paths<int>,
           "Batch varies the that any predicted paths are valid given the distance matrices.\n"
@@ -1384,17 +1396,32 @@ PYBIND11_MODULE(generator, m) {
           "vocab_min_size: int of min vocab size\n\t"
           "vocab_max_size: int of max vocab size\n\t",
 
-          py::arg("min_num_nodes"), py::arg("max_num_nodes"),
-          py::arg("dims") = 2, py::arg("radius") = -1.0,
-          py::arg("c_min") = 75, py::arg("c_max") = 125,
-          py::arg("max_length") = 10, py::arg("min_length") = 1, py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2,
-          py::arg("sample_center") = false, py::arg("sample_centroid") = false,
-          py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
-          py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-          py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
-          py::arg("concat_edges") = true, py::arg("query_at_end") = true, py::arg("num_thinking_tokens") = 0,
-          py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
+          py::arg("min_num_nodes"),
+          py::arg("max_num_nodes"),
+          py::arg("dims") = 2,
+          py::arg("radius") = -1.0,
+          py::arg("c_min") = 75,
+          py::arg("c_max") = 125,
+          py::arg("max_length") = 10,
+          py::arg("min_length") = 1,
+          py::arg("sample_target_paths") = true,
+          py::arg("max_query_length") = -1,
+          py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false,
+          py::arg("sample_centroid") = false,
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
 
     m.def("path_star_n", &path_star_n,
           "Generate a batch of path star graphs\nParameters:\n\t"
@@ -1422,14 +1449,25 @@ PYBIND11_MODULE(generator, m) {
           "vocab_min_size: int of min vocab size\n\t"
           "vocab_max_size: int of max vocab size\n\t",
 
-          py::arg("min_num_arms"), py::arg("max_num_arms"), py::arg("min_arm_length"), py::arg("max_arm_length"),
+          py::arg("min_num_arms"),
+          py::arg("max_num_arms"),
+          py::arg("min_arm_length"),
+          py::arg("max_arm_length"),
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false,
+          py::arg("max_query_length") = -1,
+          py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false,
           py::arg("sample_centroid") = false,
-          py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
-          py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-          py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
-          py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
 
     m.def("balanced_n", &balanced_n,
           "Generate a batch of balanced graphs\nParameters:\n\t"
@@ -1460,14 +1498,26 @@ PYBIND11_MODULE(generator, m) {
           "vocab_min_size: int of min vocab size\n\t"
           "vocab_max_size: int of max vocab size\n\t",
 
-          py::arg("min_num_nodes"), py::arg("max_num_nodes"),
-          py::arg("min_lookahead"), py::arg("max_lookahead"), py::arg("min_noise_reserve") = 0,
-          py::arg("max_num_parents") = 4, py::arg("max_noise") = -1,
+          py::arg("min_num_nodes"),
+          py::arg("max_num_nodes"),
+          py::arg("min_lookahead"),
+          py::arg("max_lookahead"),
+          py::arg("min_noise_reserve") = 0,
+          py::arg("max_num_parents") = 4,
+          py::arg("max_noise") = -1,
           py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1, py::arg("min_query_length") = 2, py::arg("sample_center") = false,
+          py::arg("max_query_length") = -1,
+          py::arg("min_query_length") = 2,
+          py::arg("sample_center") = false,
           py::arg("sample_centroid") = false,
-          py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
-          py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1,
-          py::arg("batch_size") = 256, py::arg("max_edges") = 512, py::arg("max_attempts") = 1000,
-          py::arg("is_flat_model") = true, py::arg("for_plotting") = false);
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
 }

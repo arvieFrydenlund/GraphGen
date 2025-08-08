@@ -11,10 +11,79 @@ TThere is also code for recreating the graphs in python for plotting and statist
 """
 
 
+def get_args_parser():
+    """
+    :return: the parser i.e. not the parsed arguments i.e. parser.parse_args()
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Test generator functions')
+
+    # graph settings
+    parser.add_argument('--graph_type', type=str, default='euclidean')
+    parser.add_argument('--min_num_nodes', type=int, default=10)
+    parser.add_argument('--max_num_nodes', type=int, default=50)
+    parser.add_argument('--p', type=float, default=-1.0,
+                        help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
+    parser.add_argument('--dims', type=int, default=2,
+                        help="Number of dimensions for euclidean graphs")
+    parser.add_argument('--radius', type=float, default=-1.0,
+                        help="Radius for euclidean graphs, -1.0 means random")
+    parser.add_argument('--c_min', type=int, default=75)
+    parser.add_argument('--c_max', type=int, default=125)
+    parser.add_argument('--min_num_arms', type=int, default=1,
+                        help="Minimum number of arms for star graphs")
+    parser.add_argument('--max_num_arms', type=int, default=5,
+                        help="Maximum number of arms for star graphs")
+    parser.add_argument('--min_arm_length', type=int, default=1,
+                        help="Minimum length of each arm in star graphs")
+    parser.add_argument('--max_arm_length', type=int, default=5,
+                        help="Maximum length of each arm in star graphs")
+    parser.add_argument('--min_lookahead', type=int, default=1,
+                        help="Minimum lookahead for balanced graphs")
+    parser.add_argument('--max_lookahead', type=int, default=3,
+                        help="Maximum lookahead for balanced graphs")
+    parser.add_argument('--min_noise_reserve', type=int, default=0,
+                        help="Minimum noise reserve for balanced graphs")
+    parser.add_argument('--max_num_parents', type=int, default=4,
+                        help="Maximum number of parents for balanced graphs")
+
+    # task settings
+    parser.add_argument('--max_length', type=int, default=10)
+    parser.add_argument('--min_length', type=int, default=1)
+    parser.add_argument('--sample_target_paths', action='store_true', default=True)
+    parser.add_argument('--max_query_length', type=int, default=-1)
+    parser.add_argument('--min_query_length', type=int, default=2)
+    parser.add_argument('--sample_center', action='store_true', default=False)
+    parser.add_argument('--sample_centroid', action='store_true', default=False)
+
+    # tokenization settings
+    parser.add_argument('--is_causal', action='store_true', default=False)
+    parser.add_argument('--shuffle_edges', action='store_true', default=False)
+    parser.add_argument('--shuffle_nodes', action='store_true', default=False)
+    parser.add_argument('--min_vocab', type=int, default=0)
+    parser.add_argument('--max_vocab', type=int, default=-1)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--max_edges', type=int, default=512)
+    parser.add_argument('--max_attempts', type=int, default=1000)
+    parser.add_argument('--concat_edges', action='store_true', default=True)
+    parser.add_argument('--query_at_end', action='store_true', default=True)
+    parser.add_argument('--num_thinking_tokens', type=int, default=0)
+    parser.add_argument('--is_flat_model', action='store_true', default=True)
+    parser.add_argument('--for_plotting', action='store_true', default=False)
+
+    return parser
+
+
+def determine_task(args):
+    if args.sample_target_paths:
+        task = 'min_path'
+
+
 # Extra generator functions
 
 class ReconstructedGraph(object):
-    def __init__(self, edge_list, pos=None, is_undirected=True):
+    def __init__(self, graph_type, edge_list, pos=None, is_undirected=True):
 
         self.G = None
 
@@ -25,48 +94,25 @@ class ReconstructedGraph(object):
         pass
 
 
-def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None, generator_=None):
+def create_reconstruct_graphs(graph_type, batched_dict, for_plotting=False, ids=None):
     """
     Take the c++ output and reconstruct the graphs for plotting or further processing.
 
     :param batched_dict: c++ output dictionary
     :param for_plotting: bool
     :param ids: batch ids to reconstruct, if None, reconstruct all
-    :param generator_:
     :return:
     """
     if for_plotting:
-        pass
+        raise NotImplementedError
     else:
         if d['is_flat_model']:
-            """num_attempts: <class 'int'> 0
-            vocab_min_size: <class 'int'> 25
-            vocab_max_size: <class 'int'> 55
-            success: <class 'bool'> True
-            concat_edges: <class 'bool'> True
-            query_at_end: <class 'bool'> False
-            num_thinking_tokens: <class 'int'> 0
-            is_flat_model: <class 'bool'> True
-            for_plotting: <class 'bool'> False
-            src_tokens: <class 'numpy.ndarray'> 	src_tokens: (3, 62, 2), int32
-            src_lengths: <class 'numpy.ndarray'> 	src_lengths: (3,), int32
-            prev_output_tokens: <class 'numpy.ndarray'> 	prev_output_tokens: (3, 11, 2), int32
-            task_lengths: <class 'numpy.ndarray'> 	task_lengths: (3,), int32
-            query_start_indices: <class 'numpy.ndarray'> 	query_start_indices: (3,), int32
-            query_lengths: <class 'numpy.ndarray'> 	query_lengths: (3,), int32
-            graph_start_indices: <class 'numpy.ndarray'> 	graph_start_indices: (3,), int32
-            graph_lengths: <class 'numpy.ndarray'> 	graph_lengths: (3,), int32
-            task_start_indices: <class 'numpy.ndarray'> 	task_start_indices: (3,), int32
-            distances: <class 'numpy.ndarray'> 	distances: (3, 55, 55), int32
-            hashes: <class 'numpy.ndarray'> 	hashes: (3,), uint64
-            ground_truths: <class 'numpy.ndarray'> 	ground_truths: (3, 45, 55), int32
-            positions:"""
-
-
 
             src_tokens = d['src_tokens']
+            src_lengths = d['src_lengths']
             graph_start_indices = d['graph_start_indices']
             graph_lengths = d['graph_lengths']
+            task_start_indices = d['task_start_indices']
 
             if ids is None:
                 ids = list(range(src_tokens[0]))
@@ -85,7 +131,7 @@ def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None, genera
 
 
         else:
-            pass
+            raise NotImplementedError
 
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'generator.cpp'),
@@ -135,10 +181,15 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
         print(find_spec('generator'))
         import generator
 
-    def help_string():  # displays docstrings from cpp files with print(generator.help_str())
+
+    setattr(generator, "get_args_parser", get_args_parser)
+
+    def help_str():  # displays docstrings from cpp files with print(generator.help_str())
+        # note this only works for the cpp functions not the added python functions above
         return pydoc.render_doc(generator, "\nDocstring for %s:")
 
-    setattr(generator, "help_str", help_string)
+    setattr(generator, "help_str", help_str)
+
 
     return generator
 

@@ -96,19 +96,32 @@ def _t_batched_graphs_flat_model():
 
 
 
+
 def _t_reconstruct(args):
-    pass
+    if args.graph_type == 'erdos_renyi':
+        d_n = generator.erdos_renyi_n(**vars(args))
+    elif args.graph_type == 'euclidean':
+        d_n = generator.euclidian_n(**vars(args))
+    elif args.graph_type == 'path_star':
+        d_n = generator.path_star_n(**vars(args))
+    elif args.graph_type == 'balanced':
+        d_n = generator.balanced_n(**vars(args))
+    else:
+        raise NotImplementedError
+
+    for k, v in d_n.items():
+        if isinstance(v, np.ndarray):
+            print(f'{k}: {v.shape}, {v.dtype}')
+        else:
+            print(f'{k}: {v}, {type(v)}')
 
 
 
 
 if __name__ == '__main__':
 
-    import argparse
-
-
-    h = pydoc.render_doc(generator, "Help on %s")
-    print(h + '\n\n\n')
+    # h = pydoc.render_doc(generator, "Help on %s")
+    print(generator.help_str() + '\n\n\n')
     print('\n\nStarting Testing')
 
     print(f'Random seed is {generator.get_seed()}')
@@ -116,54 +129,16 @@ if __name__ == '__main__':
     # generator.set_seed(3172477368)
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
+    print("Setting dictionary")
+    generator.set_default_dictionary()
+
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
 
-    """
-    py::arg("min_num_nodes"),
-          py::arg("max_num_nodes"),
-          py::arg("p") = -1.0,
-          py::arg("c_min") = 75,
-          py::arg("c_max") = 125,
-          py::arg("max_length") = 10,
-          py::arg("min_length") = 1,
-          py::arg("sample_target_paths") = true,
-          py::arg("max_query_length") = -1,
-          py::arg("min_query_length") = 2,
-          py::arg("sample_center") = false,
-          py::arg("sample_centroid") = false,
-          py::arg("is_causal") = false,
-          py::arg("shuffle_edges") = false,
-          py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
-          py::arg("max_vocab") = -1,
-          py::arg("batch_size") = 256,
-          py::arg("max_edges") = 512,
-          py::arg("max_attempts") = 1000,
-          py::arg("concat_edges") = true,
-          py::arg("query_at_end") = true,
-          py::arg("num_thinking_tokens") = 0,
-          py::arg("is_flat_model") = true,
-          py::arg("for_plotting") = false);
-    """
+    parser = generator.get_args_parser()
+    args = parser.parse_args()
 
-    parser = argparse.ArgumentParser(description='Test generator functions')
-    parser.add_argument('--graph_type', type=str, default='euclidean')
-    parser.add_argument('--max_num_nodes', type=int, default=50)
-    parser.add_argument('--p', type=float, default=-1.0)
-    parser.add_argument('--c_min', type=int, default=75)
-    parser.add_argument('--c_max', type=int, default=125)
-    parser.add_argument('--max_length', type=int, default=10)
-    parser.add_argument('--min_length', type=int, default=1)
-    parser.add_argument('--sample_target_paths', action='store_true', default=True)
-    parser.add_argument('--max_query_length', type=int, default=-1)
-    parser.add_argument('--min_query_length', type=int, default=2)
-
-
-
-
-
-    _t_reconstruct()
+    _t_reconstruct(args)
 
 
 
