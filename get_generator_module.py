@@ -3,6 +3,7 @@ import sys
 import time
 import pydoc
 import numpy as np
+from sympy.polys.polyconfig import query
 
 """
 All code belonging to the generator is in here.  This is the python interface to the C++ code.
@@ -57,10 +58,12 @@ def get_args_parser():
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False)
-    parser.add_argument('--shuffle_edges', action='store_true', default=False)
-    parser.add_argument('--shuffle_nodes', action='store_true', default=False)
-    parser.add_argument('--min_vocab', type=int, default=0)
-    parser.add_argument('--max_vocab', type=int, default=-1)
+    parser.add_argument('--shuffle_edges', action='store_false', default=True)
+    parser.add_argument('--shuffle_nodes', action='store_false', default=True)
+    parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
+    parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
+    parser.add_argument('--min_vocab', type=int, default=22)
+    parser.add_argument('--max_vocab', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_edges', type=int, default=512)
     parser.add_argument('--max_attempts', type=int, default=1000)
@@ -88,7 +91,7 @@ class ReconstructedGraph(object):
         pass
 
 
-def create_reconstruct_graphs(graph_type, batched_dict, for_plotting=False, ids=None):
+def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None):
     """
     Take the c++ output and reconstruct the graphs for plotting or further processing.
 
@@ -100,25 +103,51 @@ def create_reconstruct_graphs(graph_type, batched_dict, for_plotting=False, ids=
     if for_plotting:
         raise NotImplementedError
     else:
-        if d['is_flat_model']:
+        if batched_dict['is_flat_model']:
 
-            src_tokens = d['src_tokens']
-            src_lengths = d['src_lengths']
-            graph_start_indices = d['graph_start_indices']
-            graph_lengths = d['graph_lengths']
-            task_start_indices = d['task_start_indices']
+            src_tokens = batched_dict['src_tokens']
+            src_lengths = batched_dict['src_lengths']
+            query_start_indices = batched_dict['query_start_indices']
+            query_lengths = batched_dict['query_lengths']
+            graph_start_indices = batched_dict['graph_start_indices']
+            graph_lengths = batched_dict['graph_lengths']
+            task_start_indices = batched_dict['task_start_indices']
+
 
             if ids is None:
-                ids = list(range(src_tokens[0]))
+                ids = list(range(src_tokens.shape[0]))
 
             edge_lists = []
 
+
             if src_tokens.shape[-1] == 1:  # not concat_edges
-                pass
+                concat_edges = False
             elif src_tokens.shape[-1] == 2:  # concat_edges
-                pass
+                concat_edges = True
             else:
                 raise ValueError(f"Unexpected src_tokens shape: {src_tokens.shape[-1]}")
+
+            query_at_end = False
+            if query_start_indices[0] > graph_start_indices[0]:
+                query_at_end = True
+
+            if batched_dict['task_type'] == 'shortest_path':
+                pass
+            elif batched_dict['task_type'] in ('center', 'centroid'):
+                pass
+
+            pos = None
+            if batched_dict['graph_type'] == 'euclidean':
+                pos = batched_dict['positions']
+
+            for id in ids:
+                query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], :]
+                edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
+                if not concat_edges:
+                    edge_list = edge_list.view(-1, 3)[:, :2]  # remove the edge marker
+                print(edge_list)
+                print(query)
+
 
 
 
@@ -177,6 +206,7 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
 
 
     setattr(generator, "get_args_parser", get_args_parser)
+    setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
 
     def help_str():  # displays docstrings from cpp files with print(generator.help_str())
         # note this only works for the cpp functions not the added python functions above

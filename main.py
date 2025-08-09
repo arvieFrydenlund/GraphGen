@@ -97,7 +97,9 @@ def _t_batched_graphs_flat_model():
 
 
 
-def _t_reconstruct(args):
+def _t_reconstruct(args, batch_size=3):
+    args.batch_size = batch_size
+
     if args.graph_type == 'erdos_renyi':
         d_n = generator.erdos_renyi_n(**vars(args))
     elif args.graph_type == 'euclidean':
@@ -114,6 +116,8 @@ def _t_reconstruct(args):
             print(f'{k}: {v.shape}, {v.dtype}')
         else:
             print(f'{k}: {v}, {type(v)}')
+
+    generator.create_reconstruct_graphs(d_n, False)
 
 
 
@@ -132,11 +136,22 @@ if __name__ == '__main__':
     print("Setting dictionary")
     generator.set_default_dictionary()
 
+    d = generator.get_dictionary()
+    # sort by value
+    d = dict(sorted(d.items(), key=lambda item: item[1]))
+    print('Dictionary ...')
+    for k, v in d.items():
+        print(f'{k}: {v}')
+    print()
+
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
+
+    for arg in vars(args):
+        print(f'{arg}: {getattr(args, arg)}')
 
     _t_reconstruct(args)
 

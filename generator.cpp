@@ -183,6 +183,10 @@ inline void set_default_dictionary(const int max_vocab = 100) {
     }
 }
 
+map<std::string, int> get_dictionary() {
+    return dictionary;
+}
+
 
 /* ************************************************
  *  Constructing inputs and targets for model
@@ -1178,6 +1182,13 @@ PYBIND11_MODULE(generator, m) {
           "Returns:\n\t"
           "None\n",
           py::arg("max_vocab") = 100);
+
+    m.def("get_dictionary", &get_dictionary,
+          "Gets the dictionary/vocabulary of token to token_idx.\n"
+          "Parameters:\n\t"
+          "None\n"
+          "Returns:\n\t"
+          "dictionary: of str -> int\n");
 
     m.def("varify_paths", &varify_paths<int>,
           "Batch varies the that any predicted paths are valid given the distance matrices.\n"
