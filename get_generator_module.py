@@ -75,10 +75,6 @@ def get_args_parser():
     return parser
 
 
-def determine_task(args):
-    if args.sample_target_paths:
-        task = 'min_path'
-
 
 # Extra generator functions
 
