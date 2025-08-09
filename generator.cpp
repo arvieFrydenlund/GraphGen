@@ -692,7 +692,7 @@ inline int attempt_check(const int E, const int max_edges, const int attempts, c
 
 inline py::dict erdos_renyi_n(
     const int min_num_nodes, int max_num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
-    const string &task_type = 'shortest_path',
+    const string &task_type = "shortest_path",
     const int max_path_length = 10, const int min_path_length = 1,
     int max_query_size = -1, const int min_query_size = 2,
     const bool is_causal = false, const bool shuffle_edges = false,
@@ -775,7 +775,9 @@ inline py::dict erdos_renyi_n(
     }
 
     if (for_plotting) {
-        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+        return package_for_plotting("erdos_renyi", task_type,
+                                    attempts, max_attempts,
+                                    min_vocab, max_vocab,
                                     batched_node_shuffle_map,
                                     batched_edge_list,
                                     batched_edge_list_lengths,
@@ -785,7 +787,8 @@ inline py::dict erdos_renyi_n(
                                     batched_path_lengths
         );
     }
-    return package_for_model(attempts, max_attempts,
+    return package_for_model("erdos_renyi", task_type,
+                             attempts, max_attempts,
                              min_vocab, max_vocab, dictionary,
                              batched_node_shuffle_map,
                              batched_edge_list,
@@ -805,7 +808,7 @@ inline py::dict erdos_renyi_n(
 inline py::dict euclidian_n(
     const int min_num_nodes, int max_num_nodes, const int dim = 2, float radius = -1.0,
     const int c_min = 75, const int c_max = 125,
-    const string &task_type = 'shortest_path',
+    const string &task_type = "shortest_path",
     const int max_path_length = 10, const int min_path_length = 1,
     int max_query_size = -1, const int min_query_size = 2,
     const bool is_causal = false, const bool shuffle_edges = false,
@@ -894,7 +897,8 @@ inline py::dict euclidian_n(
     }
 
     if (for_plotting) {
-        auto d = package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+        auto d = package_for_plotting("euclidian", task_type,
+                                      attempts, max_attempts, min_vocab, max_vocab,
                                       batched_node_shuffle_map,
                                       batched_edge_list,
                                       batched_edge_list_lengths,
@@ -906,7 +910,8 @@ inline py::dict euclidian_n(
         d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
         return d;
     }
-    auto d = package_for_model(attempts, max_attempts,
+    auto d = package_for_model("euclidian", task_type,
+                               attempts, max_attempts,
                                min_vocab, max_vocab, dictionary,
                                batched_node_shuffle_map,
                                batched_edge_list,
@@ -926,7 +931,7 @@ inline py::dict euclidian_n(
 
 inline py::dict path_star_n(
     const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
-    const string &task_type = 'shortest_path',
+    const string &task_type = "shortest_path",
     int max_query_size = -1, const int min_query_size = 2,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
@@ -979,7 +984,8 @@ inline py::dict path_star_n(
     }
 
     if (for_plotting) {
-        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+        return package_for_plotting("path_star", task_type,
+                                    attempts, max_attempts, min_vocab, max_vocab,
                                     batched_node_shuffle_map,
                                     batched_edge_list,
                                     batched_edge_list_lengths,
@@ -996,7 +1002,7 @@ inline py::dict path_star_n(
 inline py::dict balanced_n(
     const int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead,
     const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
-    const string &task_type = 'shortest_path',
+    const string &task_type = "shortest_path",
     int max_query_size = -1, const int min_query_size = 2,
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
@@ -1082,7 +1088,8 @@ inline py::dict balanced_n(
     }
 
     if (for_plotting) {
-        return package_for_plotting(attempts, max_attempts, min_vocab, max_vocab,
+        return package_for_plotting("balanced", task_type,
+                                    attempts, max_attempts, min_vocab, max_vocab,
                                     batched_node_shuffle_map,
                                     batched_edge_list,
                                     batched_edge_list_lengths,

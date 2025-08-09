@@ -444,7 +444,8 @@ inline void add_arguments_to_dict(py::dict &d,
 }
 
 
-inline py::dict package_for_plotting(const int attempts, const int max_attempts,
+inline py::dict package_for_plotting(const string &graph_type, const string &task_type,
+                                     const int attempts, const int max_attempts,
                                      const int min_vocab, const int max_vocab,
                                      const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
                                      const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
@@ -472,11 +473,14 @@ inline py::dict package_for_plotting(const int attempts, const int max_attempts,
         // TODO label smoothing for paths
     }
     // todo center
+    d["graph_type"] = graph_type;
+    d["task_type"] = task_type;
     return d;
 }
 
 
-inline py::dict package_for_flat_model(const int attempts, const int max_attempts,
+inline py::dict package_for_flat_model(const string &graph_type, const string &task_type,
+                                  const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
                                   const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
                                   const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
@@ -536,10 +540,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
 
     auto src_len_ra = src_lengths.mutable_unchecked();
-    if (not batched_path_lengths.empty()) {
-        if (not batched_centers.empty()) {  // can only do one task
-            throw std::runtime_error("Cannot do both path and center tasks");
-        }
+    if (task_type == "shortest_path" || task_type == "path") {
         // The issue here is that we need to know the size of max label before making tensor
         // thus the smoothing values need to be calculated first
         auto batched_label_smoothing = vector<vector<vector<int> > >(batch_size);
@@ -591,7 +592,7 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
             src_len_ra(cur) = path_length + 2 + static_cast<int>(query[cur].size());
             cur += 1;
         }
-    } else if (not batched_center_lengths.empty()) {
+    } else if (task_type == "center" || task_type == "centroid") {
         // batched_center_lengths is a list of queries and tasks
         auto max_center_task_len = 0;
         for (auto &m: batched_center_lengths) {
@@ -775,10 +776,13 @@ inline py::dict package_for_flat_model(const int attempts, const int max_attempt
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
     d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    d["graph_type"] = graph_type;
+    d["task_type"] = task_type;
     return d;
 }
 
-inline py::dict package_for_non_flat_model(const int attempts, const int max_attempts,
+inline py::dict package_for_non_flat_model( const string &graph_type, const string &task_type,
+                                  const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
                                   const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
                                   const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
@@ -803,7 +807,8 @@ inline py::dict package_for_model() {
     return d;
 }
 
-inline py::dict package_for_model(const int attempts, const int max_attempts,
+inline py::dict package_for_model(const string &graph_type, const string &task_type,
+                                  const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
                                   const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
                                   const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
@@ -820,13 +825,13 @@ inline py::dict package_for_model(const int attempts, const int max_attempts,
                                   const bool is_flat_model = true) {
 
     if (is_flat_model) {
-        return package_for_flat_model(attempts, max_attempts, min_vocab, max_vocab, dictionary,
+        return package_for_flat_model(graph_type, task_type, attempts, max_attempts, min_vocab, max_vocab, dictionary,
                                 batched_node_shuffle_map, batched_edge_list, batched_edge_list_lengths,
                                 batched_distances, batched_ground_truths, batched_paths, batched_path_lengths,
                                 batched_centers, batched_center_lengths, concat_edges, query_at_end,
                                 num_thinking_tokens);
     }
-    return package_for_non_flat_model(attempts, max_attempts, min_vocab, max_vocab, dictionary,
+    return package_for_non_flat_model(graph_type, task_type, attempts, max_attempts, min_vocab, max_vocab, dictionary,
                                 batched_node_shuffle_map, batched_edge_list, batched_edge_list_lengths,
                                 batched_distances, batched_ground_truths, batched_paths, batched_path_lengths,
                                 batched_centers, batched_center_lengths, concat_edges, query_at_end,

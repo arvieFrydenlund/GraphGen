@@ -49,13 +49,11 @@ def get_args_parser():
                         help="Maximum number of parents for balanced graphs")
 
     # task settings
+    parser.add_argument('--task_type', type=str, default='shortest_path')
     parser.add_argument('--max_length', type=int, default=10)
     parser.add_argument('--min_length', type=int, default=1)
-    parser.add_argument('--sample_target_paths', action='store_true', default=True)
     parser.add_argument('--max_query_length', type=int, default=-1)
     parser.add_argument('--min_query_length', type=int, default=2)
-    parser.add_argument('--sample_center', action='store_true', default=False)
-    parser.add_argument('--sample_centroid', action='store_true', default=False)
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False)
