@@ -97,7 +97,7 @@ def _t_batched_graphs_flat_model():
 
 
 
-def _t_reconstruct(args, batch_size=3):
+def _t_reconstruct(args, d, batch_size=3):
     args.batch_size = batch_size
 
     if args.graph_type == 'erdos_renyi':
@@ -117,12 +117,19 @@ def _t_reconstruct(args, batch_size=3):
         else:
             print(f'{k}: {v}, {type(v)}')
 
-    generator.create_reconstruct_graphs(d_n, False)
+    generator.create_reconstruct_graphs(d_n, d)
 
 
 
 
 if __name__ == '__main__':
+
+    parser = generator.get_args_parser()
+    args = parser.parse_args()
+
+    for arg in vars(args):
+        print(f'{arg}: {getattr(args, arg)}')
+
 
     # h = pydoc.render_doc(generator, "Help on %s")
     print(generator.help_str() + '\n\n\n')
@@ -134,8 +141,7 @@ if __name__ == '__main__':
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary()
-
+    generator.set_default_dictionary(args.max_vocab)
     d = generator.get_dictionary()
     # sort by value
     d = dict(sorted(d.items(), key=lambda item: item[1]))
@@ -147,13 +153,8 @@ if __name__ == '__main__':
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
 
-    parser = generator.get_args_parser()
-    args = parser.parse_args()
 
-    for arg in vars(args):
-        print(f'{arg}: {getattr(args, arg)}')
-
-    _t_reconstruct(args)
+    _t_reconstruct(args, d)
 
 
 

@@ -80,26 +80,62 @@ def get_args_parser():
 # Extra generator functions
 
 class ReconstructedGraph(object):
-    def __init__(self, graph_type, edge_list, pos=None, is_undirected=True):
+    def __init__(self, graph_type, task_type, edge_list, query, task_input, task_targets, pos=None):
+        """
+
+        :param graph_type:
+        :param edge_list: [num_edges, 2]
+        :param pos:
+        """
 
         self.G = None
+        self.graph_type = graph_type
+        self.task_type = task_type
+        self.edge_list = edge_list
+        self.query = query
+        self.task_input = task_input
+        self.task_targets = task_targets
+        self.pos = pos
 
+    # RECONSTRUCTION METHODS
+    def process_task(self):
+        if self.task_input is None or self.task_targets is None:
+            return
+        elif self.task_type in (None, 'none', 'None'):
+            return
+        elif self.task_type in ('shortest_path', 'path'):
+            # process the query and targets for the task
+            pass
+        elif self.task_type in ('center', 'centroid'):
+            pass
+        else:
+            raise ValueError(f"Unexpected task_type: {self.task_type}")
+
+    # PLOTTING METHODS
     def plot(self):
         pass
 
-    def print(self):
+    def pprint(self):
         pass
 
 
-def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None):
+def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, ids=None):
     """
-    Take the c++ output and reconstruct the graphs for plotting or further processing.
+    Take the c++ output and reconstruct the graphs for plotting and sanity checking.
 
     :param batched_dict: c++ output dictionary
+    :param symbol_to_id: mapping from symbols to tokenized ids
     :param for_plotting: bool
     :param ids: batch ids to reconstruct, if None, reconstruct all
     :return:
     """
+
+    reconstructions = []
+
+    id_to_symbol = {v: k for k, v in symbol_to_id.items()}
+    pad = symbol_to_id.get('<pad>', -1)
+
+    edge_list, query, task = None, None, None
     if for_plotting:
         raise NotImplementedError
     else:
@@ -111,14 +147,13 @@ def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None):
             query_lengths = batched_dict['query_lengths']
             graph_start_indices = batched_dict['graph_start_indices']
             graph_lengths = batched_dict['graph_lengths']
+            task = batched_dict['prev_output_tokens']
             task_start_indices = batched_dict['task_start_indices']
+            task_lengths = batched_dict['task_lengths']
 
 
             if ids is None:
                 ids = list(range(src_tokens.shape[0]))
-
-            edge_lists = []
-
 
             if src_tokens.shape[-1] == 1:  # not concat_edges
                 concat_edges = False
@@ -141,20 +176,26 @@ def create_reconstruct_graphs(batched_dict, for_plotting=False, ids=None):
                 pos = batched_dict['positions']
 
             for id in ids:
-                query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], :]
+                query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
                 edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
+                task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
+                prev_output_tokens = batched_dict['prev_output_tokens'][id, :]
                 if not concat_edges:
                     edge_list = edge_list.view(-1, 3)[:, :2]  # remove the edge marker
-                print(edge_list)
-                print(query)
-
-
-
-
-
-
+                edge_list = edge_list.tolist()
+                for i in range(len(edge_list)):
+                    edge_list[i] = [id_to_symbol[e] for e in edge_list[i]]
+                query = query.tolist()  # remove the tokenized ids
+                query = [id_to_symbol[q] for q in query]
+                task_input = task.tolist()
+                task_input = [id_to_symbol[t] for t in task]
+                task_targets = prev_output_tokens.tolist()
+                task_targets = [[id_to_symbol[j] for j in t if j != pad] for t in prev_output_tokens]
         else:
             raise NotImplementedError
+
+        r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
+                               edge_list, query, task, pos=pos)
 
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'generator.cpp'),

@@ -176,9 +176,10 @@ inline void set_default_dictionary(const int max_vocab = 100) {
     };
 
     if (max_vocab > 0) {
-        assert(max_vocab >= static_cast<int>(dictionary.size()));
-        for (int i = 0; i < max_vocab - static_cast<int>(dictionary.size()); i++) {
-            dictionary[std::to_string(i)] = static_cast<int>(dictionary.size()) + i;
+        auto num_special = static_cast<int>(dictionary.size());
+        assert(max_vocab >=  num_special);
+        for (int i = num_special; i < max_vocab; i++) {
+            dictionary[std::to_string(i - num_special)] = i;
         }
     }
 }
