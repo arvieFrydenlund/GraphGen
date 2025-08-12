@@ -603,14 +603,14 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         // only one token but has label smoothing, so 3 is special tokens
         task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len + 2});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
-        task_lengths[py::make_tuple(py::ellipsis())] = 1; // initialize array
+        task_lengths[py::make_tuple(py::ellipsis())] = 3; // initialize array
         query = vector<vector<int> >(batch_size);
         auto ra = task.mutable_unchecked();
         auto ra_q_lengths = query_lengths.mutable_unchecked();
         auto it1 = batched_centers.begin();
         auto it2 = batched_node_shuffle_map.begin();
 
-        int cur = 0;
+        int cur = 0; // batch
         for (; it1 != batched_centers.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
             // auto query_length = static_cast<int>((*it1)->first.size());
             auto task_length = static_cast<int>((*it1)->second.size());
@@ -620,7 +620,7 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
             query[cur] = cur_query;
 
             ra(cur, 0, 0) = task_start_marker;
-            for (int j = 0; j < task_length; j++) {
+            for (int j = 0; j < task_length; j++) {  // fill in vocab dimension
                 auto node = (*it1)->second[j];
                 ra(cur, 1, j) = (**it2)[node];
             }

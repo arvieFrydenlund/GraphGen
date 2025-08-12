@@ -540,7 +540,7 @@ inline py::dict erdos_renyi(const int num_nodes, float p = -1.0, const int c_min
                               is_causal, shuffle_edges, shuffle_nodes, min_vocab, max_vocab);
 }
 
-inline py::dict euclidian(const int num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75,
+inline py::dict euclidean(const int num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75,
                           const int c_max = 125,
                           const int max_path_length = 10, const int min_path_length = 1,
                           int max_query_size = -1, const int min_query_size = 2, const bool is_center = true,
@@ -810,7 +810,7 @@ inline py::dict erdos_renyi_n(
 }
 
 
-inline py::dict euclidian_n(
+inline py::dict euclidean_n(
     const int min_num_nodes, int max_num_nodes, const int dim = 2, float radius = -1.0,
     const int c_min = 75, const int c_max = 125,
     const string &task_type = "shortest_path",
@@ -902,7 +902,7 @@ inline py::dict euclidian_n(
     }
 
     if (for_plotting) {
-        auto d = package_for_plotting("euclidian", task_type,
+        auto d = package_for_plotting("euclidean", task_type,
                                       attempts, max_attempts, min_vocab, max_vocab,
                                       batched_node_shuffle_map,
                                       batched_edge_list,
@@ -915,7 +915,7 @@ inline py::dict euclidian_n(
         d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
         return d;
     }
-    auto d = package_for_model("euclidian", task_type,
+    auto d = package_for_model("euclidean", task_type,
                                attempts, max_attempts,
                                min_vocab, max_vocab, dictionary,
                                batched_node_shuffle_map,
@@ -1231,8 +1231,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("is_causal") = false, py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false, py::arg("min_vocab") = 0, py::arg("max_vocab") = -1);
 
-    m.def("euclidian", &euclidian,
-          "Generate a single Euclidian graph.\nParameters:\n\t"
+    m.def("euclidean", &euclidean,
+          "Generate a single euclidean graph.\nParameters:\n\t"
           "num_nodes: number of nodes.\n\t"
           "dims: number of dimensions\n\t"
           "radius: radius of graph.  If -1 then 1/sqrt(num_nodes).\n\t"
@@ -1374,8 +1374,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("is_flat_model") = true,
           py::arg("for_plotting") = false);
 
-    m.def("euclidian_n", &euclidian_n,
-          "Generate a batch of Euclidian graphs\nParameters:\n\t"
+    m.def("euclidean_n", &euclidean_n,
+          "Generate a batch of euclidean graphs\nParameters:\n\t"
           "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
           "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
           "dims: number of dimensions\n\t"

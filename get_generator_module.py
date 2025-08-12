@@ -3,6 +3,12 @@ import sys
 import time
 import pydoc
 import numpy as np
+
+try:
+    import networkx as nx
+except ImportError:
+    nx = None
+
 from sympy.polys.polyconfig import query
 
 """
@@ -50,16 +56,16 @@ def get_args_parser():
                         help="Maximum number of parents for balanced graphs")
 
     # task settings
-    parser.add_argument('--task_type', type=str, default='shortest_path')
-    parser.add_argument('--max_length', type=int, default=10)
-    parser.add_argument('--min_length', type=int, default=1)
-    parser.add_argument('--max_query_length', type=int, default=-1)
-    parser.add_argument('--min_query_length', type=int, default=2)
+    parser.add_argument('--task_type', type=str, default='center') #'shortest_path')  # 'center'
+    parser.add_argument('--max_path_length', type=int, default=12)
+    parser.add_argument('--min_path_length', type=int, default=3)
+    parser.add_argument('--max_query_size', type=int, default=10)
+    parser.add_argument('--min_query_size', type=int, default=4)
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False)
-    parser.add_argument('--shuffle_edges', action='store_false', default=True)
-    parser.add_argument('--shuffle_nodes', action='store_false', default=True)
+    parser.add_argument('--shuffle_edges', action='store_false', default=False)
+    parser.add_argument('--shuffle_nodes', action='store_false', default=False)
     parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
     parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
     parser.add_argument('--min_vocab', type=int, default=22)
@@ -80,7 +86,9 @@ def get_args_parser():
 # Extra generator functions
 
 class ReconstructedGraph(object):
-    def __init__(self, graph_type, task_type, edge_list, query, task_input, task_targets, pos=None):
+    def __init__(self, graph_type, task_type,
+                 edge_list, query, task_input, task_targets, pos=None,
+                 spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
         """
 
         :param graph_type:
@@ -88,32 +96,105 @@ class ReconstructedGraph(object):
         :param pos:
         """
 
-        self.G = None
         self.graph_type = graph_type
         self.task_type = task_type
         self.edge_list = edge_list
         self.query = query
         self.task_input = task_input
         self.task_targets = task_targets
-        self.pos = pos
+
+        self.default_colour = '#1f78b4'  # matplotlib tab:blue
+
+        if self.is_directed():
+            self.G = nx.DiGraph()  # or nx.Graph() for undirected graphs
+        else:
+            self.G = nx.Graph()
+        self.pos, self.colour_map= None, None
+        if pos is not None:
+            self.pos = {}
+            for node, node_pos in pos.items():
+                self.G.add_node(node, pos=node_pos)
+        self.G.add_edges_from(edge_list)
+        self.process_task()
+        self.set_plot_positions_for_layout(spring_k, spring_scale, verbose, **kwargs)
+
+
+    def is_directed(self):
+        return self.graph_type in ('path_star', 'balanced')
+
+    def get_node_list(self):
+        nodes = []
+        for e in self.edge_list:
+            nodes.append(e[0])
+            nodes.append(e[1])
+        nodes = sorted(list(set(nodes)))
+        return nodes
 
     # RECONSTRUCTION METHODS
     def process_task(self):
-        if self.task_input is None or self.task_targets is None:
-            return
-        elif self.task_type in (None, 'none', 'None'):
-            return
+        print(self.query)
+        print(self.task_input)
+        print(self.task_targets)
+        print(self.get_node_list())
+        print()
+        if self.task_input is None or self.task_targets is None or self.task_type in (None, 'none', 'None'):
+            self.colour_map = self.default_colour
         elif self.task_type in ('shortest_path', 'path'):
-            # process the query and targets for the task
-            pass
+            self.colour_map = []
+            target_nodes = []
+            for t in self.task_targets[1:-1]:  # cut special tokens
+                for node in t:
+                    target_nodes.append(node)
+            query = self.query[1:-1]  # cut special tokens
+            for node in self.G:
+                if node in query:
+                    self.colour_map.append('purple')
+                elif node in target_nodes:
+                    self.colour_map.append('green')
+                else:
+                    self.colour_map.append(self.default_colour)
         elif self.task_type in ('center', 'centroid'):
             pass
+            # raise NotImplementedError
         else:
             raise ValueError(f"Unexpected task_type: {self.task_type}")
 
     # PLOTTING METHODS
-    def plot(self):
-        pass
+    def plot(self, save_path=None, save_name=None, node_size=200,  with_labels=True, **kwargs):
+        assert nx is not None, "NetworkX is required for plotting. Please install it with 'pip install networkx'."
+        import matplotlib.pyplot as plt
+
+        nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, node_color=self.colour_map)
+
+        plt.show()
+        if save_path is not None:
+            #if graph.type not in save_path:
+            #    save_path = os.path.join(save_path, graph.type)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            if save_name is not None:
+                save_path = os.path.join(save_path, save_name)
+            else:
+                save_path = os.path.join(save_path, 'graph.png')
+            plt.savefig(save_path)
+
+
+    def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
+        if self.pos is not None:
+            try:
+                if self.graph_type in ('path_star', 'balanced'):
+                    pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi")
+                else:
+                    pos = nx.nx_agraph.graphviz_layout(self.G, prog="neato")
+            except Exception as e:
+                if verbose:
+                    print('Using spring layout due to error:', e)
+                if spring_k is None:
+                    spring_k = 1 / np.sqrt(len(self.G.nodes))
+                else:
+                    spring_k = 1 / np.sqrt(len(self.G.nodes)) * spring_k
+                pos = nx.spring_layout(self.G, k=spring_k, scale=spring_scale)
+            self.pos = pos
 
     def pprint(self):
         pass
@@ -132,7 +213,13 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
     reconstructions = []
 
-    id_to_symbol = {v: k for k, v in symbol_to_id.items()}
+    id_to_symbol_ = {v: k for k, v in symbol_to_id.items()}
+    def id_to_symbol(id):
+        symbol = id_to_symbol_[id]
+        if symbol.isdigit():
+            return int(symbol)
+        return symbol
+
     pad = symbol_to_id.get('<pad>', -1)
 
     edge_list, query, task = None, None, None
@@ -150,6 +237,9 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             task = batched_dict['prev_output_tokens']
             task_start_indices = batched_dict['task_start_indices']
             task_lengths = batched_dict['task_lengths']
+            print(query_lengths)
+            print(task_lengths)
+            print(task_start_indices)
 
 
             if ids is None:
@@ -179,24 +269,30 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
                 query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
                 edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
                 task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
-                prev_output_tokens = batched_dict['prev_output_tokens'][id, :]
+                prev_output_tokens = task[id, :task_lengths[id]]
                 if not concat_edges:
                     edge_list = edge_list.view(-1, 3)[:, :2]  # remove the edge marker
                 edge_list = edge_list.tolist()
                 for i in range(len(edge_list)):
-                    edge_list[i] = [id_to_symbol[e] for e in edge_list[i]]
+                    edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
                 query = query.tolist()  # remove the tokenized ids
-                query = [id_to_symbol[q] for q in query]
-                task_input = task.tolist()
-                task_input = [id_to_symbol[t] for t in task]
-                task_targets = prev_output_tokens.tolist()
-                task_targets = [[id_to_symbol[j] for j in t if j != pad] for t in prev_output_tokens]
+                print(query)
+                query = [id_to_symbol(q) for q in query]
+                task_input = task_input.tolist()
+                task_input = [id_to_symbol(t) for t in task_input]
+                task_targets = [[id_to_symbol(j) for j in t if j != pad] for t in prev_output_tokens]
+                pos_i = {id_to_symbol(int(pos[id, i, 0])): (pos[id, i, 1], pos[id, i, 2])
+                         for i in range(pos.shape[1]) if pos[id, i, 0] > 0} if pos is not None else None
+                if pos_i is not None:
+                    pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
+
+                r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
+                                       edge_list, query, task_input, task_targets, pos=pos_i)
+                reconstructions.append(r)
         else:
             raise NotImplementedError
 
-        r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
-                               edge_list, query, task, pos=pos)
-
+    return reconstructions
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'generator.cpp'),
                          cpp_path='',
@@ -274,7 +370,7 @@ if __name__ == "__main__":
     print(generator.help_str())
 
     # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
-    d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
+    d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
 
     for k, v in d.items():
         print(f'{k}: {type(v)}')

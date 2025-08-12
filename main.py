@@ -19,7 +19,7 @@ Testing generation functions and pybind compile.
 
 def _t_single_graph():
     # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
-    d = generator.euclidian(15, 2, -1, False, False, shuffle_edges=False)
+    d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
 
     for k, v in d.items():
         print(f'{k}: {type(v)}')
@@ -36,7 +36,7 @@ def _t_batched_verify_paths():
 
 def _t_batched_graphs_for_plotting_and_hashes():
 
-    d_n = generator.euclidian_n(50, 56, 2, -1, is_causal=True,
+    d_n = generator.euclidean_n(50, 56, 2, -1, is_causal=True,
                                 shuffle_nodes=True, min_vocab=4, max_vocab=60, shuffle_edges=True, batch_size=8,
                                 for_plotting=True)
 
@@ -50,7 +50,7 @@ def _t_batched_graphs_for_plotting_and_hashes():
     hashes[1] = 0  # fake a different hash
     print(f'Is in with 2nd faked: {generator.is_in_test(hashes)}')
 
-    d_n = generator.euclidian_n(50, 55, 2, -1, is_causal=True, min_vocab=4, max_vocab=59, shuffle_edges=True, batch_size=8,
+    d_n = generator.euclidean_n(50, 55, 2, -1, is_causal=True, min_vocab=4, max_vocab=59, shuffle_edges=True, batch_size=8,
                                 for_plotting=True)
     print(f"Is in with new hashes: {generator.is_in_test(d_n['hashes'])}")
 
@@ -68,7 +68,7 @@ def _t_batched_graphs_flat_model():
     max_num_nodes = 30
     num_special_tokens = 25
 
-    d_n = generator.euclidian_n(min_num_nodes, max_num_nodes,
+    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
                                 is_causal=True, shuffle_nodes=True,
                                 min_vocab=num_special_tokens, max_vocab=max_num_nodes+num_special_tokens,
                                 shuffle_edges=True,
@@ -77,7 +77,7 @@ def _t_batched_graphs_flat_model():
     batch_pprint(d_n, title='Flat model with concat edges and query at start')
 
 
-    d_n = generator.euclidian_n(min_num_nodes, max_num_nodes,
+    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
                                 is_causal=True, shuffle_nodes=True,
                                 min_vocab=num_special_tokens, max_vocab=max_num_nodes+num_special_tokens,
                                 shuffle_edges=True,
@@ -86,7 +86,7 @@ def _t_batched_graphs_flat_model():
     batch_pprint(d_n, title='Flat model without concat edges and query at start')
 
 
-    d_n = generator.euclidian_n(min_num_nodes, max_num_nodes,
+    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
                                 is_causal=True, shuffle_nodes=True,
                                 min_vocab=num_special_tokens, max_vocab=max_num_nodes+num_special_tokens,
                                 shuffle_edges=True,
@@ -97,13 +97,13 @@ def _t_batched_graphs_flat_model():
 
 
 
-def _t_reconstruct(args, d, batch_size=3):
+def _t_reconstruct(args, d, batch_size=20):
     args.batch_size = batch_size
 
     if args.graph_type == 'erdos_renyi':
         d_n = generator.erdos_renyi_n(**vars(args))
     elif args.graph_type == 'euclidean':
-        d_n = generator.euclidian_n(**vars(args))
+        d_n = generator.euclidean_n(**vars(args))
     elif args.graph_type == 'path_star':
         d_n = generator.path_star_n(**vars(args))
     elif args.graph_type == 'balanced':
@@ -117,7 +117,11 @@ def _t_reconstruct(args, d, batch_size=3):
         else:
             print(f'{k}: {v}, {type(v)}')
 
-    generator.create_reconstruct_graphs(d_n, d)
+    reconstructions = generator.create_reconstruct_graphs(d_n, d)
+    print
+    for r in reconstructions:
+        r.plot()
+
 
 
 

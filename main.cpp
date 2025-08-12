@@ -30,7 +30,7 @@ void test_erdos_renyi(std::mt19937& gen, const int num_nodes = 100,
   }
 }
 
-void test_euclidian(std::mt19937& gen, const int num_nodes = 100,
+void test_euclidean(std::mt19937& gen, const int num_nodes = 100,
                     const bool verbose = false) {
   unique_ptr<Graph<boost::undirectedS> > g_ptr;
   unique_ptr<DistanceMatrix<boost::undirectedS> > distances_ptr;
@@ -102,13 +102,13 @@ void test_pybind(string graph_type = "erdos_renyi",
                       max_vocab, batch_size, max_edges, 1000,
                       concat_edges, query_at_end, 0, is_flat_model, for_plotting
         );
-  } else if (graph_type == "euclidian") {
-    cout << "Euclidian Graph Test: " << endl;
-    d = euclidian(num_nodes, 2, -1.0, 75, 125, 10, 3, -1, 2, true, is_casual,
+  } else if (graph_type == "euclidean") {
+    cout << "euclidean Graph Test: " << endl;
+    d = euclidean(num_nodes, 2, -1.0, 75, 125, 10, 3, -1, 2, true, is_casual,
                   false, false);
-  } else if (graph_type == "euclidian_n") {
-    cout << "Batched Euclidian Graph Test: " << endl;
-    d = euclidian_n(num_nodes, num_nodes + 5, 2, -1.0, 75, 125,
+  } else if (graph_type == "euclidean_n") {
+    cout << "Batched euclidean Graph Test: " << endl;
+    d = euclidean_n(num_nodes, num_nodes + 5, 2, -1.0, 75, 125,
       "shortest_path",  10, 3, -2, 2,
                     is_casual,true, 2, num_nodes + 10, batch_size,
                     max_edges);
@@ -161,7 +161,7 @@ int main() {
   // std::mt19937 gen(seed);
 
   // test_erdos_renyi(gen, 25, false);
-  // test_euclidian(gen, 25, false);
+  // test_euclidean(gen, 25, false);
 
   //auto d = return_dict_test();
   // cout << "Dict: " << &d << endl;
@@ -206,7 +206,7 @@ int main() {
   const bool for_plotting = false;
 
   // test_pybind("erdos_renyi", num_nodes, batch_size, is_casual, shuffle_edges, shuffle_nodes, min_vocab, max_vocab, concat_edges ,query_at_end, is_flat_model, for_plotting);
-  // test_pybind("euclidian");
+  // test_pybind("euclidean");
   // test_pybind("path_star");
   // test_pybind("balanced", 25);
 
@@ -217,7 +217,7 @@ int main() {
               shuffle_nodes, min_vocab, max_vocab, concat_edges, query_at_end,
               is_flat_model, for_plotting);
   // test_pybind("erdos_renyi_n", 150, 256);
-  // test_pybind("euclidian_n", 50, 256, false);
+  // test_pybind("euclidean_n", 50, 256, false);
   // test_pybind("path_star_n", 50, 256, false);
   // test_pybind("balanced_n", 50, 256, false);
   time_after(t1, "Final");
