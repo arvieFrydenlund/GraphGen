@@ -28,8 +28,8 @@ def get_args_parser():
 
     # graph settings
     parser.add_argument('--graph_type', type=str, default='euclidean')
-    parser.add_argument('--min_num_nodes', type=int, default=10)
-    parser.add_argument('--max_num_nodes', type=int, default=50)
+    parser.add_argument('--min_num_nodes', type=int, default=5)
+    parser.add_argument('--max_num_nodes', type=int, default=15)
     parser.add_argument('--p', type=float, default=-1.0,
                         help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
     parser.add_argument('--dims', type=int, default=2,
@@ -56,11 +56,11 @@ def get_args_parser():
                         help="Maximum number of parents for balanced graphs")
 
     # task settings
-    parser.add_argument('--task_type', type=str, default='center') #'shortest_path')  # 'center'
+    parser.add_argument('--task_type', type=str, default='centroid') #'shortest_path')  # 'center'  # 'centroid'
     parser.add_argument('--max_path_length', type=int, default=12)
     parser.add_argument('--min_path_length', type=int, default=3)
-    parser.add_argument('--max_query_size', type=int, default=10)
-    parser.add_argument('--min_query_size', type=int, default=4)
+    parser.add_argument('--max_query_size', type=int, default=3)
+    parser.add_argument('--min_query_size', type=int, default=2)
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False)
@@ -109,7 +109,7 @@ class ReconstructedGraph(object):
             self.G = nx.DiGraph()  # or nx.Graph() for undirected graphs
         else:
             self.G = nx.Graph()
-        self.pos, self.colour_map= None, None
+        self.pos, self.colour_map, self.node_edge_colour_map = None, None, None
         if pos is not None:
             self.pos = {}
             for node, node_pos in pos.items():
@@ -139,31 +139,46 @@ class ReconstructedGraph(object):
         print()
         if self.task_input is None or self.task_targets is None or self.task_type in (None, 'none', 'None'):
             self.colour_map = self.default_colour
-        elif self.task_type in ('shortest_path', 'path', 'center', 'centroid'):
-            query_first  = self.task_type in ('shortest_path', 'path')
+        elif self.task_type in ('shortest_path', 'path'):
             self.colour_map = []
+            self.node_edge_colour_map = []
             target_nodes = []
             for t in self.task_targets[1:-1]:  # cut special tokens
                 for node in t:
                     target_nodes.append(node)
             query = self.query[1:-1]  # cut special tokens
             for node in self.G:
-                if query_first:
-                    if node in query:
-                        self.colour_map.append('purple')
-                    elif node in target_nodes:
-                        self.colour_map.append('green')
-                    else:
-                        self.colour_map.append(self.default_colour)
+
+                if node in query:
+                    self.colour_map.append('purple')
+                    self.node_edge_colour_map.append('purple')
+                elif node in target_nodes:
+                    self.colour_map.append('green')
+                    self.node_edge_colour_map.append('green')
                 else:
-                    if node in target_nodes:
-                        self.colour_map.append('green')
-                    elif node in query:
-                        self.colour_map.append('purple')
-                    else:
-                        self.colour_map.append(self.default_colour)
+                    self.colour_map.append(self.default_colour)
+                    self.node_edge_colour_map.append(self.default_colour)
         elif self.task_type in ('center', 'centroid'):
-            pass  # incase I need different colours
+            self.colour_map = []
+            self.node_edge_colour_map= []
+            target_nodes = []
+            for t in self.task_targets[1:-1]:  # cut special tokens
+                for node in t:
+                    target_nodes.append(node)
+            query = self.query[1:-1]  # cut special tokens
+            for node in self.G:
+                if node in target_nodes and node in query:
+                    self.colour_map.append('green')
+                    self.node_edge_colour_map.append('purple')
+                elif node in target_nodes:
+                    self.colour_map.append('green')
+                    self.node_edge_colour_map.append('green')
+                elif node in query:
+                    self.colour_map.append('purple')
+                    self.node_edge_colour_map.append('purple')
+                else:
+                    self.colour_map.append(self.default_colour)
+                    self.node_edge_colour_map.append(self.default_colour)
         else:
             raise ValueError(f"Unexpected task_type: {self.task_type}")
 
@@ -172,7 +187,11 @@ class ReconstructedGraph(object):
         assert nx is not None, "NetworkX is required for plotting. Please install it with 'pip install networkx'."
         import matplotlib.pyplot as plt
 
-        nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, node_color=self.colour_map)
+        # the edgecolors keyword argument (for setting the outline of nodes)
+        # is different from the edge_color keyword argument (for setting the colour of lines)
+        nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, linewidths=2,
+                node_color=self.colour_map,
+                edgecolors=self.node_edge_colour_map)
 
         plt.show()
         if save_path is not None:

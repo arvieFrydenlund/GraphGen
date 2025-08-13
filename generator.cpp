@@ -14,6 +14,8 @@
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
 #include "utils.h"
+#include <limits>
+#include <cmath>
 
 using namespace std;
 
@@ -376,6 +378,11 @@ py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_st
     return out;
 }
 
+
+bool float_eqaulity(double a, double b) {
+    return std::fabs(a - b) < std::numeric_limits<double>::epsilon();
+}
+
 inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<vector<vector<int> > > &distances_ptr,
                                                               vector<int> &given_query,
                                                               int max_query_size = -1, const int min_query_size = 2,
@@ -404,8 +411,8 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
     auto Q = static_cast<int>(new_query.size());
     // calculate center or centroid of graph given queries
     auto values = vector<float>(N, static_cast<float>(inf));
-    auto d = vector<float>(Q, 0.0);
     for (int v = 0; v < N; v++) {
+        auto d = vector<float>(Q, 0.0);
         for (int q = 0; q < Q; q++) {
             d[q] = static_cast<float>((*distances_ptr)[v][new_query[q]]);
         }
@@ -414,14 +421,14 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
             values[v] = *std::max_element(d.begin(), d.end());
         } else {
             // get average
-            values[v] = static_cast<float>(std::accumulate(d.begin(), d.end(), 0.0) / Q);
+            values[v] = static_cast<float>(std::accumulate(d.begin(), d.end(), 0.0)); // / Q);  avoid float
         }
     }
-    // uses equality of floats, so not great
+
     auto outputs = vector<int>();
     auto min_value = *std::min_element(values.begin(), values.end());
     for (int i = 0; i < N; i++) {
-        if (values[i] == min_value) {
+        if (float_eqaulity(values[i], min_value)) {
             outputs.push_back(i);
         }
     }
