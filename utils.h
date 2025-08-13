@@ -605,6 +605,8 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         task_lengths[py::make_tuple(py::ellipsis())] = 3; // initialize array
         query = vector<vector<int> >(batch_size);
+        query_lengths[py::make_tuple(py::ellipsis())]  = 0; // initialize array
+
         auto ra = task.mutable_unchecked();
         auto ra_q_lengths = query_lengths.mutable_unchecked();
         auto it1 = batched_centers.begin();
@@ -612,20 +614,24 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
 
         int cur = 0; // batch
         for (; it1 != batched_centers.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-            // auto query_length = static_cast<int>((*it1)->first.size());
-            auto task_length = static_cast<int>((*it1)->second.size());
+            // write in query
+            auto query_length = static_cast<int>((*it1)->first.size());
             auto cur_query = (*it1)->first;
-            cur_query.insert(cur_query.begin(), query_start_marker);
-            cur_query.push_back(query_end_marker);
-            query[cur] = cur_query;
+            query[cur].push_back(query_start_marker);
+            for (int j = 0; j < query_length; j++) {
+                query[cur].push_back((**it2)[cur_query[j]]);
+            }
+            query[cur].push_back(query_end_marker);
 
+            // write in targets
+            auto task_length = static_cast<int>((*it1)->second.size());
             ra(cur, 0, 0) = task_start_marker;
-            for (int j = 0; j < task_length; j++) {  // fill in vocab dimension
+            for (int j = 0; j < task_length; j++) {  // fill in vocab dimension not the sequence dimension
                 auto node = (*it1)->second[j];
                 ra(cur, 1, j) = (**it2)[node];
             }
             ra(cur, 2, 0) = task_end_marker;
-            ra_q_lengths(cur) = task_length + 2;
+            ra_q_lengths(cur) = query[cur].size();
             src_len_ra(cur) = task_length + 2 + static_cast<int>(query[cur].size());
             cur += 1;
         }

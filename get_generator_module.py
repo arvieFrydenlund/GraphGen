@@ -139,7 +139,8 @@ class ReconstructedGraph(object):
         print()
         if self.task_input is None or self.task_targets is None or self.task_type in (None, 'none', 'None'):
             self.colour_map = self.default_colour
-        elif self.task_type in ('shortest_path', 'path'):
+        elif self.task_type in ('shortest_path', 'path', 'center', 'centroid'):
+            query_first  = self.task_type in ('shortest_path', 'path')
             self.colour_map = []
             target_nodes = []
             for t in self.task_targets[1:-1]:  # cut special tokens
@@ -147,15 +148,22 @@ class ReconstructedGraph(object):
                     target_nodes.append(node)
             query = self.query[1:-1]  # cut special tokens
             for node in self.G:
-                if node in query:
-                    self.colour_map.append('purple')
-                elif node in target_nodes:
-                    self.colour_map.append('green')
+                if query_first:
+                    if node in query:
+                        self.colour_map.append('purple')
+                    elif node in target_nodes:
+                        self.colour_map.append('green')
+                    else:
+                        self.colour_map.append(self.default_colour)
                 else:
-                    self.colour_map.append(self.default_colour)
+                    if node in target_nodes:
+                        self.colour_map.append('green')
+                    elif node in query:
+                        self.colour_map.append('purple')
+                    else:
+                        self.colour_map.append(self.default_colour)
         elif self.task_type in ('center', 'centroid'):
-            pass
-            # raise NotImplementedError
+            pass  # incase I need different colours
         else:
             raise ValueError(f"Unexpected task_type: {self.task_type}")
 
