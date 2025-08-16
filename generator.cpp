@@ -948,6 +948,9 @@ inline py::dict path_star_n(
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
@@ -1007,7 +1010,21 @@ inline py::dict path_star_n(
                                     batched_path_lengths
         );
     }
-    return package_for_model();
+    auto d = package_for_model("path_star", task_type,
+                               attempts, max_attempts,
+                               min_vocab, max_vocab, dictionary,
+                               batched_node_shuffle_map,
+                               batched_edge_list,
+                               batched_edge_list_lengths,
+                               batched_distances,
+                               batched_ground_truths,
+                               batched_paths,
+                               batched_path_lengths,
+                               batched_centers,
+                               batched_center_lengths,
+                               concat_edges, query_at_end, num_thinking_tokens,
+                               is_flat_model);
+    return d;
 }
 
 
@@ -1019,6 +1036,9 @@ inline py::dict balanced_n(
     const bool is_causal = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
@@ -1111,7 +1131,21 @@ inline py::dict balanced_n(
                                     batched_path_lengths
         );
     }
-    return package_for_model();
+    auto d = package_for_model("balanced", task_type,
+                               attempts, max_attempts,
+                               min_vocab, max_vocab, dictionary,
+                               batched_node_shuffle_map,
+                               batched_edge_list,
+                               batched_edge_list_lengths,
+                               batched_distances,
+                               batched_ground_truths,
+                               batched_paths,
+                               batched_path_lengths,
+                               batched_centers,
+                               batched_center_lengths,
+                               concat_edges, query_at_end, num_thinking_tokens,
+                               is_flat_model);
+    return d;
 }
 
 
@@ -1482,6 +1516,9 @@ PYBIND11_MODULE(generator, m) {
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
           py::arg("for_plotting") = false);
 
@@ -1535,6 +1572,9 @@ PYBIND11_MODULE(generator, m) {
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
           py::arg("for_plotting") = false);
 }

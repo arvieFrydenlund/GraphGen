@@ -27,28 +27,34 @@ def get_args_parser():
     parser = argparse.ArgumentParser(description='Test generator functions')
 
     # graph settings
-    parser.add_argument('--graph_type', type=str, default='euclidean')
-    parser.add_argument('--min_num_nodes', type=int, default=5)
-    parser.add_argument('--max_num_nodes', type=int, default=15)
+    parser.add_argument('--graph_type', type=str, default='erdos_renyi')  # 'erdos_renyi' # 'euclidean'  # 'path_star'  # 'balanced'
+    parser.add_argument('--min_num_nodes', type=int, default=20)
+    parser.add_argument('--max_num_nodes', type=int, default=25)
+    parser.add_argument('--c_min', type=int, default=75)  # for graphs with multiple connected components
+    parser.add_argument('--c_max', type=int, default=125)
+
     parser.add_argument('--p', type=float, default=-1.0,
                         help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
+
     parser.add_argument('--dims', type=int, default=2,
                         help="Number of dimensions for euclidean graphs")
     parser.add_argument('--radius', type=float, default=-1.0,
                         help="Radius for euclidean graphs, -1.0 means random")
-    parser.add_argument('--c_min', type=int, default=75)
-    parser.add_argument('--c_max', type=int, default=125)
-    parser.add_argument('--min_num_arms', type=int, default=1,
+
+    # path star graphs settings
+    parser.add_argument('--min_num_arms', type=int, default=2,
                         help="Minimum number of arms for star graphs")
     parser.add_argument('--max_num_arms', type=int, default=5,
                         help="Maximum number of arms for star graphs")
-    parser.add_argument('--min_arm_length', type=int, default=1,
+    parser.add_argument('--min_arm_length', type=int, default=5,
                         help="Minimum length of each arm in star graphs")
-    parser.add_argument('--max_arm_length', type=int, default=5,
+    parser.add_argument('--max_arm_length', type=int, default=8,
                         help="Maximum length of each arm in star graphs")
-    parser.add_argument('--min_lookahead', type=int, default=1,
+
+    # balanced graphs settings
+    parser.add_argument('--min_lookahead', type=int, default=3,
                         help="Minimum lookahead for balanced graphs")
-    parser.add_argument('--max_lookahead', type=int, default=3,
+    parser.add_argument('--max_lookahead', type=int, default=8,
                         help="Maximum lookahead for balanced graphs")
     parser.add_argument('--min_noise_reserve', type=int, default=0,
                         help="Minimum noise reserve for balanced graphs")
@@ -56,16 +62,16 @@ def get_args_parser():
                         help="Maximum number of parents for balanced graphs")
 
     # task settings
-    parser.add_argument('--task_type', type=str, default='centroid') #'shortest_path')  # 'center'  # 'centroid'
+    parser.add_argument('--task_type', type=str, default='shortest_path') #'shortest_path')  # 'center'  # 'centroid'
     parser.add_argument('--max_path_length', type=int, default=12)
     parser.add_argument('--min_path_length', type=int, default=3)
-    parser.add_argument('--max_query_size', type=int, default=3)
+    parser.add_argument('--max_query_size', type=int, default=10)
     parser.add_argument('--min_query_size', type=int, default=2)
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False)
-    parser.add_argument('--shuffle_edges', action='store_false', default=False)
-    parser.add_argument('--shuffle_nodes', action='store_false', default=False)
+    parser.add_argument('--shuffle_edges', action='store_false', default=True)
+    parser.add_argument('--shuffle_nodes', action='store_false', default=True)
     parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
     parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
     parser.add_argument('--min_vocab', type=int, default=22)
@@ -104,6 +110,8 @@ class ReconstructedGraph(object):
         self.task_targets = task_targets
 
         self.default_colour = '#1f78b4'  # matplotlib tab:blue
+        self.query_colour = 'purple'  # matplotlib tab:purple
+        self.target_colour = 'green'  # matplotlib tab:green
 
         if self.is_directed():
             self.G = nx.DiGraph()  # or nx.Graph() for undirected graphs
@@ -143,18 +151,21 @@ class ReconstructedGraph(object):
             self.colour_map = []
             self.node_edge_colour_map = []
             target_nodes = []
+            target_node_to_rank = {}
             for t in self.task_targets[1:-1]:  # cut special tokens
-                for node in t:
+                for i, node in enumerate(t):
                     target_nodes.append(node)
+                    target_node_to_rank[node] = i
             query = self.query[1:-1]  # cut special tokens
             for node in self.G:
 
                 if node in query:
-                    self.colour_map.append('purple')
-                    self.node_edge_colour_map.append('purple')
+                    self.colour_map.append(self.query_colour)
+                    self.node_edge_colour_map.append(self.query_colour)
                 elif node in target_nodes:
-                    self.colour_map.append('green')
-                    self.node_edge_colour_map.append('green')
+                    self.colour_map.append(self.target_colour)
+                    # colour alternative paths with optional red boundary
+                    self.node_edge_colour_map.append(self.target_colour if target_node_to_rank[node] == 0 else 'red')
                 else:
                     self.colour_map.append(self.default_colour)
                     self.node_edge_colour_map.append(self.default_colour)
@@ -168,14 +179,14 @@ class ReconstructedGraph(object):
             query = self.query[1:-1]  # cut special tokens
             for node in self.G:
                 if node in target_nodes and node in query:
-                    self.colour_map.append('green')
-                    self.node_edge_colour_map.append('purple')
+                    self.colour_map.append(self.target_colour)
+                    self.node_edge_colour_map.append(self.query_colour)
                 elif node in target_nodes:
-                    self.colour_map.append('green')
-                    self.node_edge_colour_map.append('green')
+                    self.colour_map.append(self.target_colour)
+                    self.node_edge_colour_map.append(self.target_colour)
                 elif node in query:
-                    self.colour_map.append('purple')
-                    self.node_edge_colour_map.append('purple')
+                    self.colour_map.append(self.query_colour)
+                    self.node_edge_colour_map.append(self.query_colour)
                 else:
                     self.colour_map.append(self.default_colour)
                     self.node_edge_colour_map.append(self.default_colour)
@@ -313,6 +324,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
                 if pos_i is not None:
                     pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
+                print(edge_list)
                 r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
                                        edge_list, query, task_input, task_targets, pos=pos_i)
                 reconstructions.append(r)
