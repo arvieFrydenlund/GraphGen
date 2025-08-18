@@ -95,10 +95,9 @@ def _t_batched_graphs_flat_model():
     batch_pprint(d_n, title='Flat model with concat edges and query at end')
 
 
-
-
-def _t_reconstruct(args, d, batch_size=20):
-    args.batch_size = batch_size
+def get_batch(args, batch_size=20):
+    if batch_size is not None:
+        args.batch_size = batch_size
 
     if args.graph_type == 'erdos_renyi':
         d_n = generator.erdos_renyi_n(**vars(args))
@@ -110,6 +109,10 @@ def _t_reconstruct(args, d, batch_size=20):
         d_n = generator.balanced_n(**vars(args))
     else:
         raise NotImplementedError
+    return d_n
+
+def _t_reconstruct(args, d, batch_size=20):
+    d_n = get_batch(args, batch_size)
 
     for k, v in d_n.items():
         if isinstance(v, np.ndarray):
@@ -122,8 +125,31 @@ def _t_reconstruct(args, d, batch_size=20):
     for r in reconstructions:
         r.plot()
 
+def _t_verify_paths(args, d, batch_size=20):
+    args.task_type = 'shortest_path'
+    # given distance matrices, make fake paths and verify them
+    d_n = get_batch(args, batch_size)
+    distances = d_n['distances']
+    print(distances.shape)
+
+    src_tokens = d_n['src_tokens']
+    task_start_indices = d_n['task_start_indices'] + 1
+    task_lengths = d_n['task_lengths'] - 2
+
+    gt_paths = np.ones((src_tokens.shape[0], max(task_lengths)), dtype=np.int32)
+    for b in range(src_tokens.shape[0]):
+        gt_paths[b, :task_lengths[b]] = src_tokens[b, task_start_indices[b]:task_start_indices[b] + task_lengths[b], 0]
+
+    print(gt_paths, 'should be all ones')
+    # print(distances[0])
+
+    verify = generator.verify_paths(distances, gt_paths, task_lengths)
+    print(verify)
 
 
+
+
+    # generate incorrect paths
 
 
 if __name__ == '__main__':
@@ -158,8 +184,7 @@ if __name__ == '__main__':
     # _t_batched_graphs_flat_model()
 
 
-    _t_reconstruct(args, d)
-
-
+    # _t_reconstruct(args, d)
+    _t_verify_paths(args, d)
 
     print('\n\nDone Testing')

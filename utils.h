@@ -704,16 +704,18 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
             ++it2;
         }
     } else {
+        graph_lengths = py::array_t<int, py::array::c_style>({batch_size});
         auto ra_gl = graph_lengths.mutable_unchecked();
         for (auto b = 0; b < batch_size; b++) {
             ra_gl[b] = static_cast<int>((*it1)->size()) * 3;
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
-                ra(b, cur + j, 0) = (*it1)->at(j).first;
-                ra(b, cur + j + 1, 0) = (*it1)->at(j).second;
-                ra(b, cur + j + 2, 0) = edge_marker;
-                curs[b] += 3;
+                ra(b, cur, 0) = (**it2)[(*it1)->at(j).first];
+                ra(b, cur + 1, 0) = (**it2)[(*it1)->at(j).second];
+                ra(b, cur + 2, 0) = edge_marker;
+                cur += 3;
             }
+            curs[b] = cur;
             ++it1;
             ++it2;
         }

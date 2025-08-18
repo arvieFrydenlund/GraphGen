@@ -340,46 +340,44 @@ int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path
 
 
 template<typename T>
-py::array_t<int, py::array::c_style> varify_paths(py::array_t<T, py::array::c_style> &distances,
+py::array_t<int, py::array::c_style> verify_paths(py::array_t<T, py::array::c_style> &distances,
                                                   py::array_t<T, py::array::c_style> &paths,
                                                   py::array_t<T, py::array::c_style> &lengths) {
     // batch version [batch_size, vocab_size, vocab_size]
     auto batch_size = paths.shape(0);
     auto out = py::array_t<int, py::array::c_style>({static_cast<int>(batch_size)});
-    out[py::make_tuple(py::ellipsis())] = 1; // initialize array
+    out[py::make_tuple(py::ellipsis())] = 1; // initialize array to true
     auto ra = out.mutable_unchecked();
     for (auto b = 0; b < batch_size; b++) {
-        for (auto i = 0; i < lengths.at(b); i++) {
-            auto start = paths.at(b, i);
-            auto end = paths.at(b, i + 1);
-            auto shortest_distance = distances.at(start, end);
-            if (shortest_distance < 0) {
+        auto start = paths.at(b, 0);
+        auto end = paths.at(b, lengths.at(b) - 1);
+        auto shortest_distance = distances.at(b, start, end);
+        if (shortest_distance < 0 || shortest_distance > inf - 1) {
+            ra(b) = -1;
+            break;
+        }
+        // validate path
+        auto path_dist = 0.0;
+        auto cur = start;
+        for (int j = 1; j < lengths.at(b); j++) {
+            auto next = paths.at(b, j);
+            auto cur_d = distances.at(b, cur, next);
+            if (cur_d <= 0.0 || shortest_distance > inf - 1) {
                 ra(b) = -1;
                 break;
             }
-            // validate path
-            auto cur = start;
-            for (int j = 1; j < lengths.at(b); j++) {
-                auto next = paths.at(b, j);
-                if (distances.at(cur, next) != 1) {
-                    // hardcoded for distance of 1
-                    ra(b) = -1;
-                    break;
-                }
-                cur = next;
-            }
-            if (ra(b) != -1 && lengths.at(b) > shortest_distance) {
-                ra(b) = 0;
-            } //else {
-            //    ra(b) = 1;
-            //}
+            path_dist += cur_d;
+            cur = next;
+        }
+        if (ra(b) != -1 && path_dist > shortest_distance) {
+            ra(b) = 0;
         }
     }
     return out;
 }
 
 
-bool float_eqaulity(double a, double b) {
+bool float_equality(double a, double b) {
     return std::fabs(a - b) < std::numeric_limits<double>::epsilon();
 }
 
@@ -428,7 +426,7 @@ inline pair<vector<int>, vector<int> > sample_center_centroid(const unique_ptr<v
     auto outputs = vector<int>();
     auto min_value = *std::min_element(values.begin(), values.end());
     for (int i = 0; i < N; i++) {
-        if (float_eqaulity(values[i], min_value)) {
+        if (float_equality(values[i], min_value)) {
             outputs.push_back(i);
         }
     }
@@ -1232,7 +1230,7 @@ PYBIND11_MODULE(generator, m) {
           "Returns:\n\t"
           "dictionary: of str -> int\n");
 
-    m.def("varify_paths", &varify_paths<int>,
+    m.def("verify_paths", &verify_paths<int>,
           "Batch varies the that any predicted paths are valid given the distance matrices.\n"
           "Parameters:\n\t"
           "distances: [batch_size, vocab_size, vocab_size]\n\t"

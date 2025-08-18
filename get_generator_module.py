@@ -79,8 +79,9 @@ def get_args_parser():
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_edges', type=int, default=512)
     parser.add_argument('--max_attempts', type=int, default=1000)
-    parser.add_argument('--concat_edges', action='store_true', default=True)
-    parser.add_argument('--query_at_end', action='store_true', default=True)
+    parser.add_argument('--concat_edges', action='store_true', default=False)
+    parser.add_argument('--dont_concat_edges', action='store_false', dest='concat_edges')
+    parser.add_argument('--query_at_end', action='store_true', default=False)
     parser.add_argument('--num_thinking_tokens', type=int, default=0)
     parser.add_argument('--is_flat_model', action='store_true', default=True)
     parser.add_argument('--for_plotting', action='store_true', default=False)
@@ -275,6 +276,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             task = batched_dict['prev_output_tokens']
             task_start_indices = batched_dict['task_start_indices']
             task_lengths = batched_dict['task_lengths']
+            print(query_start_indices)
             print(query_lengths)
             print(task_lengths)
             print(task_start_indices)
@@ -283,16 +285,13 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             if ids is None:
                 ids = list(range(src_tokens.shape[0]))
 
+            print(src_tokens.shape)
             if src_tokens.shape[-1] == 1:  # not concat_edges
                 concat_edges = False
             elif src_tokens.shape[-1] == 2:  # concat_edges
                 concat_edges = True
             else:
                 raise ValueError(f"Unexpected src_tokens shape: {src_tokens.shape[-1]}")
-
-            query_at_end = False
-            if query_start_indices[0] > graph_start_indices[0]:
-                query_at_end = True
 
             if batched_dict['task_type'] == 'shortest_path':
                 pass
@@ -305,11 +304,14 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
             for id in ids:
                 query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
+                print(src_tokens[id].squeeze())
+                print(graph_start_indices[id])
+                print(graph_lengths[id])
                 edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
                 task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
                 prev_output_tokens = task[id, :task_lengths[id]]
                 if not concat_edges:
-                    edge_list = edge_list.view(-1, 3)[:, :2]  # remove the edge marker
+                    edge_list = edge_list.reshape(-1, 3)[:, :2]  # remove the edge marker
                 edge_list = edge_list.tolist()
                 for i in range(len(edge_list)):
                     edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
