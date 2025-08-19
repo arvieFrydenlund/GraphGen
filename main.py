@@ -184,7 +184,7 @@ if __name__ == '__main__':
     # _t_batched_graphs_flat_model()
 
 
-    # _t_reconstruct(args, d)
-    _t_verify_paths(args, d)
+    _t_reconstruct(args, d)
+    # _t_verify_paths(args, d)
 
     print('\n\nDone Testing')

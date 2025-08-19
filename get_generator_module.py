@@ -79,11 +79,12 @@ def get_args_parser():
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_edges', type=int, default=512)
     parser.add_argument('--max_attempts', type=int, default=1000)
-    parser.add_argument('--concat_edges', action='store_true', default=False)
+    parser.add_argument('--concat_edges', action='store_true', default=True)
     parser.add_argument('--dont_concat_edges', action='store_false', dest='concat_edges')
     parser.add_argument('--query_at_end', action='store_true', default=False)
     parser.add_argument('--num_thinking_tokens', type=int, default=0)
-    parser.add_argument('--is_flat_model', action='store_true', default=True)
+    parser.add_argument('--is_decoder_model', action='store_true', dest='is_flat_model', default=True)
+    parser.add_argument('--is_encoder_model', action='store_false', dest='is_flat_model')
     parser.add_argument('--for_plotting', action='store_true', default=False)
 
     return parser
@@ -265,73 +266,74 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
     if for_plotting:
         raise NotImplementedError
     else:
-        if batched_dict['is_flat_model']:
+        src_tokens = batched_dict['src_tokens']
+        src_lengths = batched_dict['src_lengths']
+        query_start_indices = batched_dict['query_start_indices']
+        query_lengths = batched_dict['query_lengths']
+        graph_start_indices = batched_dict['graph_start_indices']
+        graph_lengths = batched_dict['graph_lengths']
+        task = batched_dict['prev_output_tokens']
+        task_start_indices = batched_dict['task_start_indices']
+        task_lengths = batched_dict['task_lengths']
 
-            src_tokens = batched_dict['src_tokens']
-            src_lengths = batched_dict['src_lengths']
-            query_start_indices = batched_dict['query_start_indices']
-            query_lengths = batched_dict['query_lengths']
-            graph_start_indices = batched_dict['graph_start_indices']
-            graph_lengths = batched_dict['graph_lengths']
-            task = batched_dict['prev_output_tokens']
-            task_start_indices = batched_dict['task_start_indices']
-            task_lengths = batched_dict['task_lengths']
-            print(query_start_indices)
-            print(query_lengths)
-            print(task_lengths)
-            print(task_start_indices)
+        print('is_flat_model', batched_dict['is_flat_model'])
 
+        if ids is None:
+            ids = list(range(src_tokens.shape[0]))
 
-            if ids is None:
-                ids = list(range(src_tokens.shape[0]))
-
-            print(src_tokens.shape)
-            if src_tokens.shape[-1] == 1:  # not concat_edges
-                concat_edges = False
-            elif src_tokens.shape[-1] == 2:  # concat_edges
-                concat_edges = True
-            else:
-                raise ValueError(f"Unexpected src_tokens shape: {src_tokens.shape[-1]}")
-
-            if batched_dict['task_type'] == 'shortest_path':
-                pass
-            elif batched_dict['task_type'] in ('center', 'centroid'):
-                pass
-
-            pos = None
-            if batched_dict['graph_type'] == 'euclidean':
-                pos = batched_dict['positions']
-
-            for id in ids:
-                query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
-                print(src_tokens[id].squeeze())
-                print(graph_start_indices[id])
-                print(graph_lengths[id])
-                edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
-                task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
-                prev_output_tokens = task[id, :task_lengths[id]]
-                if not concat_edges:
-                    edge_list = edge_list.reshape(-1, 3)[:, :2]  # remove the edge marker
-                edge_list = edge_list.tolist()
-                for i in range(len(edge_list)):
-                    edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
-                query = query.tolist()  # remove the tokenized ids
-                print(query)
-                query = [id_to_symbol(q) for q in query]
-                task_input = task_input.tolist()
-                task_input = [id_to_symbol(t) for t in task_input]
-                task_targets = [[id_to_symbol(j) for j in t if j != pad] for t in prev_output_tokens]
-                pos_i = {id_to_symbol(int(pos[id, i, 0])): (pos[id, i, 1], pos[id, i, 2])
-                         for i in range(pos.shape[1]) if pos[id, i, 0] > 0} if pos is not None else None
-                if pos_i is not None:
-                    pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
-
-                print(edge_list)
-                r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
-                                       edge_list, query, task_input, task_targets, pos=pos_i)
-                reconstructions.append(r)
+        if src_tokens.shape[-1] == 1:  # not concat_edges
+            concat_edges = False
+        elif src_tokens.shape[-1] == 2:  # concat_edges
+            concat_edges = True
         else:
-            raise NotImplementedError
+            raise ValueError(f"Unexpected src_tokens shape: {src_tokens.shape[-1]}")
+
+        if batched_dict['task_type'] == 'shortest_path':
+            pass
+        elif batched_dict['task_type'] in ('center', 'centroid'):
+            pass
+
+        pos = None
+        if batched_dict['graph_type'] == 'euclidean':
+            pos = batched_dict['positions']
+
+        for id in ids:
+            print('\n\n\n\nID: ', id)
+            print('query_start_indices[id]',  query_start_indices[id], 'length ', query_lengths[id])
+            print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
+            print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
+
+
+            query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
+            print(graph_start_indices[id])
+            print(graph_lengths[id])
+            edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
+            if batched_dict['is_flat_model']:
+                task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
+            else:
+                task_input = task[id, :task_lengths[id], 0]
+            prev_output_tokens = task[id, :task_lengths[id], :]
+            if not concat_edges:
+                edge_list = edge_list.reshape(-1, 3)[:, :2]  # remove the edge marker
+            edge_list = edge_list.tolist()
+            for i in range(len(edge_list)):
+                edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
+            query = query.tolist()  # remove the tokenized ids
+            print('query', query)
+            query = [id_to_symbol(q) for q in query]
+            task_input = task_input.tolist()
+            task_input = [id_to_symbol(t) for t in task_input]
+            task_targets = [[id_to_symbol(j) for j in t if j != pad] for t in prev_output_tokens]
+            pos_i = {id_to_symbol(int(pos[id, i, 0])): (pos[id, i, 1], pos[id, i, 2])
+                     for i in range(pos.shape[1]) if pos[id, i, 0] > 0} if pos is not None else None
+            if pos_i is not None:
+                pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
+
+            print(edge_list)
+            r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
+                                   edge_list, query, task_input, task_targets, pos=pos_i)
+            reconstructions.append(r)
+
 
     return reconstructions
 

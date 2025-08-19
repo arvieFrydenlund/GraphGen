@@ -239,20 +239,20 @@ py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<
 
     auto it1 = batched_distances.begin();
     auto it2 = batched_node_shuffle_map.begin();
-    int cur = 0;
+    int b = 0;
     for (; it1 != batched_distances.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
         for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
             for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
                 auto mapped_j = (**it2)[j];
                 auto mapped_k = (**it2)[k];
                 if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
-                    ra(cur, mapped_j, mapped_k) = max_value;
+                    ra(b, mapped_j, mapped_k) = max_value;
                 } else {
-                    ra(cur, mapped_j, mapped_k) = (**it1)[j][k];
+                    ra(b, mapped_j, mapped_k) = (**it1)[j][k];
                 }
             }
         }
-        cur += 1;
+        b += 1;
     }
     return arr;
 }
@@ -479,7 +479,7 @@ inline py::dict package_for_plotting(const string &graph_type, const string &tas
 }
 
 
-inline py::dict package_for_flat_model(const string &graph_type, const string &task_type,
+inline py::dict package_for_model(const string &graph_type, const string &task_type,
                                   const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
                                   const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
@@ -492,11 +492,12 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
                                   const list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
                                   const list<pair<int, int> > &batched_center_lengths,
                                   const bool concat_edges = true,
-                                  const bool query_at_end = true,
-                                  const int num_thinking_tokens = 0) {
+                                  const bool query_at_end = false,
+                                  const int num_thinking_tokens = 0,
+                                  const bool is_flat_model = true) {
     /*
-     *  Package the data for a flat encoder- or decoder-only model i.e. same layers over src and tgt
-     *   // or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
+     *  Package the data for a flat encoder-only or decoder-only model i.e. same layers over src and tgt
+     *  or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
      *
      *  src_tokens [batch_size, seq_len, num_input_tokens]
      *  src_lengths [batch_size] in range [0, seq_len]
@@ -536,8 +537,10 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
     py::array_t<int, py::array::c_style> query_lengths(batch_size);
     py::array_t<int, py::array::c_style> task; // tgt-side ground-truths
     py::array_t<int, py::array::c_style> task_lengths(batch_size);
+    task_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
     //calculate lengths as  edge_len + query_length + num_thinking_tokens + task_length + 2 per instance in batch
     auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
+    src_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
 
     auto src_len_ra = src_lengths.mutable_unchecked();
     if (task_type == "shortest_path" || task_type == "path") {
@@ -547,10 +550,9 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         auto max_path_length = 0;
         auto max_k = 0;
 
-        int cur = 0;
         auto it1 = batched_paths.begin();
         auto it2 = batched_distances.begin();
-        for (; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2) {
+        for (auto b = 0; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2, b++) {
             auto labels = label_smooth_path(**it2, **it1);
             if (static_cast<int>(labels.size()) > max_path_length) {
                 max_path_length = labels.size();
@@ -560,8 +562,7 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
                     max_k = m.size();
                 }
             }
-            batched_label_smoothing[cur] = labels;
-            cur += 1;
+            batched_label_smoothing[b] = labels;
         }
 
         task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
@@ -571,26 +572,26 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         auto ra = task.mutable_unchecked();
         auto ra_t_lengths = task_lengths.mutable_unchecked();
 
-        cur = 0;
         auto it3 = batched_node_shuffle_map.begin();
-        for (; it3 != batched_node_shuffle_map.end(); ++it3) {
-            auto labels = batched_label_smoothing[cur];
+        for (auto b = 0; it3 != batched_node_shuffle_map.end(); ++it3, b++) {
+            auto labels = batched_label_smoothing[b];
             auto path_length = static_cast<int>(labels.size());
-            query[cur][0] = query_start_marker;
-            query[cur][1] = (**it3)[labels[0][0]]; // start node
-            query[cur][2] = (**it3)[labels[path_length - 1][0]]; // end node
-            query[cur][3] = query_end_marker;
+            query[b][0] = query_start_marker;
+            query[b][1] = (**it3)[labels[0][0]]; // start node
+            query[b][2] = (**it3)[labels[path_length - 1][0]]; // end node
+            query[b][3] = query_end_marker;
 
-            ra(cur, 0, 0) = task_start_marker;
+            ra(b, 0, 0) = task_start_marker;
             for (int j = 0; j < path_length; j++) {
                 for (int k = 0; k < static_cast<int>(labels[j].size()); k++) {
-                    ra(cur, j + 1, k) = (**it3)[labels[j][k]];
+                    ra(b, j + 1, k) = (**it3)[labels[j][k]];
                 }
             }
-            ra(cur, path_length + 1, 0) = task_end_marker;
-            ra_t_lengths(cur) = path_length + 2;
-            src_len_ra(cur) = path_length + 2 + static_cast<int>(query[cur].size());
-            cur += 1;
+            ra(b, path_length + 1, 0) = task_end_marker;
+            ra_t_lengths(b) = path_length + 2;
+            if (is_flat_model) {
+                src_len_ra(b) += path_length + 2;
+            }
         }
     } else if (task_type == "center" || task_type == "centroid") {
         // batched_center_lengths is a list of queries and tasks
@@ -612,39 +613,40 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         auto it1 = batched_centers.begin();
         auto it2 = batched_node_shuffle_map.begin();
 
-        int cur = 0; // batch
-        for (; it1 != batched_centers.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+        for (auto b = 0; it1 != batched_centers.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2, b++) {
             // write in query
             auto query_length = static_cast<int>((*it1)->first.size());
-            auto cur_query = (*it1)->first;
-            query[cur].push_back(query_start_marker);
+            auto b_query = (*it1)->first;
+            query[b].push_back(query_start_marker);
             for (int j = 0; j < query_length; j++) {
-                query[cur].push_back((**it2)[cur_query[j]]);
+                query[b].push_back((**it2)[b_query[j]]);
             }
-            query[cur].push_back(query_end_marker);
+            query[b].push_back(query_end_marker);
 
             // write in targets
             auto task_length = static_cast<int>((*it1)->second.size());
-            ra(cur, 0, 0) = task_start_marker;
+            ra(b, 0, 0) = task_start_marker;
             for (int j = 0; j < task_length; j++) {  // fill in vocab dimension not the sequence dimension
                 auto node = (*it1)->second[j];
-                ra(cur, 1, j) = (**it2)[node];
+                ra(b, 1, j) = (**it2)[node];
             }
-            ra(cur, 2, 0) = task_end_marker;
-            ra_q_lengths(cur) = query[cur].size();
-            src_len_ra(cur) = task_length + 2 + static_cast<int>(query[cur].size());
-            cur += 1;
+            ra(b, 2, 0) = task_end_marker;
+            ra_q_lengths(b) = query[b].size();
+            if (is_flat_model) {
+                src_len_ra(b) += task_length + 2;
+            }
         }
     }
 
     // add edge sizes and thinking tokens to src_lengths
     auto it0 = batched_edge_list_lengths.begin();
-    for (int b = 0; b < batch_size; b++) {
+    for (int b = 0; b < batch_size; b++) {  //  task length already added if not flat model
         if (concat_edges) {
-            src_len_ra(b) += static_cast<int>(*it0) + num_thinking_tokens + 2;
+            src_len_ra(b) += static_cast<int>(*it0);
         } else {
-            src_len_ra(b) += static_cast<int>(*it0) * 3 + num_thinking_tokens + 2;
+            src_len_ra(b) += static_cast<int>(*it0) * 3;
         }
+        src_len_ra(b) += num_thinking_tokens + 2 + static_cast<int>(query[b].size());
         ++it0;
     }
 
@@ -665,7 +667,7 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
     src_tokens[py::make_tuple(py::ellipsis())] = padding; // initialize array
     auto ra = src_tokens.mutable_unchecked();
 
-    for (auto b = 0; b < batch_size; b++) {
+    for (auto b = 0; b < batch_size; b++) {  // start-of-sequence marker
         ra(b, 0, 0) = start_marker;
         if (concat_edges) {  // non-graph tokens get duplicated
             ra(b, 0, 1) = start_marker;
@@ -687,11 +689,13 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         }
     }
 
+    // write in graph edge list
     auto it1 = batched_edge_list.begin();
     auto it2 = batched_node_shuffle_map.begin();
     graph_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
+    graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
     if (concat_edges) {  // note: there are no graph markers
-        graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
+
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
@@ -704,10 +708,9 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
             ++it2;
         }
     } else {
-        graph_lengths = py::array_t<int, py::array::c_style>({batch_size});
         auto ra_gl = graph_lengths.mutable_unchecked();
         for (auto b = 0; b < batch_size; b++) {
-            ra_gl[b] = static_cast<int>((*it1)->size()) * 3;
+            ra_gl[b] *= 3;
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
                 ra(b, cur, 0) = (**it2)[(*it1)->at(j).first];
@@ -749,8 +752,8 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
         }
     }
 
-    // write in the task
-    if (not batched_path_lengths.empty() || not batched_center_lengths.empty()) {
+    // write in the task to source tokens
+    if (is_flat_model and (not batched_path_lengths.empty() || not batched_center_lengths.empty())) {
         task_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -765,8 +768,12 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
             if (concat_edges) {
                 ra(b, curs[b], 1) = end_marker; // end marker
             }
-            // curs[b]++; // for correct length
+            // cout << "curs[" << b << "] = " << curs[b] << " length " << src_lengths.at(b) << " of max " << max_seq_len << endl;
+            // curs[b]++; // for correct length, incase we ever add something after
         }
+    } else {
+        task_start_indices = py::array_t<int, py::array::c_style>({batch_size});
+        task_start_indices[py::make_tuple(py::ellipsis())] = 0; // initialize array
     }
 
     d["src_tokens"] = src_tokens;
@@ -786,65 +793,13 @@ inline py::dict package_for_flat_model(const string &graph_type, const string &t
     d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
     d["graph_type"] = graph_type;
     d["task_type"] = task_type;
+    d["is_flat_model"] = is_flat_model;
     return d;
 }
-
-inline py::dict package_for_non_flat_model( const string &graph_type, const string &task_type,
-                                  const int attempts, const int max_attempts,
-                                  const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
-                                  const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-                                  const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
-                                  const list<int> &batched_edge_list_lengths,
-                                  const list<unique_ptr<vector<vector<int> > > > &batched_distances,
-                                  const list<unique_ptr<vector<vector<int> > > > &batched_ground_truths,
-                                  const list<unique_ptr<vector<int> > > &batched_paths,
-                                  const list<int> &batched_path_lengths,
-                                  const list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
-                                  const list<pair<int, int> > &batched_center_lengths,
-                                  const bool concat_edges = true,
-                                  const bool query_at_end = true,
-                                  const int num_thinking_tokens = 0) {
-
-    py::dict d;
-    return d;
-}
-
 
 inline py::dict package_for_model() {
     py::dict d;
     return d;
 }
-
-inline py::dict package_for_model(const string &graph_type, const string &task_type,
-                                  const int attempts, const int max_attempts,
-                                  const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
-                                  const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-                                  const list<unique_ptr<vector<pair<int, int> > > > &batched_edge_list,
-                                  const list<int> &batched_edge_list_lengths,
-                                  const list<unique_ptr<vector<vector<int> > > > &batched_distances,
-                                  const list<unique_ptr<vector<vector<int> > > > &batched_ground_truths,
-                                  const list<unique_ptr<vector<int> > > &batched_paths,
-                                  const list<int> &batched_path_lengths,
-                                  const list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
-                                  const list<pair<int, int> > &batched_center_lengths,
-                                  const bool concat_edges = true,
-                                  const bool query_at_end = true,
-                                  const int num_thinking_tokens = 0,
-                                  const bool is_flat_model = true) {
-
-    if (is_flat_model) {
-        return package_for_flat_model(graph_type, task_type, attempts, max_attempts, min_vocab, max_vocab, dictionary,
-                                batched_node_shuffle_map, batched_edge_list, batched_edge_list_lengths,
-                                batched_distances, batched_ground_truths, batched_paths, batched_path_lengths,
-                                batched_centers, batched_center_lengths, concat_edges, query_at_end,
-                                num_thinking_tokens);
-    }
-    return package_for_non_flat_model(graph_type, task_type, attempts, max_attempts, min_vocab, max_vocab, dictionary,
-                                batched_node_shuffle_map, batched_edge_list, batched_edge_list_lengths,
-                                batched_distances, batched_ground_truths, batched_paths, batched_path_lengths,
-                                batched_centers, batched_center_lengths, concat_edges, query_at_end,
-                                num_thinking_tokens);
-}
-
 
 #endif //UTILS_H
