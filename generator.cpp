@@ -123,6 +123,14 @@ inline py::array_t<bool, py::array::c_style> is_invalid_example(
     return arr;
 }
 
+inline bool task_type_check(const std::string &task_type) {
+    // Check if the task type is valid
+    static const std::set<std::string> valid_task_types = {
+        "shortest_path", "path", "center", "centroid", "none", "None",
+    };
+    return valid_task_types.find(task_type) != valid_task_types.end();
+}
+
 
 /* ************************************************
  *  Dictionary for mapping to models vocabulary
@@ -1169,17 +1177,13 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_validation_hashes", &set_validation_hashes,
           "Sets the validation hashes for the graph generation.  This is used to check if the graph generation is correct.\n"
           "Parameters:\n\t"
-          "hashes: numpy [N] of uint64_t hashes\n\t"
-          "Returns:\n\t"
-          "None\n",
+          "hashes: numpy [N] of uint64_t hashes\n\t",
           py::arg("hashes"));
 
     m.def("set_test_hashes", &set_test_hashes,
           "Sets the test hashes for the graph generation.  This is used to check if the graph generation is correct.\n"
           "Parameters:\n\t"
-          "hashes: numpy [N] of uint64_t hashes\n\t"
-          "Returns:\n\t"
-          "None\n",
+          "hashes: numpy [N] of uint64_t hashes\n\t",
           py::arg("hashes"));
 
     m.def("is_in_validation", &is_in_validation,
@@ -1206,20 +1210,22 @@ PYBIND11_MODULE(generator, m) {
           "numpy [N] True if the graph is in the validation or test sets, False otherwise\n",
           py::arg("hashes"));
 
+    m.def("task_type_check", &task_type_check,
+          "Checks if the task type is valid.\n"
+          "Parameters:\n\t"
+          "task_type: str",
+          py::arg("task_type"));
+
     // dictionary/vocabulary
     m.def("set_dictionary", &set_dictionary,
           "Sets the dictionary/vocabulary of token to token_idx.\n"
           "Parameters:\n\t"
-          "dictionary: of str -> int\n\t"
-          "Returns:\n\t"
-          "None\n",
+          "dictionary: of str -> int\n\t",
           py::arg("dictionary"), py::arg("verbose") = false);
 
     m.def("set_default_dictionary", &set_default_dictionary,
           "Sets the dictionary/vocabulary of token to token_idx.\n"
           "Parameters:\n\t"
-          "None\n"
-          "Returns:\n\t"
           "None\n",
           py::arg("max_vocab") = 100);
 

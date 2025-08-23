@@ -540,7 +540,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     task_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
     //calculate lengths as  edge_len + query_length + num_thinking_tokens + task_length + 2 per instance in batch
     auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
-    src_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
+    src_lengths[py::make_tuple(py::ellipsis())] = 2 + num_thinking_tokens; // initialize array
 
     auto src_len_ra = src_lengths.mutable_unchecked();
     if (task_type == "shortest_path" || task_type == "path") {
@@ -646,7 +646,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         } else {
             src_len_ra(b) += static_cast<int>(*it0) * 3;
         }
-        src_len_ra(b) += num_thinking_tokens + 2 + static_cast<int>(query[b].size());
+        // if query has length
+        if (query.size()) {
+            src_len_ra(b) += static_cast<int>(query[b].size());
+        }
         ++it0;
     }
 
@@ -675,7 +678,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     }
     auto curs = vector<int>(batch_size, 1); // current position in src_tokens
 
-    if (!query_at_end) {  // write in query before graph
+    if (query.size() && !query_at_end) {  // write in query before graph
         query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -724,7 +727,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         }
     }
 
-    if (query_at_end) {  // write in query if after graph
+    if (query.size() && query_at_end) {  // write in query if after graph
         query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -781,8 +784,13 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     d["prev_output_tokens"] = task;
     d["task_lengths"] = task_lengths;
 
-    d["query_start_indices"] = query_start_indices;
-    d["query_lengths"] = query_lengths;
+    if (query.size()) {
+        d["query_start_indices"] = query_start_indices;
+        d["query_lengths"] = query_lengths;
+    }else {
+        d["query_start_indices"] = py::none();
+        d["query_lengths"] = py::none();
+    }
     d["graph_start_indices"] = graph_start_indices;
     d["graph_lengths"] = graph_lengths;
     d["task_start_indices"] = task_start_indices;

@@ -112,6 +112,7 @@ def get_batch(args, batch_size=20):
     return d_n
 
 def _t_reconstruct(args, d, batch_size=20):
+    args.task_type = 'shortest-path'
     d_n = get_batch(args, batch_size)
 
     for k, v in d_n.items():

@@ -303,7 +303,6 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
             print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
 
-
             query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
             print(graph_start_indices[id])
             print(graph_lengths[id])
@@ -383,7 +382,6 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
         build_module("generator", cpp_files, cpp_path, boost_path)
         print(find_spec('generator'))
         import generator
-
 
     setattr(generator, "get_args_parser", get_args_parser)
     setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
