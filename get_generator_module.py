@@ -6,7 +6,8 @@ import numpy as np
 
 try:
     import networkx as nx
-except ImportError:
+except ImportError as e:
+    print(f"NetworkX is not installed or broken. {e}")
     nx = None
 
 from sympy.polys.polyconfig import query
@@ -308,6 +309,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             print('graph_gather_indices[id]', graph_gather_indices[id])
             print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
             print('task_gather_indices[id]', task_gather_indices[id], 'src_size', src_tokens.shape[1])
+            print('task[id]', task[id, :, 0] if task.ndim > 2 else task[id, :])
 
             query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
             edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
@@ -333,9 +335,10 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
                 pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
             print('edge_list', edge_list)
-            r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
-                                   edge_list, query, task_input, task_targets, pos=pos_i)
-            reconstructions.append(r)
+            if nx is not None:
+                r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
+                                       edge_list, query, task_input, task_targets, pos=pos_i)
+                reconstructions.append(r)
 
 
     return reconstructions
