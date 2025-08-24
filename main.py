@@ -111,8 +111,8 @@ def get_batch(args, batch_size=20):
         raise NotImplementedError
     return d_n
 
-def _t_reconstruct(args, d, batch_size=20):
-    args.task_type = 'shortest-path'
+def _t_reconstruct(args, d, batch_size=20, plot=False):
+    args.task_type = 'shortest_path'
     d_n = get_batch(args, batch_size)
 
     for k, v in d_n.items():
@@ -122,9 +122,9 @@ def _t_reconstruct(args, d, batch_size=20):
             print(f'{k}: {v}, {type(v)}')
 
     reconstructions = generator.create_reconstruct_graphs(d_n, d)
-    print
     for r in reconstructions:
-        r.plot()
+        if plot:
+            r.plot()
 
 def _t_verify_paths(args, d, batch_size=20):
     args.task_type = 'shortest_path'

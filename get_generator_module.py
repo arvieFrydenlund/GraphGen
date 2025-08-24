@@ -142,11 +142,11 @@ class ReconstructedGraph(object):
 
     # RECONSTRUCTION METHODS
     def process_task(self):
-        print(self.query)
-        print(self.task_input)
-        print(self.task_targets)
-        print(self.get_node_list())
-        print()
+        # print(self.query)
+        # print(self.task_input)
+        # print(self.task_targets)
+        # print(self.get_node_list())
+        # print()
         if self.task_input is None or self.task_targets is None or self.task_type in (None, 'none', 'None'):
             self.colour_map = self.default_colour
         elif self.task_type in ('shortest_path', 'path'):
@@ -272,9 +272,11 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
         query_lengths = batched_dict['query_lengths']
         graph_start_indices = batched_dict['graph_start_indices']
         graph_lengths = batched_dict['graph_lengths']
+        graph_gather_indices = batched_dict['graph_gather_indices']
         task = batched_dict['prev_output_tokens']
         task_start_indices = batched_dict['task_start_indices']
         task_lengths = batched_dict['task_lengths']
+        task_gather_indices = batched_dict['task_gather_indices']
 
         print('is_flat_model', batched_dict['is_flat_model'])
 
@@ -298,14 +300,16 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             pos = batched_dict['positions']
 
         for id in ids:
-            print('\n\n\n\nID: ', id)
+            print('\n\nID: ', id)
+            print('src_tokens[id]', src_tokens[id, :, 0] if src_tokens.ndim > 2 else src_tokens[id, :])
+            print('range         ', np.arange(src_tokens.shape[1]))
             print('query_start_indices[id]',  query_start_indices[id], 'length ', query_lengths[id])
             print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
+            print('graph_gather_indices[id]', graph_gather_indices[id])
             print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
+            print('task_gather_indices[id]', task_gather_indices[id], 'src_size', src_tokens.shape[1])
 
             query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
-            print(graph_start_indices[id])
-            print(graph_lengths[id])
             edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
             if batched_dict['is_flat_model']:
                 task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
@@ -328,7 +332,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             if pos_i is not None:
                 pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
-            print(edge_list)
+            print('edge_list', edge_list)
             r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
                                    edge_list, query, task_input, task_targets, pos=pos_i)
             reconstructions.append(r)

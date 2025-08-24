@@ -538,9 +538,11 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     py::array_t<int, py::array::c_style> task; // tgt-side ground-truths
     py::array_t<int, py::array::c_style> task_lengths(batch_size);
     task_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
+    int max_task_length = 0;
     //calculate lengths as  edge_len + query_length + num_thinking_tokens + task_length + 2 per instance in batch
     auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
     src_lengths[py::make_tuple(py::ellipsis())] = 2 + num_thinking_tokens; // initialize array
+
 
     auto src_len_ra = src_lengths.mutable_unchecked();
     if (task_type == "shortest_path" || task_type == "path") {
@@ -554,10 +556,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         auto it2 = batched_distances.begin();
         for (auto b = 0; it1 != batched_paths.end() && it2 != batched_distances.end(); ++it1, ++it2, b++) {
             auto labels = label_smooth_path(**it2, **it1);
-            if (static_cast<int>(labels.size()) > max_path_length) {
+            if (static_cast<int>(labels.size()) > max_path_length) {  // max length of sequence
                 max_path_length = labels.size();
             }
-            for (auto &m: labels) {
+            for (auto &m: labels) {  // max number of ground truth labels per node
                 if (static_cast<int>(m.size()) > max_k) {
                     max_k = m.size();
                 }
@@ -567,6 +569,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
 
         task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
+        max_task_length = max_path_length + 3; // +2 for start and end markers, +1 for end seq marker
         query_lengths[py::make_tuple(py::ellipsis())] = 4; // initialize array
         query = vector<vector<int> >(batch_size, vector<int>(4));
         auto ra = task.mutable_unchecked();
@@ -588,7 +591,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                 }
             }
             ra(b, path_length + 1, 0) = task_end_marker;
-            ra_t_lengths(b) = path_length + 2;
+            ra_t_lengths(b) = path_length + 2; // +2 for start and end task markers,
             if (is_flat_model) {
                 src_len_ra(b) += path_length + 2;
             }
@@ -604,7 +607,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         // only one token but has label smoothing, so 3 is special tokens
         task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len + 2});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
-        task_lengths[py::make_tuple(py::ellipsis())] = 3; // initialize array
+        max_task_length = 4; // 1 for task, +2 for start and end task markers, +1 for end seq marker
+        task_lengths[py::make_tuple(py::ellipsis())] = 3; // +2 for start and end task markers,
         query = vector<vector<int> >(batch_size);
         query_lengths[py::make_tuple(py::ellipsis())]  = 0; // initialize array
 
@@ -779,12 +783,51 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         task_start_indices[py::make_tuple(py::ellipsis())] = 0; // initialize array
     }
 
+    auto task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_task_length});
+    auto task_gather_indices_ra = task_gather_indices.mutable_unchecked();
+    for (int b = 0; b < batch_size; b++) {
+        auto cur = task_start_indices.at(b);
+        for (int j = 0; j < max_task_length; j++, cur++) {
+            if (j <= task_lengths.at(b)) {  // <= because we have end seq marker
+                task_gather_indices_ra(b, j) = cur; // gather indices
+            } else {
+                task_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
+            }
+        }
+    }
+
+    // now may gather indices for the graphs, the queries, and the tasks
+    auto max_graph_length = max(0, *max_element(batched_edge_list_lengths.begin(),
+                                                          batched_edge_list_lengths.end()));
+    auto graph_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_length});
+    auto graph_gather_indices_ra = graph_gather_indices.mutable_unchecked();
+    for (int b = 0; b < batch_size; b++) {
+        auto cur = graph_start_indices.at(b);  // already skips start marker
+        if (!concat_edges) {
+            cur += 2;  // move to edge marker
+        }
+        for (int j = 0; j < max_graph_length; j++) {
+            if (j < graph_lengths.at(b)) {
+                graph_gather_indices_ra(b, j) = cur; // gather indices
+            } else {
+                graph_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
+            }
+            if (concat_edges) {
+                cur += 1;
+            }else {
+                cur += 3;  // essentially multiple each index by 3
+            }
+        }
+    }
+
     d["src_tokens"] = src_tokens;
     d["src_lengths"] = src_lengths;
-    d["prev_output_tokens"] = task;
+    d["prev_output_tokens"] = task;  // fairseq naming convention, yuck
+    d["task_start_indices"] = task_start_indices;
     d["task_lengths"] = task_lengths;
+    d["task_gather_indices"] = task_gather_indices;
 
-    if (query.size()) {
+    if (!query.empty()) {
         d["query_start_indices"] = query_start_indices;
         d["query_lengths"] = query_lengths;
     }else {
@@ -793,7 +836,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     }
     d["graph_start_indices"] = graph_start_indices;
     d["graph_lengths"] = graph_lengths;
-    d["task_start_indices"] = task_start_indices;
+    d["graph_gather_indices"] = graph_gather_indices;
 
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
     d["distances"] = bd;
