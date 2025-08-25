@@ -294,6 +294,58 @@ py::array_t<T, py::array::c_style> batch_ground_truths(
 
 
 template<typename T>
+pair<py::array_t<T, py::array::c_style> , py::array_t<T, py::array::c_style>> batch_ground_truth_gather_indices(
+    const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
+    const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+    const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+    // indices are nodes, values are distances
+    auto max_E = 0;
+    for (auto &m: batched_ground_truths) {
+        if (static_cast<int>((*m).size()) > max_E) {
+            max_E = (*m).size();
+        }
+    }
+    auto max_k = 0;  // number of non -1 entries in ground truths
+    for (auto b = batched_ground_truths.begin(); b != batched_ground_truths.end(); ++b) {
+        for (int j = 0; j < static_cast<int>((**b).size()); j++) {
+            int count = 0;
+            for (int k = 0; k < static_cast<int>((**b)[j].size()); k++) {
+                if ((**b)[j][k] >= 0 && ((cuttoff <= 0) || ((**b)[j][k] < cuttoff))) {
+                    count += 1;
+                }
+            }
+            if (count > max_k) {
+                max_k = count;
+            }
+        }
+    }
+
+    py::array_t<T, py::array::c_style> arr_indices({static_cast<int>(batched_ground_truths.size()), max_E, max_k});
+    py::array_t<T, py::array::c_style> arr_distances({static_cast<int>(batched_ground_truths.size()), max_E, max_k});
+    arr_indices[py::make_tuple(py::ellipsis())] = 0;; // initialize array
+    arr_distances[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
+    auto ra_i = arr_indices.mutable_unchecked();
+    auto ra_d = arr_distances.mutable_unchecked();
+    auto it1 = batched_ground_truths.begin();
+    auto it2 = batched_node_shuffle_map.begin();
+    int cur = 0;
+    for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2, cur++) {
+        for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+            auto cur_gt = 0;
+            for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
+                if (((**it1)[j][k] >= 0) && ((cuttoff <= 0) || ((**it1)[j][k] < cuttoff))) {
+                    ra_i(cur, j, cur_gt) = (**it2)[k];
+                    ra_d(cur, j, cur_gt) = (**it1)[j][k];
+                    cur_gt += 1;
+                }
+            }
+        }
+    }
+    return make_pair(arr_indices, arr_distances);
+}
+
+
+template<typename T>
 py::array_t<T, py::array::c_style> batch_paths(const list<unique_ptr<vector<int> > > &batched_paths,
                                                const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
                                                int pad = -1) {
@@ -841,7 +893,15 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
-    d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    // d["ground_truths"] = batch_ground_truths<int>(batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    // these are [bs, num_edges, vocab_size] and as distances.
+    // This is a big tensor due to vocab mapping since vocab_size >> num_nodes.
+    // for the loss it is better to gather_indices so ground-truth labels are [bs, num_edges, max_k]
+    // with the distances as [bs, num_edges, max_k] where max_k is num_nodes for a single connected-component graph
+    auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>(
+        batched_ground_truths, batched_node_shuffle_map, max_vocab);
+    d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
+    d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
     d["graph_type"] = graph_type;
     d["task_type"] = task_type;
     d["is_flat_model"] = is_flat_model;

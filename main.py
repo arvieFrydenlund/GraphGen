@@ -111,7 +111,10 @@ def get_batch(args, batch_size=20):
         raise NotImplementedError
     return d_n
 
-def _t_reconstruct(args, d, batch_size=20, plot=False):
+def _t_reconstruct(args, d, batch_size=20, plot=True):
+
+    np.set_printoptions(threshold=np.inf)
+
     args.task_type = 'shortest_path'
     d_n = get_batch(args, batch_size)
 
@@ -163,7 +166,7 @@ if __name__ == '__main__':
 
 
     # h = pydoc.render_doc(generator, "Help on %s")
-    print(generator.help_str() + '\n\n\n')
+    # print(generator.help_str() + '\n\n\n')
     print('\n\nStarting Testing')
 
     print(f'Random seed is {generator.get_seed()}')

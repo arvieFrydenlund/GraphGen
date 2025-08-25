@@ -69,7 +69,7 @@ def get_args_parser():
     parser.add_argument('--min_query_size', type=int, default=2)
 
     # tokenization settings
-    parser.add_argument('--is_causal', action='store_true', default=False)
+    parser.add_argument('--is_causal', action='store_true', default=True)
     parser.add_argument('--shuffle_edges', action='store_false', default=True)
     parser.add_argument('--shuffle_nodes', action='store_false', default=True)
     parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
@@ -277,6 +277,8 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
         task_start_indices = batched_dict['task_start_indices']
         task_lengths = batched_dict['task_lengths']
         task_gather_indices = batched_dict['task_gather_indices']
+        ground_truths_gather_indices = batched_dict["ground_truths_gather_indices"]
+        ground_truths_gather_distances = batched_dict["ground_truths_gather_distances"]
 
         print('is_flat_model', batched_dict['is_flat_model'])
 
@@ -301,13 +303,17 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
         for id in ids:
             print('\n\nID: ', id)
-            print('src_tokens[id]', src_tokens[id, :, 0] if src_tokens.ndim > 2 else src_tokens[id, :])
+            # print('src_tokens[id]', src_tokens[id, :, 0] if src_tokens.ndim > 2 else src_tokens[id, :])
+            print('src_tokens[id]\n', src_tokens[id].transpose())
             print('range         ', np.arange(src_tokens.shape[1]))
             print('query_start_indices[id]',  query_start_indices[id], 'length ', query_lengths[id])
             print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
             print('graph_gather_indices[id]', graph_gather_indices[id])
+            print('task[id]', task[id, :, 0] if task.ndim > 2 else task[id, :])
             print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
             print('task_gather_indices[id]', task_gather_indices[id], 'src_size', src_tokens.shape[1])
+            print('ground_truths_gather_indices[id]\n', ground_truths_gather_indices[id].transpose())
+            print('ground_truths_gather_distances[id]\n', ground_truths_gather_distances[id].transpose())
 
             query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
             edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
@@ -333,9 +339,10 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
                 pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
             print('edge_list', edge_list)
-            r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
-                                   edge_list, query, task_input, task_targets, pos=pos_i)
-            reconstructions.append(r)
+            if nx is not None:
+                r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
+                                       edge_list, query, task_input, task_targets, pos=pos_i)
+                reconstructions.append(r)
 
 
     return reconstructions
