@@ -6,7 +6,8 @@ import numpy as np
 
 try:
     import networkx as nx
-except ImportError:
+except ImportError as e:
+    print(f"NetworkX is not installed or broken. {e}")
     nx = None
 
 from sympy.polys.polyconfig import query
@@ -69,7 +70,7 @@ def get_args_parser():
     parser.add_argument('--min_query_size', type=int, default=2)
 
     # tokenization settings
-    parser.add_argument('--is_causal', action='store_true', default=True)
+    parser.add_argument('--is_causal', action='store_true', default=False)
     parser.add_argument('--shuffle_edges', action='store_false', default=True)
     parser.add_argument('--shuffle_nodes', action='store_false', default=True)
     parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')

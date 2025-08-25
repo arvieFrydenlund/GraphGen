@@ -595,7 +595,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto src_lengths = py::array_t<int, py::array::c_style>(batch_size);
     src_lengths[py::make_tuple(py::ellipsis())] = 2 + num_thinking_tokens; // initialize array
 
-
+    // we do not add the end marker as part of the task length but do include it in the task vector
+    // this is an annoying thing for the criterion
     auto src_len_ra = src_lengths.mutable_unchecked();
     if (task_type == "shortest_path" || task_type == "path") {
         // The issue here is that we need to know the size of max label before making tensor
@@ -619,7 +620,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             batched_label_smoothing[b] = labels;
         }
 
-        task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 2, max_k});
+        task = py::array_t<int, py::array::c_style>({batch_size, max_path_length + 3, max_k});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         max_task_length = max_path_length + 3; // +2 for start and end markers, +1 for end seq marker
         query_lengths[py::make_tuple(py::ellipsis())] = 4; // initialize array
@@ -643,7 +644,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                 }
             }
             ra(b, path_length + 1, 0) = task_end_marker;
-            ra_t_lengths(b) = path_length + 2; // +2 for start and end task markers,
+            ra(b, path_length + 2, 0) = end_marker;
+            ra_t_lengths(b) = path_length + 2; // +2 for start and end task markers, but not end seq marker
             if (is_flat_model) {
                 src_len_ra(b) += path_length + 2;
             }
@@ -657,10 +659,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
         // only one token but has label smoothing, so 3 is special tokens
-        task = py::array_t<int, py::array::c_style>({batch_size, 3, max_center_task_len + 2});
+        task = py::array_t<int, py::array::c_style>({batch_size, 4, max_center_task_len + 2});
         task[py::make_tuple(py::ellipsis())] = padding; // initialize array
         max_task_length = 4; // 1 for task, +2 for start and end task markers, +1 for end seq marker
-        task_lengths[py::make_tuple(py::ellipsis())] = 3; // +2 for start and end task markers,
+        task_lengths[py::make_tuple(py::ellipsis())] = 3; // see above
         query = vector<vector<int> >(batch_size);
         query_lengths[py::make_tuple(py::ellipsis())]  = 0; // initialize array
 
@@ -687,6 +689,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                 ra(b, 1, j) = (**it2)[node];
             }
             ra(b, 2, 0) = task_end_marker;
+            ra(b, 3, 0) = end_marker;
             ra_q_lengths(b) = query[b].size();
             if (is_flat_model) {
                 src_len_ra(b) += task_length + 2;
@@ -912,5 +915,6 @@ inline py::dict package_for_model() {
     py::dict d;
     return d;
 }
+
 
 #endif //UTILS_H
