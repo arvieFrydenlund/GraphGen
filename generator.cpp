@@ -360,6 +360,12 @@ py::array_t<int, py::array::c_style> verify_paths(py::array_t<T, py::array::c_st
     for (auto b = 0; b < batch_size; b++) {
         auto start = queries.at(b, 0);  //paths.at(b, 0);
         auto end = queries.at(b, 1); //paths.at(b, lengths.at(b) - 1);
+        // check start and end of path match query
+        if (start != paths.at(b, 0) || end != paths.at(b, lengths.at(b) - 1)) {
+            ra(b) = -1;
+            continue;
+        }
+        // check there exists a path between start and end
         auto shortest_distance = distances.at(b, start, end);
         if (shortest_distance < 0 || shortest_distance > inf - 1) {
             ra(b) = -1;
