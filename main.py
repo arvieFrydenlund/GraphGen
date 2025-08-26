@@ -140,14 +140,18 @@ def _t_verify_paths(args, d, batch_size=20):
     task_start_indices = d_n['task_start_indices'] + 1
     task_lengths = d_n['task_lengths'] - 2
 
+    query_start_indices = d_n['query_start_indices'] + 1
+
     gt_paths = np.ones((src_tokens.shape[0], max(task_lengths)), dtype=np.int32)
+    queries = np.ones((src_tokens.shape[0], 2), dtype=np.int32)
     for b in range(src_tokens.shape[0]):
         gt_paths[b, :task_lengths[b]] = src_tokens[b, task_start_indices[b]:task_start_indices[b] + task_lengths[b], 0]
+        queries[b, 0] = src_tokens[b, query_start_indices[b], 0]
+        queries[b, 1] = src_tokens[b, query_start_indices[b] + 1, 0]
 
     print(gt_paths, 'should be all ones')
     # print(distances[0])
-
-    verify = generator.verify_paths(distances, gt_paths, task_lengths)
+    verify = generator.verify_paths(distances, queries, gt_paths, task_lengths)
     print(verify)
 
 
@@ -188,7 +192,7 @@ if __name__ == '__main__':
     # _t_batched_graphs_flat_model()
 
 
-    _t_reconstruct(args, d)
-    # _t_verify_paths(args, d)
+    # _t_reconstruct(args, d)
+    _t_verify_paths(args, d)
 
     print('\n\nDone Testing')

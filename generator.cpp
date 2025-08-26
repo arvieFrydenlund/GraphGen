@@ -349,6 +349,7 @@ int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path
 
 template<typename T>
 py::array_t<int, py::array::c_style> verify_paths(py::array_t<T, py::array::c_style> &distances,
+                                                  py::array_t<T, py::array::c_style> &queries,
                                                   py::array_t<T, py::array::c_style> &paths,
                                                   py::array_t<T, py::array::c_style> &lengths) {
     // batch version [batch_size, vocab_size, vocab_size]
@@ -357,8 +358,8 @@ py::array_t<int, py::array::c_style> verify_paths(py::array_t<T, py::array::c_st
     out[py::make_tuple(py::ellipsis())] = 1; // initialize array to true
     auto ra = out.mutable_unchecked();
     for (auto b = 0; b < batch_size; b++) {
-        auto start = paths.at(b, 0);
-        auto end = paths.at(b, lengths.at(b) - 1);
+        auto start = queries.at(b, 0);  //paths.at(b, 0);
+        auto end = queries.at(b, 1); //paths.at(b, lengths.at(b) - 1);
         auto shortest_distance = distances.at(b, start, end);
         if (shortest_distance < 0 || shortest_distance > inf - 1) {
             ra(b) = -1;
@@ -1240,11 +1241,12 @@ PYBIND11_MODULE(generator, m) {
           "Batch varies the that any predicted paths are valid given the distance matrices.\n"
           "Parameters:\n\t"
           "distances: [batch_size, vocab_size, vocab_size]\n\t"
+          "queries: [batch_size, 2] of start, end\n\t"
           "paths: [batch_size, max_path_length]\n\t"
           "path_lengths: [batch_size]\n\t"
           "Returns:\n\t"
           "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
-          py::arg("distances"), py::arg("paths"), py::arg("path_lengths"));
+          py::arg("distances"), py::arg("queries"), py::arg("paths"), py::arg("path_lengths"));
 
     // single graph generation
     m.def("erdos_renyi", &erdos_renyi,

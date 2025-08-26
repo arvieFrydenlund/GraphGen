@@ -305,14 +305,15 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
         for id in ids:
             print('\n\nID: ', id)
             # print('src_tokens[id]', src_tokens[id, :, 0] if src_tokens.ndim > 2 else src_tokens[id, :])
+            print('range         \n',
+                  np.arange(src_tokens.shape[1]))
             print('src_tokens[id]\n', src_tokens[id].transpose())
-            print('range         ', np.arange(src_tokens.shape[1]))
             print('query_start_indices[id]',  query_start_indices[id], 'length ', query_lengths[id])
             print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
             print('graph_gather_indices[id]', graph_gather_indices[id])
-            print('task[id]', task[id, :, 0] if task.ndim > 2 else task[id, :])
+            print('task[id]', task[id, :, 0] if task.ndim > 2 else task[id, :], 'tensor length', task.shape[1], 'task_lengths', task_lengths[id])
             print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
-            print('task_gather_indices[id]', task_gather_indices[id], 'src_size', src_tokens.shape[1])
+            print('task_gather_indices[id]', task_gather_indices[id], 'length', task_gather_indices.shape[1])
             print('ground_truths_gather_indices[id]\n', ground_truths_gather_indices[id].transpose())
             print('ground_truths_gather_distances[id]\n', ground_truths_gather_distances[id].transpose())
 
