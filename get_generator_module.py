@@ -340,6 +340,14 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
             if pos_i is not None:
                 pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
+
+            def is_directed(graph_type):
+                return graph_type in ('path_star', 'balanced')
+
+            # sort edge list
+            edge_list = [sorted(e) if not is_directed(batched_dict['graph_type']) else e for e in edge_list]
+            edge_list = sorted(edge_list, key=lambda x: (x[0], x[1]))
+
             print('edge_list', edge_list)
             if nx is not None:
                 r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],

@@ -35,7 +35,7 @@ const int inf = std::numeric_limits<int>::max() / 8;  // careful because we add 
 
 template <typename D>  // undirectedS  or directedS
 using Graph = boost::adjacency_list<
-                                    boost::vecS            // edge list
+                                    boost::setS            // edge set!  otherwise this allows for edge duplicates
                                   , boost::vecS            // vertex list
                                   , D    // directedness
                                   , boost::no_property     // property associated with vertices, float or int etc.
