@@ -265,10 +265,18 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
             auto len_ = d1(gen);
             // get all paths of that length
             auto set_of_paths = vector<pair<int, int> >();
-            for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
-                for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
-                    if ((*distances_ptr)[i][j] == len_) {
-                        set_of_paths.push_back(make_pair(i, j));
+            if (start != -1 && end == -1 ) { // known start
+                for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
+                    if ((*distances_ptr)[start][j] == len_) {
+                        set_of_paths.push_back(make_pair(start, j));
+                    }
+                }
+            } else {
+                for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
+                    for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
+                        if ((*distances_ptr)[i][j] == len_) {
+                            set_of_paths.push_back(make_pair(i, j));
+                        }
                     }
                 }
             }
@@ -954,6 +962,173 @@ inline py::dict euclidean_n(
 }
 
 
+inline py::dict random_tree_n(
+    const int min_num_nodes, int max_num_nodes, vector<float> &probs, const int max_depth,
+    const int c_min = 75, const int c_max = 125,
+    const string &task_type = "shortest_path",
+    const int max_path_length = 10, const int min_path_length = 1,
+    const bool start_at_root = true,
+    int max_query_size = -1, const int min_query_size = 2,
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
+    const bool is_flat_model = true,
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
+    if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
+    if (max_num_nodes == -1) {
+        max_num_nodes = min_num_nodes;
+    }
+    if (max_vocab == -1) {
+        max_vocab = max_num_nodes;
+    }
+    if (max_vocab - min_vocab < max_num_nodes) {
+        auto s = "Invalid arguments: max_vocab - min_vocab < max_num_nodes:  " +
+                 to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
+        throw std::invalid_argument(s);
+    }
+
+    float sum = 0.0;
+    for (auto p : probs) {
+        sum += p;
+    }
+    if ( abs(sum - 1.0) > 0.0001 ) {
+        throw invalid_argument("probs must sum to 1");
+    }
+    if ( max_depth <= 0  && max_num_nodes <= 0 ) {
+        throw invalid_argument("must provide max_depth or num_nodes");
+    }
+
+    if (c_min > c_max) { throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
+    if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
+    if (min_path_length > max_path_length) { throw std::invalid_argument("Invalid arguments: min_path_length > max_path_length"); }
+    if (num_thinking_tokens < 0) {
+        throw std::invalid_argument("Invalid arguments: num_thinking_tokens < 0");
+    }
+    if (!for_plotting && dictionary.empty()) {
+        throw std::invalid_argument("Invalid arguments: dictionary is empty.  Please set it first.");
+    }
+
+    auto batched_node_shuffle_map = list<unique_ptr<vector<int> > >();
+    auto batched_edge_list = list<unique_ptr<vector<pair<int, int> > > >();
+    auto batched_edge_list_lengths = list<int>();
+    auto batched_distances = list<unique_ptr<vector<vector<int> > > >();
+    auto batched_ground_truths = list<unique_ptr<vector<vector<int> > > >();
+    auto batched_paths = list<unique_ptr<vector<int> > >();
+    auto batched_path_lengths = list<int>();
+    auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
+    auto batched_center_lengths = list<pair<int, int> >();
+
+    int attempts = 0;
+    int num = 0;
+    while (num < batch_size && attempts < max_attempts) {
+        int num_nodes;
+        if (max_num_nodes == min_num_nodes) {
+            num_nodes = max_num_nodes;
+        } else {
+            uniform_int_distribution<int> d(min_num_nodes, max_num_nodes);
+            num_nodes = d(gen);
+        }
+        unique_ptr<Graph<boost::undirectedS> > g_ptr;
+
+        // auto graph_t = time_before();
+        int start = random_tree_generator(g_ptr, num_nodes, gen, probs, max_depth,false);
+        if (!start_at_root) {
+            start = -1;
+        }
+        // time_after(graph_t, "graph gen");
+        const auto N = num_vertices(*g_ptr);
+        const auto E = num_edges(*g_ptr);
+        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+            attempts += a;
+            continue;
+        }
+        auto edge_shuffle_map = get_edge_shuffle_map(E, shuffle_edges);
+        auto node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
+        batched_node_shuffle_map.push_back(make_unique<vector<int> >(node_shuffle_map));
+        // auto pack_t = time_before();
+
+        push_back_data<boost::undirectedS>(g_ptr, edge_shuffle_map,
+                                           batched_edge_list, batched_edge_list_lengths,
+                                           batched_distances, batched_ground_truths,
+                                           is_causal, task_type,
+                                           batched_paths, batched_path_lengths,
+                                           max_path_length, min_path_length, start, -1,
+                                           batched_centers, batched_center_lengths,
+                                           max_query_size, min_query_size
+        );
+        // time_after(pack_t, "pack");
+        num += 1;
+    }
+
+    if (for_plotting) {
+        auto d = package_for_plotting("random_tree", task_type,
+                                      attempts, max_attempts, min_vocab, max_vocab,
+                                      batched_node_shuffle_map,
+                                      batched_edge_list,
+                                      batched_edge_list_lengths,
+                                      batched_distances,
+                                      batched_ground_truths,
+                                      batched_paths,
+                                      batched_path_lengths
+        );
+        return d;
+    }
+    auto d = package_for_model("random_tree", task_type,
+                               attempts, max_attempts,
+                               min_vocab, max_vocab, dictionary,
+                               batched_node_shuffle_map,
+                               batched_edge_list,
+                               batched_edge_list_lengths,
+                               batched_distances,
+                               batched_ground_truths,
+                               batched_paths,
+                               batched_path_lengths,
+                               batched_centers,
+                               batched_center_lengths,
+                               concat_edges, query_at_end, num_thinking_tokens,
+                               is_flat_model);
+    return d;
+}
+
+// where probs is a numpy array
+/*
+inline py::dict random_tree_n(
+    const int min_num_nodes, int max_num_nodes,
+    const py::array_t<float, py::array::c_style> &probs_array,
+    const int max_depth,
+    const int c_min = 75, const int c_max = 125,
+    const string &task_type = "shortest_path",
+    const int max_path_length = 10, const int min_path_length = 1,
+    int max_query_size = -1, const int min_query_size = 2,
+    const bool is_causal = false, const bool shuffle_edges = false,
+    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
+    const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+    const bool concat_edges = true,
+    const bool query_at_end = true,
+    const int num_thinking_tokens = 0,
+    const bool is_flat_model = true,
+    const bool for_plotting = false,
+    const py::kwargs& kwargs = py::kwargs()) {
+    auto probs = vector<float>();
+    auto ra = probs_array.unchecked();
+    for (ssize_t i = 0; i < ra.shape(0); i++) {
+        probs.push_back(ra(i));
+    }
+    return random_tree_n(min_num_nodes, max_num_nodes, probs, max_depth, c_min, c_max,
+                         task_type, max_path_length, min_path_length,
+                         max_query_size, min_query_size,
+                         is_causal, shuffle_edges, shuffle_nodes,
+                         min_vocab, max_vocab,
+                         batch_size, max_edges, max_attempts,
+                         concat_edges, query_at_end, num_thinking_tokens,
+                         is_flat_model, for_plotting, kwargs);
+}
+*/
+
 inline py::dict path_star_n(
     const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
     const string &task_type = "shortest_path",
@@ -1469,6 +1644,59 @@ PYBIND11_MODULE(generator, m) {
           py::arg("task_type") = "shortest_path",
           py::arg("max_path_length") = 10,
           py::arg("min_path_length") = 1,
+          py::arg("max_query_size") = -1,
+          py::arg("min_query_size") = 2,
+          py::arg("is_causal") = false,
+          py::arg("shuffle_edges") = false,
+          py::arg("shuffle_nodes") = false,
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("max_edges") = 512,
+          py::arg("max_attempts") = 1000,
+          py::arg("concat_edges") = true,
+          py::arg("query_at_end") = true,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("is_flat_model") = true,
+          py::arg("for_plotting") = false);
+
+    m.def("random_tree_n", &random_tree_n,
+          "Generate a batch of random tree graphs\nParameters:\n\t"
+          "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
+          "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
+          "max_branching: max branching factor.\n\t"
+          "task_type: type of task to sample.\n\t"
+          "max_query_size: max number of query nodes to sample \n\t"
+          "min_query_size: min number of query nodes to sample\n\t"
+          "is_causal: if true then return causally masked ground_truths\n\t"
+          "shuffle_edges: if true then shuffle edges\n\t"
+          "shuffle_nodes: if true then shuffle nodes\n\t"
+          "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
+          "max_vocab: max vocab size to map nodes into.\n"
+          "Returns a dict with the following keys (N is the max_vocab):\n\t"
+          "edge_list: numpy [B, E, 2] of edges\n\t"
+          "edge_list_lengths: numpy [B] of edge list lengths\n\t"
+          "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
+          "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
+          "ground_truths: numpy [B, E, N] of ground truths\n\t"
+          "paths: numpy [B, L] of paths\n\t"
+          "path_lengths: numpy [B] of path lengths\n\t"
+          "node_map: numpy [B, N] of node map\n\t"
+          "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
+          "num_attempts: int of number of attempts to generate the graph\n\t"
+          "vocab_min_size: int of min vocab size\n\t"
+          "vocab_max_size: int of max vocab size\n\t",
+
+          py::arg("min_num_nodes"),
+          py::arg("max_num_nodes"),
+          py::arg("probs") = vector<float>{0.5, 0.5},
+          py::arg("max_depth") = -1.0,
+          py::arg("c_min") = 75,
+          py::arg("c_max") = 125,
+          py::arg("task_type") = "shortest_path",
+          py::arg("max_path_length") = 10,
+          py::arg("min_path_length") = 1,
+          py::arg("start_at_root") = true,
           py::arg("max_query_size") = -1,
           py::arg("min_query_size") = 2,
           py::arg("is_causal") = false,

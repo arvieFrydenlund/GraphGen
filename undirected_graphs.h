@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <queue>
 
 /*
  * Undirected graphs and utils, read before directed_graphs.h and py_bindings.h
@@ -356,5 +357,62 @@ inline int euclidean_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
     return 0;
 }
 
+inline bool node_check(const int cur_node, const int num_nodes) {
+    if (num_nodes > 0 && cur_node >= num_nodes) {
+        return false;
+    }
+    return true;
+}
+
+inline bool depth_check(const int cur_depth, const int max_depth) {
+    if (max_depth > 0 && cur_depth >= max_depth) {
+        return false;
+    }
+    return true;
+}
+
+inline int random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  const int num_nodes, std::mt19937 &gen,
+    vector<float> &probs, const int max_depth, const bool verbose = false) {
+
+    // check probs sum to one
+    /*  Do these on the batch check
+    float sum = 0.0;
+    for (auto p : probs) {
+        sum += p;
+    }
+    if ( abs(sum - 1.0) > 0.0001 ) {
+        throw invalid_argument("probs must sum to 1");
+    }
+    if ( max_depth <= 0  && num_nodes <= 0 ) {
+        throw invalid_argument("must provide max_depth or num_nodes");
+    }
+    */
+
+    g_ptr = make_unique<Graph<boost::undirectedS>>();
+
+    int start = 0;
+    int cur_depth = 0;
+    int cur_node = start;
+    // make expansion queue of leaf nodes
+    std:queue<int> expansion_q{};
+    expansion_q.push(cur_node);
+
+    while ( depth_check(cur_depth, max_depth) && node_check(cur_node, num_nodes) ) {
+        while ( !expansion_q.empty() ) {
+            auto to_expand = expansion_q.front();
+            expansion_q.pop();
+            // sample number of children from probs
+            std::discrete_distribution<int> d(probs.begin(), probs.end());
+            int num_children = d(gen);
+            for ( int i = 0; i < num_children && node_check(cur_node, num_nodes - 1); i++ ) {
+                cur_node++;
+                boost::add_edge(to_expand, cur_node, *g_ptr);
+                expansion_q.push(cur_node);
+            }
+        }
+        cur_depth++;
+    }
+    return start;
+}
 
 #endif //GRAPH_H
