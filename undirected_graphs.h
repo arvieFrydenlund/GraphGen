@@ -403,7 +403,7 @@ inline int random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
             expansion_q.pop();
             // sample number of children from probs
             std::discrete_distribution<int> d(probs.begin(), probs.end());
-            int num_children = d(gen);
+            int num_children = d(gen) + 1;  // at least one child
             for ( int i = 0; i < num_children && node_check(cur_node, num_nodes - 1); i++ ) {
                 cur_node++;
                 boost::add_edge(to_expand, cur_node, *g_ptr);

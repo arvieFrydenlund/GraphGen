@@ -42,6 +42,11 @@ def get_args_parser():
     parser.add_argument('--radius', type=float, default=-1.0,
                         help="Radius for euclidean graphs, -1.0 means random")
 
+    # random tree graphs settings
+    parser.add_argument('--probs', type=float, nargs='+', default=[0.5, 0.5],
+                        help="Probabilities for random tree graphs, should sum to 1.0")
+    parser.add_argument('--max-depth', type=int, default=7)
+
     # path star graphs settings
     parser.add_argument('--min_num_arms', type=int, default=2,
                         help="Minimum number of arms for star graphs")

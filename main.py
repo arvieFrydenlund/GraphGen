@@ -103,6 +103,8 @@ def get_batch(args, batch_size=20):
         d_n = generator.erdos_renyi_n(**vars(args))
     elif args.graph_type == 'euclidean':
         d_n = generator.euclidean_n(**vars(args))
+    elif args.graph_type == 'random_tree':
+        d_n = generator.random_tree_n(**vars(args))
     elif args.graph_type == 'path_star':
         d_n = generator.path_star_n(**vars(args))
     elif args.graph_type == 'balanced':
@@ -191,7 +193,7 @@ if __name__ == '__main__':
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
 
-
+    args.graph_type = 'random_tree'
     _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
 
