@@ -394,7 +394,7 @@ inline int random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  
     int cur_depth = 0;
     int cur_node = start;
     // make expansion queue of leaf nodes
-    std:queue<int> expansion_q{};
+    queue<int> expansion_q{};
     expansion_q.push(cur_node);
 
     while ( depth_check(cur_depth, max_depth) && node_check(cur_node, num_nodes) ) {

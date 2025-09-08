@@ -194,6 +194,7 @@ if __name__ == '__main__':
     # _t_batched_graphs_flat_model()
 
     args.graph_type = 'random_tree'
+    args.start_at_root = True
     _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
 
