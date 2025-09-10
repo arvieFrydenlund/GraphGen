@@ -908,6 +908,30 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     d["graph_type"] = graph_type;
     d["task_type"] = task_type;
     d["is_flat_model"] = is_flat_model;
+
+    // also want stats
+    // 1) length of task (no special tokens),  actually already have this just minus 2
+    // 2) number of nodes
+    // 3) number of edges
+
+    py::array_t<int, py::array::c_style> num_nodes(batch_size);
+    py::array_t<int, py::array::c_style> num_edges(batch_size);
+    auto nn_ra = num_nodes.mutable_unchecked();
+    auto ne_ra = num_edges.mutable_unchecked();
+    auto it = batched_edge_list.begin();
+    for (int b = 0; b < batch_size; b++) {
+        ne_ra(b) = static_cast<int>((*it)->size());
+        // number of nodes as unique values in edge list, could just pass in the number form the graphs
+        set<int> nodes;
+        for (auto &p: **it) {
+            nodes.insert(p.first);
+            nodes.insert(p.second);
+        }
+        nn_ra(b) = nodes.size();
+        ++it;
+    }
+    d["num_nodes"] = num_nodes;
+    d["num_edges"] = num_edges;
     return d;
 }
 
