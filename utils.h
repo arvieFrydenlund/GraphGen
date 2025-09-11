@@ -922,6 +922,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     for (int b = 0; b < batch_size; b++) {
         ne_ra(b) = static_cast<int>((*it)->size());
         // number of nodes as unique values in edge list, could just pass in the number form the graphs
+        // todo
         set<int> nodes;
         for (auto &p: **it) {
             nodes.insert(p.first);

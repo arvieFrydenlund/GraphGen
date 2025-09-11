@@ -17,6 +17,9 @@
 #include <limits>
 #include <cmath>
 
+#include <thread>
+#include <mutex>
+
 using namespace std;
 
 namespace py = pybind11;
@@ -41,6 +44,27 @@ inline void set_seed(const unsigned int seed = 0) {
 inline int rand_int(int min, int max) {
     std::uniform_int_distribution<int> d(min, max);
     return d(gen);
+}
+
+/* ******************************************************
+ *  For curriculum learning, change sampling probability
+ *  This is not used.  Only worked via python due to using processes not threads.
+ *  *****************************************************/
+
+std::mutex global_mutex; // Mutex to protect the global variable
+inline vector<float> g_task_sample_dist_;
+
+inline void set_task_sample_dist(const vector<float> &task_sample_dist) {
+    std::lock_guard<std::mutex> lock(global_mutex); // Acquire lock
+    g_task_sample_dist_ = vector<float>(task_sample_dist.size(), 0.0);
+    for (size_t i = 0; i < task_sample_dist.size(); i++) {
+        g_task_sample_dist_[i] = task_sample_dist[i];
+    }
+    // release lock when going out of scope
+}
+
+inline vector<float> get_task_sample_dist() {
+    return g_task_sample_dist_;
 }
 
 /* ************************************************
@@ -247,13 +271,24 @@ vector<pair<int, int> > get_edge_list(unique_ptr<Graph<D> > &g_ptr, vector<int> 
 
 
 inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distances_ptr,
-                               const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1) {
+                               const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
+                               const vector<float> &task_sample_dist = vector<float>()) {
     /*
+     * This is hardcoded for integer path lengths
      * Uniform sample paths of length between min_path_length and max_path_length
      * return length as vector of node ids
      * This is hardcoded for checking for distances of 1 as a connection
      */
-    uniform_int_distribution<int> d1(min_path_length, max_path_length);
+
+    // define d1
+    std::discrete_distribution<int> d1;
+    if (task_sample_dist.empty()) {
+        vector<float> uweights(max_path_length - min_path_length + 1, 1.0);
+        d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
+    } else {
+        d1 = std::discrete_distribution<int>(task_sample_dist.begin(), task_sample_dist.end());
+    }
+
     pair<int, int> start_end;
     if (start != -1 && end != -1) {
         start_end = make_pair(start, end);
@@ -262,19 +297,19 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
         // could avoid while loop by making set of sets of paths and sampling that but may not as fast?
         while (true) {
             // sample a path of length between min_path_length and max_path_length
-            auto len_ = d1(gen);
+            auto sampled_path_length = d1(gen) + min_path_length;
             // get all paths of that length
             auto set_of_paths = vector<pair<int, int> >();
             if (start != -1 && end == -1 ) { // known start
                 for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
-                    if ((*distances_ptr)[start][j] == len_) {
+                    if ((*distances_ptr)[start][j] == sampled_path_length) {
                         set_of_paths.push_back(make_pair(start, j));
                     }
                 }
             } else {
                 for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
                     for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
-                        if ((*distances_ptr)[i][j] == len_) {
+                        if ((*distances_ptr)[i][j] == sampled_path_length) {
                             set_of_paths.push_back(make_pair(i, j));
                         }
                     }
@@ -289,10 +324,19 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
             attempts += 1;
             if (attempts > 10) {
                 // pick a random path after too many attempts
-                uniform_int_distribution<int> d3(0, (*distances_ptr).size() - 1);
-                auto i = d3(gen);
-                auto j = d3(gen);
-                start_end = make_pair(i, j);
+                while (true) {
+                    uniform_int_distribution<int> d3(0, (*distances_ptr).size() - 1);
+                    auto i = d3(gen);
+                    auto j = d3(gen);
+                    if ((*distances_ptr)[i][j] < inf && (*distances_ptr)[i][j] > 0) {
+                        start_end = make_pair(i, j);
+                        break;
+                    }
+                    attempts += 1;
+                    if (attempts > 1000) {
+                        throw std::invalid_argument("Could not find a path in 1000 attempts.  This should never happen.");
+                    }
+                }
                 break;
             }
         }
@@ -1344,6 +1388,18 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_seed", &set_seed, "Sets random seed (unique to thread)", py::arg("seed") = 0);
     m.def("get_seed", &get_seed, "Gets random seed (unique to thread)");
     m.def("rand_int", &rand_int, "Gets random int (unique to thread)", py::arg("min") = 0, py::arg("max") = 100);
+
+    m.def("set_task_sample_dist", &set_task_sample_dist,
+          "Sets the task sampling distribution.  This is used to sample tasks during graph generation.\n"
+          "Parameters:\n\t"
+          "task_sample_dist: dict of str -> float\n\t"
+          "If empty then use uniform distribution over all tasks.\n",
+          py::arg("task_sample_dist"));
+
+    m.def("get_task_sample_dist", &get_task_sample_dist,
+          "Gets the task sampling distribution.\n"
+          "Returns:\n\t"
+          "task_sample_dist: dict of str -> float\n");
 
     // hashing test and validation sets
     m.def("get_validation_size", &get_validation_size,
