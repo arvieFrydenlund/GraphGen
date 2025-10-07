@@ -546,25 +546,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                                   const bool concat_edges = true,
                                   const bool query_at_end = false,
                                   const int num_thinking_tokens = 0,
-                                  const bool is_flat_model = true) {
-    /*
-     *  Package the data for a flat encoder-only or decoder-only model i.e. same layers over src and tgt
-     *  or non-flat encoder-encoder and encoder-decoder model i.e. different layers over src and tgt
-     *
-     *  src_tokens [batch_size, seq_len, num_input_tokens]
-     *  src_lengths [batch_size] in range [0, seq_len]
-     *  prev_output_tokens [batch_size, task_len, max_k], i.e. targets, where k is for label smoothing
-     *  graph_start_indices [batch_size]
-     *  graph_length [batch_size]
-     *  query_start_indices [batch_size]
-     *  query_length [batch_size]
-     *  task_start_indices [batch_size]
-     *  task_length [batch_size]
-     *  distances [batch_size, vocab_size, vocab_size]
-     *  ground_truths [batch_size, num_edges, vocab_size], graph reconstruction
-     *
-     */
-
+                                  const bool is_flat_model = true,
+                                  const bool align_prefix_front_pad = false) {
     py::dict d;
     add_arguments_to_dict(d, attempts, max_attempts, min_vocab, max_vocab,
         concat_edges, query_at_end, num_thinking_tokens, true, false);
@@ -727,17 +710,39 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
 
     // tgt-side ground-truths
     src_tokens[py::make_tuple(py::ellipsis())] = padding; // initialize array
+    auto curs = vector<int>(batch_size, 0); // current position in src_tokens
     auto ra = src_tokens.mutable_unchecked();
-
-    for (auto b = 0; b < batch_size; b++) {  // start-of-sequence marker
-        ra(b, 0, 0) = start_marker;
-        if (concat_edges) {  // non-graph tokens get duplicated
-            ra(b, 0, 1) = start_marker;
+    if (align_prefix_front_pad) { // count the max query and graph size, then front pad
+        int max_prefix_length = 0;
+        for (auto b = 0; b < batch_size; b++) {
+            auto pref_length = src_len_ra(b) - task_lengths.at(b); // query + graph + thinking tokens
+            if (pref_length > max_prefix_length) {
+                max_prefix_length = pref_length;
+            }
+        }
+        for (auto b = 0; b < batch_size; b++) {
+            auto front_pad = max_prefix_length - (src_len_ra(b) - task_lengths.at(b));
+            if (front_pad) {
+                for (int j = 0; j < front_pad; j++) {
+                    ra(b, curs[b], 0) = padding;
+                    if (concat_edges) {
+                        ra(b, curs[b], 1) = padding;
+                    }
+                    curs[b] += 1;
+                }
+            }
         }
     }
-    auto curs = vector<int>(batch_size, 1); // current position in src_tokens
-
-    if (query.size() && !query_at_end) {  // write in query before graph
+    // write in start-of-sequence marker
+    for (auto b = 0; b < batch_size; b++) {
+        ra(b, curs[b], 0) = start_marker;
+        if (concat_edges) {  // non-graph tokens get duplicated
+            ra(b, curs[b], 1) = start_marker;
+        }
+        curs[b] += 1;
+    }
+    // write in query if before graph
+    if (query.size() && !query_at_end) {
         query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -750,7 +755,6 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
-
     // write in graph edge list
     auto it1 = batched_edge_list.begin();
     auto it2 = batched_node_shuffle_map.begin();
@@ -785,8 +789,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             ++it2;
         }
     }
-
-    if (query.size() && query_at_end) {  // write in query if after graph
+    // write in query if after graph
+    if (query.size() && query_at_end) {
         query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -799,8 +803,8 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
-
-    if (num_thinking_tokens > 0) { // write in thinking tokens between query and task
+    // write in thinking tokens between query and task
+    if (num_thinking_tokens > 0) {
         auto thinking_token = dictionary["!"];
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
@@ -813,8 +817,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
-
-    // write in the task to source tokens
+    // write in the task to source tokens  (note that scratchpads are part of task already)
     if (is_flat_model and (not batched_path_lengths.empty() || not batched_center_lengths.empty())) {
         task_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
         for (auto b = 0; b < batch_size; b++) {
@@ -838,6 +841,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         task_start_indices[py::make_tuple(py::ellipsis())] = 0; // initialize array
     }
 
+    // now we can gather indices for the graphs, the queries, and the tasks
     auto task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_task_length});
     auto task_gather_indices_ra = task_gather_indices.mutable_unchecked();
     for (int b = 0; b < batch_size; b++) {
@@ -850,8 +854,6 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
-
-    // now may gather indices for the graphs, the queries, and the tasks
     auto max_graph_length = max(0, *max_element(batched_edge_list_lengths.begin(),
                                                           batched_edge_list_lengths.end()));
     auto graph_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_length});
