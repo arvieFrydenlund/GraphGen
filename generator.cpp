@@ -895,8 +895,10 @@ inline py::dict euclidean_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
+    const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
+
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -1000,7 +1002,8 @@ inline py::dict euclidean_n(
                                batched_centers,
                                batched_center_lengths,
                                concat_edges, query_at_end, num_thinking_tokens,
-                               is_flat_model);
+                               is_flat_model,
+                               align_prefix_front_pad);
     d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
     return d;
 }
@@ -1020,8 +1023,10 @@ inline py::dict random_tree_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
+    const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
+
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -1134,7 +1139,8 @@ inline py::dict random_tree_n(
                                batched_centers,
                                batched_center_lengths,
                                concat_edges, query_at_end, num_thinking_tokens,
-                               is_flat_model);
+                               is_flat_model,
+                               align_prefix_front_pad);
     return d;
 }
 
@@ -1184,8 +1190,10 @@ inline py::dict path_star_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
+    const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
+
     if (min_num_arms <= 0) { throw std::invalid_argument("Invalid arguments: min_num_arms <= 0"); }
     if (min_arm_length <= 0) { throw std::invalid_argument("Invalid arguments: min_arm_length <= 0"); }
     if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
@@ -1255,7 +1263,8 @@ inline py::dict path_star_n(
                                batched_centers,
                                batched_center_lengths,
                                concat_edges, query_at_end, num_thinking_tokens,
-                               is_flat_model);
+                               is_flat_model,
+                               align_prefix_front_pad);
     return d;
 }
 
@@ -1273,7 +1282,9 @@ inline py::dict balanced_n(
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
     const bool for_plotting = false,
+    const bool align_prefix_front_pad = false,
     const py::kwargs& kwargs = py::kwargs()) {
+
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -1376,7 +1387,8 @@ inline py::dict balanced_n(
                                batched_centers,
                                batched_center_lengths,
                                concat_edges, query_at_end, num_thinking_tokens,
-                               is_flat_model);
+                               is_flat_model,
+                               align_prefix_front_pad);
     return d;
 }
 
@@ -1656,6 +1668,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
 
     m.def("euclidean_n", &euclidean_n,
@@ -1714,6 +1727,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
 
     m.def("random_tree_n", &random_tree_n,
@@ -1767,6 +1781,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
 
     m.def("path_star_n", &path_star_n,
@@ -1816,6 +1831,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
 
     m.def("balanced_n", &balanced_n,
@@ -1872,5 +1888,6 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
 }
