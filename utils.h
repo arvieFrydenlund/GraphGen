@@ -697,9 +697,26 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
 
     auto num_input_tokens = (concat_edges) ? 2 : 1;
     int max_seq_len = 0;
-    for (int b = 0; b < batch_size; b++) {
-        if (src_len_ra(b) > max_seq_len) {
-            max_seq_len = src_len_ra(b);
+    int max_prefix_length = 0;
+
+    if (align_prefix_front_pad) { // count the max query and graph size, then front pad
+        auto src_len_with_padding = vector<int>(batch_size, 0);
+        for (auto b = 0; b < batch_size; b++) {
+            auto pref_length = src_len_ra(b) - task_lengths.at(b); // query + graph + thinking tokens
+            if (pref_length > max_prefix_length) {
+                max_prefix_length = pref_length;
+            }
+        }
+        for (auto b = 0; b < batch_size; b++) {
+            auto front_pad = max_prefix_length - (src_len_ra(b) - task_lengths.at(b));
+            src_len_with_padding[b] = src_len_ra(b) + front_pad;
+        }
+        max_seq_len = *max_element(src_len_with_padding.begin(), src_len_with_padding.end());
+    } else {
+        for (int b = 0; b < batch_size; b++) {
+            if (src_len_ra(b) > max_seq_len) {
+                max_seq_len = src_len_ra(b);
+            }
         }
     }
     auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, max_seq_len, num_input_tokens});
@@ -713,13 +730,6 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto curs = vector<int>(batch_size, 0); // current position in src_tokens
     auto ra = src_tokens.mutable_unchecked();
     if (align_prefix_front_pad) { // count the max query and graph size, then front pad
-        int max_prefix_length = 0;
-        for (auto b = 0; b < batch_size; b++) {
-            auto pref_length = src_len_ra(b) - task_lengths.at(b); // query + graph + thinking tokens
-            if (pref_length > max_prefix_length) {
-                max_prefix_length = pref_length;
-            }
-        }
         for (auto b = 0; b < batch_size; b++) {
             auto front_pad = max_prefix_length - (src_len_ra(b) - task_lengths.at(b));
             if (front_pad) {
@@ -910,6 +920,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     d["graph_type"] = graph_type;
     d["task_type"] = task_type;
     d["is_flat_model"] = is_flat_model;
+    d["concat_edges"] = concat_edges;
+    d["query_at_end"] = query_at_end;
+    d["num_thinking_tokens"] = num_thinking_tokens;
+    d["align_prefix_front_pad"] = align_prefix_front_pad;
 
     // also want stats
     // 1) length of task (no special tokens),  actually already have this just minus 2

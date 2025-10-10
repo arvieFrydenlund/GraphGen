@@ -779,6 +779,7 @@ inline py::dict erdos_renyi_n(
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
+    const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
     const py::kwargs& kwargs = py::kwargs()) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
@@ -877,7 +878,8 @@ inline py::dict erdos_renyi_n(
                              batched_centers,
                              batched_center_lengths,
                              concat_edges, query_at_end, num_thinking_tokens,
-                             is_flat_model
+                             is_flat_model,
+                             align_prefix_front_pad
     );
 }
 

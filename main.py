@@ -193,8 +193,9 @@ if __name__ == '__main__':
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
 
-    args.graph_type = 'random_tree'
-    args.start_at_root = True
+    # args.graph_type = 'random_tree'
+    # args.start_at_root = True
+    args.align_prefix_front_pad = True
     _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
 
