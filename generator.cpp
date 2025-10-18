@@ -282,8 +282,8 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
 
     // define d1
     std::discrete_distribution<int> d1;
-    if (task_sample_dist.empty()) {
-        vector<float> uweights(max_path_length - min_path_length + 1, 1.0);
+    if (task_sample_dist.empty()) { // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
+        vector<float> uweights(max_path_length - min_path_length + 1, 1.0);  // uniform distribution
         d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
     } else {
         d1 = std::discrete_distribution<int>(task_sample_dist.begin(), task_sample_dist.end());
@@ -302,14 +302,15 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
             auto set_of_paths = vector<pair<int, int> >();
             if (start != -1 && end == -1 ) { // known start
                 for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
-                    if ((*distances_ptr)[start][j] == sampled_path_length) {
+                    // +1 because distance is path length - 1
+                    if ((*distances_ptr)[start][j] + 1 == sampled_path_length) {
                         set_of_paths.push_back(make_pair(start, j));
                     }
                 }
             } else {
                 for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
                     for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
-                        if ((*distances_ptr)[i][j] == sampled_path_length) {
+                        if ((*distances_ptr)[i][j] + 1 == sampled_path_length) {
                             set_of_paths.push_back(make_pair(i, j));
                         }
                     }
@@ -1892,4 +1893,16 @@ PYBIND11_MODULE(generator, m) {
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
+
+    m.def("get_position_ids", &get_position_ids,
+          "Get the position ids for the pos embeddings.\nParameters:\n\t",
+          py::arg("src_tokens"),
+          py::arg("graph_start_indices"),
+          py::arg("graph_lengths"),
+          py::arg("task_start_indices"),
+          py::arg("pos_type") = "none",
+          py::arg("padding") = 1,
+          py::arg("mask_edges") = false,
+          py::arg("mask_value") = 0
+    );
 }

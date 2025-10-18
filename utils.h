@@ -530,7 +530,6 @@ inline py::dict package_for_plotting(const string &graph_type, const string &tas
     return d;
 }
 
-
 inline py::dict package_for_model(const string &graph_type, const string &task_type,
                                   const int attempts, const int max_attempts,
                                   const int min_vocab, const int max_vocab, map<std::string, int> &dictionary,
@@ -547,7 +546,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                                   const bool query_at_end = false,
                                   const int num_thinking_tokens = 0,
                                   const bool is_flat_model = true,
-                                  const bool align_prefix_front_pad = false) {
+                                  const bool align_prefix_front_pad = false,
+                                  const bool duplicate_edges = false // for undirected graphs with edge concatentation
+
+                                  ) {
     py::dict d;
     add_arguments_to_dict(d, attempts, max_attempts, min_vocab, max_vocab,
         concat_edges, query_at_end, num_thinking_tokens, true, false);
@@ -684,7 +686,11 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto it0 = batched_edge_list_lengths.begin();
     for (int b = 0; b < batch_size; b++) {  //  task length already added if not flat model
         if (concat_edges) {
-            src_len_ra(b) += static_cast<int>(*it0);
+            if (duplicate_edges) {
+                src_len_ra(b) += static_cast<int>(*it0) * 2;
+            } else {
+                src_len_ra(b) += static_cast<int>(*it0);
+            }
         } else {
             src_len_ra(b) += static_cast<int>(*it0) * 3;
         }
@@ -770,15 +776,29 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto it2 = batched_node_shuffle_map.begin();
     graph_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
     graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
-    if (concat_edges) {  // note: there are no graph markers
+    if (concat_edges & duplicate_edges) {  // for undirected graphs with edge concatentation
+        for (auto b = 0; b < batch_size; b++) {
+            auto cur = curs[b];
+            for (int j = 0; j < static_cast<int>((*it1)->size()) * 2;) {
+                ra(b, cur + j, 0) = (**it2)[(*it1)->at(j).first];
+                ra(b, cur + j, 1) =(**it2)[(*it1)->at(j).second];
+                curs[b] += 1;
 
+                ra(b, cur + j + 1, 0) = (**it2)[(*it1)->at(j).second];
+                ra(b, cur + j + 1, 1) =(**it2)[(*it1)->at(j).first];
+                curs[b] += 1;
+                j += 2;
+            }
+            ++it1;
+            ++it2;
+        }
+    } else if (concat_edges) {  // note: there are no graph markers
         for (auto b = 0; b < batch_size; b++) {
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
                 ra(b, cur + j, 0) = (**it2)[(*it1)->at(j).first];
                 ra(b, cur + j, 1) =(**it2)[(*it1)->at(j).second];
                 curs[b] += 1;
-
             }
             ++it1;
             ++it2;
@@ -955,6 +975,67 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
 inline py::dict package_for_model() {
     py::dict d;
     return d;
+}
+
+
+py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
+    const py::array_t<int, py::array::c_style> &src_tokens,
+    const py::array_t<int, py::array::c_style> &graph_start_indices,
+    py::array_t<int, py::array::c_style> &graph_lengths,
+    const py::array_t<int, py::array::c_style> &task_start_indices,
+    const string pos_type = "none",
+    const int padding = 1,
+    const bool mask_edges = false,  // for concated edges this allows true permutation invariance
+    const int mask_value = 0) {
+
+    // get shape of scr_tokens
+    py::buffer_info src_tokens_info = src_tokens.request();
+
+    auto shape = src_tokens.shape();
+    auto bs = shape[0];
+    auto seq_len = shape[1];
+    auto concat_edges = (src_tokens_info.shape.size() == 3 and shape[2] == 2);
+
+    auto start_pos = 0;
+    if (mask_value == 0) {
+        start_pos = 1;
+    }
+
+
+    /*
+     *
+     *
+     */
+
+
+    py::array_t<std::uint32_t, py::array::c_style> positions({static_cast<uint32_t>(bs), static_cast<uint32_t>(seq_len)});
+    auto src_ra = src_tokens.unchecked();
+    auto positions_ra = positions.mutable_unchecked();
+
+    for (auto b = 0; b < static_cast<int>(bs); b++) {
+        std::uint32_t pos = start_pos;
+        string cur_state="start";
+        for (auto s = 0; s < static_cast<int>(seq_len); s++) {
+            int token;
+            if (concat_edges) {
+                token = src_ra(b, s, 0);
+            } else {
+                token = src_ra(b, s);
+            }
+            if (token == padding) {
+                positions_ra(b, s) = mask_value;
+            } else {
+                if (mask_edges and s >= graph_start_indices.at(b) and s < graph_start_indices.at(b) + graph_lengths.at(b)) {
+                    // inside graph edge list
+                    positions_ra(b, s) = mask_value;
+                } else {
+                        positions_ra(b, s) = pos;
+                        pos += 1;
+                }
+            }
+        }
+    }
+   return positions;
 }
 
 
