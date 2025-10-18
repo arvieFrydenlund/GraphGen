@@ -983,7 +983,7 @@ py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
     const py::array_t<int, py::array::c_style> &graph_start_indices,
     py::array_t<int, py::array::c_style> &graph_lengths,
     const py::array_t<int, py::array::c_style> &task_start_indices,
-    const string pos_type = "none",
+    const string pos_type = "flat",
     const int padding = 1,
     const bool mask_edges = false,  // for concated edges this allows true permutation invariance
     const int mask_value = 0) {
@@ -996,6 +996,8 @@ py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
     auto seq_len = shape[1];
     auto concat_edges = (src_tokens_info.shape.size() == 3 and shape[2] == 2);
 
+
+
     auto start_pos = 0;
     if (mask_value == 0) {
         start_pos = 1;
@@ -1007,35 +1009,70 @@ py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
      *
      */
 
+    if (pos_type == "flat") {
+        py::array_t<std::uint32_t, py::array::c_style> positions({static_cast<uint32_t>(bs), static_cast<uint32_t>(seq_len)});
+        auto src_ra = src_tokens.unchecked();
+        auto positions_ra = positions.mutable_unchecked();
 
-    py::array_t<std::uint32_t, py::array::c_style> positions({static_cast<uint32_t>(bs), static_cast<uint32_t>(seq_len)});
-    auto src_ra = src_tokens.unchecked();
-    auto positions_ra = positions.mutable_unchecked();
-
-    for (auto b = 0; b < static_cast<int>(bs); b++) {
-        std::uint32_t pos = start_pos;
-        string cur_state="start";
-        for (auto s = 0; s < static_cast<int>(seq_len); s++) {
-            int token;
-            if (concat_edges) {
-                token = src_ra(b, s, 0);
-            } else {
-                token = src_ra(b, s);
-            }
-            if (token == padding) {
-                positions_ra(b, s) = mask_value;
-            } else {
-                if (mask_edges and s >= graph_start_indices.at(b) and s < graph_start_indices.at(b) + graph_lengths.at(b)) {
-                    // inside graph edge list
+        for (auto b = 0; b < static_cast<int>(bs); b++) {
+            std::uint32_t pos = start_pos;
+            string cur_state="start";
+            for (auto s = 0; s < static_cast<int>(seq_len); s++) {
+                int token;
+                if (concat_edges) {
+                    token = src_ra(b, s, 0);
+                } else {
+                    token = src_ra(b, s);
+                }
+                if (token == padding) {
                     positions_ra(b, s) = mask_value;
                 } else {
+                    if (mask_edges and s >= graph_start_indices.at(b) and s < graph_start_indices.at(b) + graph_lengths.at(b)) {
+                        // inside graph edge list
+                        positions_ra(b, s) = mask_value;
+                    } else {
                         positions_ra(b, s) = pos;
                         pos += 1;
+                    }
                 }
             }
         }
+        return positions;
+    } else if (pos_type == "structured") {
+        py::array_t<std::uint32_t, py::array::c_style> positions({static_cast<uint32_t>(bs),
+            static_cast<uint32_t>(seq_len),  static_cast<uint32_t>(2)});
+        auto src_ra = src_tokens.unchecked();
+        auto positions_ra = positions.mutable_unchecked();
+
+        for (auto b = 0; b < static_cast<int>(bs); b++) {
+            std::uint32_t pos = start_pos;
+            string cur_state="start";
+            for (auto s = 0; s < static_cast<int>(seq_len); s++) {
+                int token;
+
+                if (concat_edges) {
+                    token = src_ra(b, s, 0);
+                } else {
+                    token = src_ra(b, s);
+                }
+                if (token == padding) {
+                    positions_ra(b, s) = mask_value;
+                } else {
+                    if (mask_edges and s >= graph_start_indices.at(b) and s < graph_start_indices.at(b) + graph_lengths.at(b)) {
+                        // inside graph edge list
+                        positions_ra(b, s) = mask_value;
+                    } else {
+                        positions_ra(b, s) = pos;
+                        pos += 1;
+                    }
+                }
+            }
+        }
+        return positions;
+
+    } else {
+        throw std::invalid_argument("Unknown position id type: " + pos_type);
     }
-   return positions;
 }
 
 
