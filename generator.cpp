@@ -157,7 +157,7 @@ inline bool task_type_check(const std::string &task_type) {
 
 
 /* ************************************************
- *  Dictionary for mapping to models vocabulary
+ *  Dictionary for mapping vocabulary to ids
  *  ***********************************************/
 
 static map<std::string, int> dictionary; // token to idx map
@@ -220,6 +220,81 @@ inline void set_default_dictionary(const int max_vocab = 100) {
 
 map<std::string, int> get_dictionary() {
     return dictionary;
+}
+
+
+/* ************************************************
+ *  Dictionary for mapping positions to ids
+ *  ***********************************************/
+
+static map<std::string, int> pos_dictionary; // token to idx map
+
+inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = false) {
+    if (verbose) {
+        cout << "Setting pos dictionary" << endl;
+    }
+    for (std::pair<py::handle, py::handle> item: py_dictionary) {
+        auto key = item.first.cast<std::string>();
+        auto value = item.second.cast<int>();
+        if (verbose) {
+            cout << "\tkey: " << key << ", value=" << value << endl;
+        }
+        pos_dictionary[key] = value;
+    }
+    // verify that all keys are present
+    vector<string> required_keys = {
+        "pad",
+        "misc_start",
+        "misc_end",
+        "query_start",
+        "query_end",
+        "graph_start",
+        "graph_end",
+        "graph_sub_start",
+        "graph_sub_end",
+        "task_start",
+        "task_end",
+    };
+    for (const auto &key : required_keys) {
+        if (pos_dictionary.find(key) == pos_dictionary.end()) {
+            throw std::invalid_argument("Key " + key + " not found in pos_dictionary");
+        }
+    }
+}
+
+inline void set_default_pos_dictionary(const int max_vocab = 100) {
+    /* Sets a default dictionary
+    * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
+    * '|': 4, '!': 5, '=': 6, '.': 7,
+    * 't1': 8, 't2': 9, 't3': 10, 't4': 11, 't5': 12,
+    * '/': 13, '?': 14, '@': 15, '#': 16,
+    * 's1': 17, 's2': 18, 's3': 19, 's4': 20, 's5': 21,
+    */
+    dictionary = {
+        {"pad", 0},  // needed for embeding look up
+        {"misc_start", 1},
+        {"misc_end", 10},
+        {"query_start", 11},
+        {"query_end", 20},
+        {"graph_start", 21},
+        {"graph_end", 200},
+        {"graph_sub_start", 201},
+        {"graph_sub_end", 203},
+        {"task_start", 211},
+        {"task_end", 300},
+    };
+
+    if (max_vocab > 0) {
+        auto num_special = static_cast<int>(dictionary.size());
+        assert(max_vocab >=  num_special);
+        for (int i = num_special; i < max_vocab; i++) {
+            pos_dictionary[std::to_string(i - num_special)] = i;
+        }
+    }
+}
+
+map<std::string, int> get_pos_dictionary() {
+    return pos_dictionary;
 }
 
 
@@ -1489,6 +1564,25 @@ PYBIND11_MODULE(generator, m) {
           "Returns:\n\t"
           "dictionary: of str -> int\n");
 
+    m.def("set_pos_dictionary", &set_pos_dictionary,
+      "Sets the pos dictionary.\n"
+      "Parameters:\n\t"
+      "dictionary: of str -> int\n\t",
+      py::arg("dictionary"), py::arg("verbose") = false);
+
+    m.def("set_default_pos_dictionary", &set_default_pos_dictionary,
+          "Sets the pos dictionary.\n"
+          "Parameters:\n\t"
+          "None\n",
+          py::arg("max_vocab") = 100);
+
+    m.def("get_pos_dictionary", &get_pos_dictionary,
+          "Gets the pos dictionary.\n"
+          "Parameters:\n\t"
+          "None\n"
+          "Returns:\n\t"
+          "dictionary: of str -> int\n");
+
     m.def("verify_paths", &verify_paths<int>,
           "Batch varies the that any predicted paths are valid given the distance matrices.\n"
           "Parameters:\n\t"
@@ -1900,7 +1994,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("graph_start_indices"),
           py::arg("graph_lengths"),
           py::arg("task_start_indices"),
-          py::arg("pos_type") = "none",
+          py::arg("pos_type") = "flat",
           py::arg("padding") = 1,
           py::arg("mask_edges") = false,
           py::arg("mask_value") = 0
