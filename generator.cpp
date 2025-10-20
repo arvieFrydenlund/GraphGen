@@ -303,6 +303,7 @@ inline py::array_t<int, py::array::c_style> get_position_ids(
     const int padding_token_id = 1,
     const py::kwargs& kwargs = py::kwargs()
     ) {
+    assert(!pos_dictionary.empty() && "Position dictionary is not set. Please set it before calling get_position_ids.");
     return _get_position_ids(pos_dictionary,
                              src_tokens,
                              query_start_indices,

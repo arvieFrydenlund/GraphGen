@@ -983,7 +983,7 @@ inline bool _in_range(const int cur_pos, const int  start_ind, const int length)
 }
 
 inline pair<int, int> _get_next_pos(const int cur_pos,
-               map<std::string, int> cur_positions,
+               map<std::string, int> &cur_positions,
                const map<std::string, int> pos_dictionary,
                const int query_start_ind,
                const int query_length,
@@ -996,7 +996,10 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
 
     if (_in_range(cur_pos, query_start_ind, query_length)) {
         auto pos_id = cur_positions["cur_query"]++;
-        assert( pos_id <= pos_dictionary.find("query_end")->second);
+        if (pos_id > pos_dictionary.find("query_end")->second) {
+            cout << "Error: position id for query exceeded max limit " << pos_id << " > "
+                 << pos_dictionary.find("query_end")->second << endl;
+        }
         return { pos_id,  pos_id};
     }
     if (_in_range(cur_pos, graph_start_ind, graph_length)) {
@@ -1004,22 +1007,29 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
             return { pos_pad_id, pos_pad_id};
         }
         auto pos_id = cur_positions["cur_graph"]++;
-        assert( pos_id <= pos_dictionary.find("graph_end")->second);
-        // hardcoding is bad, graph is graph_start, u1, v1, |1, u2, v2, |2 ...
-        int sub_pos_id = pos_id;
-        if (cur_pos != pos_dictionary.find("graph_end")->second) {  // not start-of-graph token
-            sub_pos_id = (cur_positions["cur_sub_graph"]++) % 3;
-            sub_pos_id += pos_dictionary.find("graph_sub_start")->second;
+        if (pos_id > pos_dictionary.find("graph_end")->second) {
+            cout << "Error: position id for graph exceeded max limit " << pos_id << " > "
+                 << pos_dictionary.find("graph_end")->second << endl;
         }
+        // hardcoding is bad, graph is u1, v1, |1, u2, v2, |2 ...  there is no graph_start_token
+        int sub_pos_id = pos_id;
+        sub_pos_id = (cur_positions["cur_sub_graph"]++) % 3;
+        sub_pos_id += pos_dictionary.find("graph_sub_start")->second;
         return { pos_id,  sub_pos_id};
     }
     if (_in_range(cur_pos, task_start_ind, task_length)) {
         auto  pos_id = cur_positions["cur_task"]++;
-        assert( pos_id <= pos_dictionary.find("task_end")->second);
+        if (pos_id > pos_dictionary.find("task_end")->second) {
+            cout << "Error: position id for task exceeded max limit " << pos_id << " > "
+                 << pos_dictionary.find("task_end")->second << endl;
+        }
         return { pos_id,  pos_id};
     }
     auto  pos_id = cur_positions["cur_misc"]++;
-    assert( pos_id <= pos_dictionary.find("misc_end")->second);
+    if (pos_id > pos_dictionary.find("misc_end")->second) {
+        cout << "Error: position id for misc exceeded max limit " << pos_id << " > "
+             << pos_dictionary.find("misc_end")->second << endl;
+    }
     return { pos_id,  pos_id};
 }
 
@@ -1046,11 +1056,9 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
     auto seq_len = shape[1];
     auto concat_edges = (src_tokens_info.shape.size() == 3 and shape[2] == 2);
 
-    if (use_graph_structure) {
-        assert(not concat_edges  && "Error: Should not have structured positions for de-structured edge concat");
+    if (use_graph_structure and concat_edges) {
+        throw runtime_error("Error: Graph structured positions only supported for non concatenated edges");
     }
-    assert(not (use_graph_structure && mask_edges) && "Error: mask_edges not supported for graph structured positions");
-
 
     // note to future self, random positions should be structured around task type i.e. queries sample from certain section, graphs from another etc.
     auto pos_pad_id = pos_dictionary.find("pad")->second;
@@ -1060,17 +1068,15 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
         cout << pair.first << ": " << pair.second << endl;
     }
 
-    py::array_t<int, py::array::c_style> positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
+    py::array_t<int, py::array::c_style> positions;
+    if (use_graph_structure) {
+        positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
+            static_cast<uint32_t>(seq_len),  static_cast<uint32_t>(2)});
+    } else {
+        positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
             static_cast<uint32_t>(seq_len)});
-    //if (use_graph_structure) {
-    //    positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
-    //        static_cast<uint32_t>(seq_len),  static_cast<uint32_t>(2)});
-    //} else {
-    //    positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
-    //        static_cast<uint32_t>(seq_len)});
-    // }
+    }
     positions[py::make_tuple(py::ellipsis())] = pos_pad_id;
-    return positions;
 
     auto src_ra = src_tokens.unchecked();
     auto positions_ra = positions.mutable_unchecked();
@@ -1078,7 +1084,7 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
     for (auto b = 0; b < static_cast<int>(bs); b++) {
         auto cur_pos = pos_pad_id + 1;
 
-        static map<std::string, int> cur_positions = {
+        map<std::string, int> cur_positions = {
             {"cur_misc", pos_dictionary.find("misc_start")->second},
             {"cur_graph", pos_dictionary.find("graph_start")->second},
                {"cur_sub_graph", pos_dictionary.find("graph_sub_start")->second},
@@ -1094,9 +1100,11 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
                 token = src_ra(b, s);
             }
             if (token == padding_token_id) {
-                positions_ra(b, s) = pos_pad_id;
                 if (use_graph_structure) {
+                    positions_ra(b, s, 0) = pos_pad_id;
                     positions_ra(b, s, 1) = pos_pad_id;
+                } else {
+                    positions_ra(b, s) = pos_pad_id;
                 }
             } else {
                 if (use_task_structure) {
@@ -1118,12 +1126,14 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
                     } else {
                         positions_ra(b, s) = pos_pair.first;
                     }
+                    cur_pos++;
                 } else {
                     int temp_cur_pos = cur_pos;
-                    if (mask_edges && _in_range(cur_pos, graph_start_indices.at(b), graph_lengths.at(b))) {
+                    if (mask_edges && _in_range(s, graph_start_indices.at(b), graph_lengths.at(b))) {
                         temp_cur_pos = pos_pad_id;
+                    } else {
+                        cur_pos++;
                     }
-
                     if (use_graph_structure) {
                         positions_ra(b, s, 0) = temp_cur_pos;
                         positions_ra(b, s, 1) = temp_cur_pos;
@@ -1131,7 +1141,6 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
                         positions_ra(b, s) = temp_cur_pos;
                     }
                 }
-                cur_pos++;
             }
         }
     }

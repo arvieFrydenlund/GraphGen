@@ -161,17 +161,50 @@ def _t_verify_paths(args, d, batch_size=20):
 
     # generate incorrect paths
 
-def _t_positions(args, d, batch_size=20):
+def _t_positions(args, d, batch_size=7):
+
+    def _concat(first, second):
+        a = np.arange(first.shape[0])
+        return np.stack([first, second, a], axis=-1).transpose(1, 0)
+
+    args.align_prefix_front_pad = True
+    args.concat_edges = False # True # False
     d_n = get_batch(args, batch_size)
     generator.set_default_pos_dictionary()
     src_tokens = d_n['src_tokens']
+    graph_start_indices = d_n['graph_start_indices']
+    graph_lengths = d_n['graph_lengths']
+    query_start_indices = d_n['query_start_indices']
     pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=False, use_graph_structure=False)
-
+    print('Regular position ids:')
     for b in range(pos_ids.shape[0]):
         print(f'Batch {b} position ids:')
         print(src_tokens[b, :, 0])
         print(pos_ids[b])
 
+    print('Masking edges')
+    pos_ids = generator.get_position_ids(**d_n, mask_edges=True, use_task_structure=False, use_graph_structure=False)
+    for b in range(pos_ids.shape[0]):
+        print(f'Batch {b} position ids:')
+        print(_concat(src_tokens[b, :, 0], pos_ids[b]))
+        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
+
+
+    print('Using task structure')
+    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=False)
+    for b in range(pos_ids.shape[0]):
+        print(f'Batch {b} position ids:')
+        print(_concat(src_tokens[b, :, 0], pos_ids[b]))
+        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
+
+
+    print('Using graph structure')
+    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=True)
+    for b in range(pos_ids.shape[0]):
+        print(f'Batch {b} position ids:')
+        print(src_tokens[b, :, 0]),
+        print(pos_ids[b].transpose(1, 0))
+        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
 
 
 
