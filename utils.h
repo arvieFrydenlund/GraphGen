@@ -1062,11 +1062,6 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
 
     // note to future self, random positions should be structured around task type i.e. queries sample from certain section, graphs from another etc.
     auto pos_pad_id = pos_dictionary.find("pad")->second;
-    cout << "Generating position ids with pad id " << pos_pad_id << endl;
-    // print pos dic
-    for (const auto &pair : pos_dictionary) {
-        cout << pair.first << ": " << pair.second << endl;
-    }
 
     py::array_t<int, py::array::c_style> positions;
     if (use_graph_structure) {
