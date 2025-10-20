@@ -161,6 +161,19 @@ def _t_verify_paths(args, d, batch_size=20):
 
     # generate incorrect paths
 
+def _t_positions(args, d, batch_size=20):
+    d_n = get_batch(args, batch_size)
+    generator.set_default_pos_dictionary()
+    src_tokens = d_n['src_tokens']
+    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=False, use_graph_structure=False)
+
+    for b in range(pos_ids.shape[0]):
+        print(f'Batch {b} position ids:')
+        print(src_tokens[b, :, 0])
+        print(pos_ids[b])
+
+
+
 
 if __name__ == '__main__':
 
@@ -195,8 +208,10 @@ if __name__ == '__main__':
 
     # args.graph_type = 'random_tree'
     # args.start_at_root = True
-    args.align_prefix_front_pad = True
-    _t_reconstruct(args, d)
+    # args.align_prefix_front_pad = True
+    # _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
+
+    _t_positions(args, d, batch_size=20)
 
     print('\n\nDone Testing')

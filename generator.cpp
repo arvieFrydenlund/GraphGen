@@ -270,7 +270,7 @@ inline void set_default_pos_dictionary(const int max_vocab = 100) {
     * '/': 13, '?': 14, '@': 15, '#': 16,
     * 's1': 17, 's2': 18, 's3': 19, 's4': 20, 's5': 21,
     */
-    dictionary = {
+    pos_dictionary = {
         {"pad", 0},  // needed for embeding look up
         {"misc_start", 1},
         {"misc_end", 10},
@@ -283,18 +283,38 @@ inline void set_default_pos_dictionary(const int max_vocab = 100) {
         {"task_start", 211},
         {"task_end", 300},
     };
-
-    if (max_vocab > 0) {
-        auto num_special = static_cast<int>(dictionary.size());
-        assert(max_vocab >=  num_special);
-        for (int i = num_special; i < max_vocab; i++) {
-            pos_dictionary[std::to_string(i - num_special)] = i;
-        }
-    }
 }
 
 map<std::string, int> get_pos_dictionary() {
     return pos_dictionary;
+}
+
+inline py::array_t<int, py::array::c_style> get_position_ids(
+    const py::array_t<int, py::array::c_style> &src_tokens,
+    const py::array_t<int, py::array::c_style> &query_start_indices,
+    const py::array_t<int, py::array::c_style> &query_lengths,
+    const py::array_t<int, py::array::c_style> &graph_start_indices,
+    const py::array_t<int, py::array::c_style> &graph_lengths,
+    const py::array_t<int, py::array::c_style> &task_start_indices,
+    const py::array_t<int, py::array::c_style> &task_lengths,
+    const bool mask_edges = false,  // for concated edges this allows true permutation invariance
+    const bool use_task_structure = false,  // divide positions by task structure
+    const bool use_graph_structure = false,  // 2d positions by graph structure
+    const int padding_token_id = 1,
+    const py::kwargs& kwargs = py::kwargs()
+    ) {
+    return _get_position_ids(pos_dictionary,
+                             src_tokens,
+                             query_start_indices,
+                             query_lengths,
+                             graph_start_indices,
+                             graph_lengths,
+                             task_start_indices,
+                             task_lengths,
+                             mask_edges,
+                             use_task_structure,
+                             use_graph_structure,
+                             padding_token_id);
 }
 
 
@@ -1991,12 +2011,15 @@ PYBIND11_MODULE(generator, m) {
     m.def("get_position_ids", &get_position_ids,
           "Get the position ids for the pos embeddings.\nParameters:\n\t",
           py::arg("src_tokens"),
+          py::arg("query_start_indices"),
+          py::arg("query_lengths"),
           py::arg("graph_start_indices"),
           py::arg("graph_lengths"),
           py::arg("task_start_indices"),
-          py::arg("pos_type") = "flat",
-          py::arg("padding") = 1,
+          py::arg("task_lengths"),
           py::arg("mask_edges") = false,
-          py::arg("mask_value") = 0
+          py::arg("use_task_structure") = false,
+          py::arg("use_graph_structure") = false,
+          py::arg("padding_token_id") = 1
     );
 }

@@ -983,8 +983,8 @@ inline bool _in_range(const int cur_pos, const int  start_ind, const int length)
 }
 
 inline pair<int, int> _get_next_pos(const int cur_pos,
-               static map<std::string, int> cur_positions,
-               static map<std::string, int> pos_dictionary,
+               map<std::string, int> cur_positions,
+               const map<std::string, int> pos_dictionary,
                const int query_start_ind,
                const int query_length,
                const int graph_start_ind,
@@ -1024,7 +1024,7 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
 }
 
 
-inline py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
+inline py::array_t<int, py::array::c_style> _get_position_ids(
     const map<std::string, int> pos_dictionary,
     const py::array_t<int, py::array::c_style> &src_tokens,
     const py::array_t<int, py::array::c_style> &query_start_indices,
@@ -1054,15 +1054,24 @@ inline py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
 
     // note to future self, random positions should be structured around task type i.e. queries sample from certain section, graphs from another etc.
     auto pos_pad_id = pos_dictionary.find("pad")->second;
-
-    py::array_t<std::uint32_t, py::array::c_style> positions;
-    if (use_graph_structure) {
-        positions = py::array_t<std::uint32_t, py::array::c_style>({static_cast<uint32_t>(bs),
-            static_cast<uint32_t>(seq_len),  static_cast<uint32_t>(2)});
-    } else {
-        positions = py::array_t<std::uint32_t, py::array::c_style>({static_cast<uint32_t>(bs),
-            static_cast<uint32_t>(seq_len)});
+    cout << "Generating position ids with pad id " << pos_pad_id << endl;
+    // print pos dic
+    for (const auto &pair : pos_dictionary) {
+        cout << pair.first << ": " << pair.second << endl;
     }
+
+    py::array_t<int, py::array::c_style> positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
+            static_cast<uint32_t>(seq_len)});
+    //if (use_graph_structure) {
+    //    positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
+    //        static_cast<uint32_t>(seq_len),  static_cast<uint32_t>(2)});
+    //} else {
+    //    positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
+    //        static_cast<uint32_t>(seq_len)});
+    // }
+    positions[py::make_tuple(py::ellipsis())] = pos_pad_id;
+    return positions;
+
     auto src_ra = src_tokens.unchecked();
     auto positions_ra = positions.mutable_unchecked();
 
@@ -1102,18 +1111,24 @@ inline py::array_t<std::uint32_t, py::array::c_style> get_position_ids(
                         task_lengths.at(b),
                         mask_edges,
                         pos_pad_id);
-                    positions_ra(b, s, 0) = pos_pair.first;
+
                     if (use_graph_structure) {
+                        positions_ra(b, s, 0) = pos_pair.first;
                         positions_ra(b, s, 1) = pos_pair.second;
+                    } else {
+                        positions_ra(b, s) = pos_pair.first;
                     }
                 } else {
                     int temp_cur_pos = cur_pos;
                     if (mask_edges && _in_range(cur_pos, graph_start_indices.at(b), graph_lengths.at(b))) {
                         temp_cur_pos = pos_pad_id;
                     }
-                    positions_ra(b, s) = temp_cur_pos;
+
                     if (use_graph_structure) {
+                        positions_ra(b, s, 0) = temp_cur_pos;
                         positions_ra(b, s, 1) = temp_cur_pos;
+                    } else {
+                        positions_ra(b, s) = temp_cur_pos;
                     }
                 }
                 cur_pos++;
