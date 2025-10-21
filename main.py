@@ -175,7 +175,7 @@ def _t_positions(args, d, batch_size=7):
     graph_start_indices = d_n['graph_start_indices']
     graph_lengths = d_n['graph_lengths']
     query_start_indices = d_n['query_start_indices']
-    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=False, use_graph_structure=False)
+    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=False, use_graph_structure=False)
     print('Regular position ids:')
     for b in range(pos_ids.shape[0]):
         print(f'Batch {b} position ids:')
@@ -183,7 +183,7 @@ def _t_positions(args, d, batch_size=7):
         print(pos_ids[b])
 
     print('Masking edges')
-    pos_ids = generator.get_position_ids(**d_n, mask_edges=True, use_task_structure=False, use_graph_structure=False)
+    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=True, use_task_structure=False, use_graph_structure=False)
     for b in range(pos_ids.shape[0]):
         print(f'Batch {b} position ids:')
         print(_concat(src_tokens[b, :, 0], pos_ids[b]))
@@ -191,7 +191,7 @@ def _t_positions(args, d, batch_size=7):
 
 
     print('Using task structure')
-    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=False)
+    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=False)
     for b in range(pos_ids.shape[0]):
         print(f'Batch {b} position ids:')
         print(_concat(src_tokens[b, :, 0], pos_ids[b]))
@@ -199,12 +199,13 @@ def _t_positions(args, d, batch_size=7):
 
 
     print('Using graph structure')
-    pos_ids = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=True)
+    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True, use_graph_structure=True)
     for b in range(pos_ids.shape[0]):
         print(f'Batch {b} position ids:')
         print(src_tokens[b, :, 0]),
         print(pos_ids[b].transpose(1, 0))
         print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
+        print(task_start_pos[b])
 
 
 

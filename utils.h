@@ -1017,7 +1017,9 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
         sub_pos_id += pos_dictionary.find("graph_sub_start")->second;
         return { pos_id,  sub_pos_id};
     }
-    if (_in_range(cur_pos, task_start_ind, task_length)) {
+    if (cur_pos >= task_start_ind) {
+        // note we want the misc tokens after the task tokens to count as task tokens
+        // this is so autoregressive generation just works by auto making new positions based on past positions
         auto  pos_id = cur_positions["cur_task"]++;
         if (pos_id > pos_dictionary.find("task_end")->second) {
             cout << "Error: position id for task exceeded max limit " << pos_id << " > "
@@ -1034,7 +1036,7 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
 }
 
 
-inline py::array_t<int, py::array::c_style> _get_position_ids(
+inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::array::c_style>> _get_position_ids(
     const map<std::string, int> pos_dictionary,
     const py::array_t<int, py::array::c_style> &src_tokens,
     const py::array_t<int, py::array::c_style> &query_start_indices,
@@ -1071,7 +1073,6 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
         positions = py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs),
             static_cast<uint32_t>(seq_len)});
     }
-    positions[py::make_tuple(py::ellipsis())] = pos_pad_id;
 
     auto src_ra = src_tokens.unchecked();
     auto positions_ra = positions.mutable_unchecked();
@@ -1139,7 +1140,22 @@ inline py::array_t<int, py::array::c_style> _get_position_ids(
             }
         }
     }
-    return positions;
+    auto task_start_pos =  py::array_t<int, py::array::c_style>({static_cast<uint32_t>(bs)});
+    task_start_pos[py::make_tuple(py::ellipsis())] = -1;
+    if (use_graph_structure) {
+        for (auto b = 0; b < static_cast<int>(bs); b++) {
+            auto task_start_ind = task_start_indices.at(b);
+            if (task_start_ind >= 0 and task_start_ind < seq_len) {
+                task_start_pos.mutable_unchecked()(b) = positions_ra(b, task_start_ind, 0);
+            }else {
+                throw std::invalid_argument("task_start_indices out of range");
+            }
+        }
+
+    }
+
+    return make_tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::array::c_style>>(move(positions),
+        move(task_start_pos));
 }
 
 

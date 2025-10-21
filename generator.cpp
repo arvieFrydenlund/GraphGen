@@ -289,7 +289,7 @@ map<std::string, int> get_pos_dictionary() {
     return pos_dictionary;
 }
 
-inline py::array_t<int, py::array::c_style> get_position_ids(
+inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::array::c_style>> get_position_ids(
     const py::array_t<int, py::array::c_style> &src_tokens,
     const py::array_t<int, py::array::c_style> &query_start_indices,
     const py::array_t<int, py::array::c_style> &query_lengths,
