@@ -161,11 +161,14 @@ def _t_verify_paths(args, d, batch_size=20):
 
     # generate incorrect paths
 
-def _t_positions(args, d, batch_size=7):
-
-    def _concat(first, second):
-        a = np.arange(first.shape[0])
+def _concat(first, second):
+    a = np.arange(first.shape[0])
+    if first.ndim == 1:
         return np.stack([first, second, a], axis=-1).transpose(1, 0)
+    else:
+        return np.concatenate([first, np.stack([second, a], axis=-1)], axis=-1).transpose(1, 0)
+
+def _t_positions(args, d, batch_size=7):
 
     args.align_prefix_front_pad = True
     args.concat_edges = False # True # False
@@ -208,6 +211,24 @@ def _t_positions(args, d, batch_size=7):
         print(task_start_pos[b])
 
 
+def _t_positions2(args, d, batch_size=7):
+    args.align_prefix_front_pad = True
+    args.concat_edges = True # True # False
+    args.include_nodes_in_graph_tokenization = True
+
+    d_n = get_batch(args, batch_size)
+    generator.set_default_pos_dictionary()
+    src_tokens = d_n['src_tokens']
+    graph_start_indices = d_n['graph_start_indices']
+    graph_lengths = d_n['graph_lengths']
+    query_start_indices = d_n['query_start_indices']
+    pos_ids, task_start_pos = generator.get_position_ids(**d_n, use_edges_invariance=True, use_node_invariance=True, use_graph_invariance=True,
+                                                         use_task_structure=True, use_graph_structure=False)
+    for b in range(pos_ids.shape[0]):
+        print(f'Batch {b} position ids:')
+        print(_concat(src_tokens[b], pos_ids[b]))
+
+
 
 if __name__ == '__main__':
 
@@ -246,6 +267,6 @@ if __name__ == '__main__':
     # _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
 
-    _t_positions(args, d, batch_size=20)
+    _t_positions2(args, d, batch_size=20)
 
     print('\n\nDone Testing')
