@@ -339,7 +339,9 @@ vector<int> get_node_shuffle_map(const int N, const int min_vocab, int max_vocab
     if (shuffle) {
         std::shuffle(m.begin(), m.end(), gen);
     }
-    return std::vector<int>(m.begin(), m.begin() + N); // Only return the first N elements of the new range
+    // Only return the first N elements of the new range, thus this will be the length of the graph
+    // since we use N = num_vertices(*g_ptr)
+    return std::vector<int>(m.begin(), m.begin() + N);
 }
 
 vector<int> get_edge_shuffle_map(const int E, const bool shuffle = false) {
@@ -779,6 +781,16 @@ inline py::dict balanced(const int num_nodes, int lookahead, const int min_noise
  *  Batched graph generation
  *  ***********************************************/
 
+template<typename D> // not needed because we can just use the node shuffle map
+void get_nodes_from_graph(
+    unique_ptr<Graph<D> > &g_ptr, list<unique_ptr<vector<int> > > &batched_node_list) {
+    auto node_list = vector<int>();
+    const auto N = num_vertices(*g_ptr);
+    for (int i = 0; i < N; i++) {
+        node_list.push_back(i);
+    }
+    batched_node_list.push_back(make_unique<vector<int> >(node_list));
+}
 
 template<typename D>
 void push_back_data(unique_ptr<Graph<D> > &g_ptr,
@@ -863,7 +875,6 @@ inline int attempt_check(const int E, const int max_edges, const int attempts, c
     return 0;
 }
 
-
 inline py::dict erdos_renyi_n(
     const int min_num_nodes, int max_num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
     const string &task_type = "shortest_path",
@@ -873,6 +884,8 @@ inline py::dict erdos_renyi_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
+    const bool duplicate_edges = false,
+    const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
@@ -945,6 +958,7 @@ inline py::dict erdos_renyi_n(
                                            batched_centers, batched_center_lengths,
                                            max_query_size, min_query_size
         );
+
         // time_after(pack_t, "pack");
         num += 1;
     }
@@ -974,7 +988,8 @@ inline py::dict erdos_renyi_n(
                              batched_path_lengths,
                              batched_centers,
                              batched_center_lengths,
-                             concat_edges, query_at_end, num_thinking_tokens,
+                             concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+                             query_at_end, num_thinking_tokens,
                              is_flat_model,
                              align_prefix_front_pad
     );
@@ -991,6 +1006,8 @@ inline py::dict euclidean_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
+    const bool duplicate_edges = false,
+    const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
@@ -1100,7 +1117,8 @@ inline py::dict euclidean_n(
                                batched_path_lengths,
                                batched_centers,
                                batched_center_lengths,
-                               concat_edges, query_at_end, num_thinking_tokens,
+                               concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+                               query_at_end, num_thinking_tokens,
                                is_flat_model,
                                align_prefix_front_pad);
     d["positions"] = batch_positions<float>(batched_positions, batched_node_shuffle_map, dim);
@@ -1119,6 +1137,8 @@ inline py::dict random_tree_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
+    const bool duplicate_edges = false,
+    const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
@@ -1237,7 +1257,8 @@ inline py::dict random_tree_n(
                                batched_path_lengths,
                                batched_centers,
                                batched_center_lengths,
-                               concat_edges, query_at_end, num_thinking_tokens,
+                               concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+                               query_at_end, num_thinking_tokens,
                                is_flat_model,
                                align_prefix_front_pad);
     return d;
@@ -1286,6 +1307,8 @@ inline py::dict path_star_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
+    const bool duplicate_edges = false,
+    const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
@@ -1361,7 +1384,8 @@ inline py::dict path_star_n(
                                batched_path_lengths,
                                batched_centers,
                                batched_center_lengths,
-                               concat_edges, query_at_end, num_thinking_tokens,
+                               concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+                               query_at_end, num_thinking_tokens,
                                is_flat_model,
                                align_prefix_front_pad);
     return d;
@@ -1377,6 +1401,8 @@ inline py::dict balanced_n(
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
+    const bool duplicate_edges = false,
+    const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
     const bool is_flat_model = true,
@@ -1485,7 +1511,8 @@ inline py::dict balanced_n(
                                batched_path_lengths,
                                batched_centers,
                                batched_center_lengths,
-                               concat_edges, query_at_end, num_thinking_tokens,
+                               concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+                               query_at_end, num_thinking_tokens,
                                is_flat_model,
                                align_prefix_front_pad);
     return d;
@@ -1783,6 +1810,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
           py::arg("concat_edges") = true,
+          py::arg("duplicate_edges") = false,
+          py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
@@ -1842,6 +1871,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
           py::arg("concat_edges") = true,
+          py::arg("duplicate_edges") = false,
+          py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
@@ -1896,6 +1927,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
           py::arg("concat_edges") = true,
+          py::arg("duplicate_edges") = false,
+          py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
@@ -1946,6 +1979,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
           py::arg("concat_edges") = true,
+          py::arg("duplicate_edges") = false,
+          py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,
@@ -2003,6 +2038,8 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
           py::arg("concat_edges") = true,
+          py::arg("duplicate_edges") = false,
+          py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
           py::arg("is_flat_model") = true,

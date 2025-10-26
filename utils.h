@@ -543,12 +543,12 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
                                   const list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
                                   const list<pair<int, int> > &batched_center_lengths,
                                   const bool concat_edges = true,
+                                  const bool duplicate_edges = false, // for undirected graphs with edge concatentation
+                                  const bool include_nodes_in_graph_tokenization = false, // edge-list then nodes
                                   const bool query_at_end = false,
                                   const int num_thinking_tokens = 0,
                                   const bool is_flat_model = true,
-                                  const bool align_prefix_front_pad = false,
-                                  const bool duplicate_edges = false // for undirected graphs with edge concatentation
-
+                                  const bool align_prefix_front_pad = false
                                   ) {
     py::dict d;
     add_arguments_to_dict(d, attempts, max_attempts, min_vocab, max_vocab,
@@ -700,6 +700,13 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         }
         ++it0;
     }
+    if (include_nodes_in_graph_tokenization) {
+        auto bnsi = batched_node_shuffle_map.begin();
+        for (int b = 0; b < batch_size; b++) {
+            src_len_ra(b) += static_cast<int>((**bnsi).size());
+            ++bnsi;
+        }
+    }
 
     auto num_input_tokens = (concat_edges) ? 2 : 1;
     int max_seq_len = 0;
@@ -727,8 +734,12 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     }
     auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, max_seq_len, num_input_tokens});
     py::array_t<int, py::array::c_style> query_start_indices;
-    py::array_t<int, py::array::c_style> graph_start_indices;
-    py::array_t<int, py::array::c_style> graph_lengths;
+    py::array_t<int, py::array::c_style> graph_start_indices; // includes both edges and nodes if applicable
+    py::array_t<int, py::array::c_style> graph_lengths; // includes both edges and nodes if applicable
+    py::array_t<int, py::array::c_style> graph_edge_start_indices; // includes only edges
+    py::array_t<int, py::array::c_style> graph_edge_lengths; // includes only edges
+    py::array_t<int, py::array::c_style> graph_node_start_indices; // includes nodes if applicable
+    py::array_t<int, py::array::c_style> graph_node_lengths; // includes nodes if applicable
     py::array_t<int, py::array::c_style> task_start_indices;
 
     // tgt-side ground-truths
@@ -776,8 +787,14 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     auto it2 = batched_node_shuffle_map.begin();
     graph_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
     graph_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
+    graph_edge_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
+    graph_edge_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_edge_list_lengths));
     if (concat_edges & duplicate_edges) {  // for undirected graphs with edge concatentation
+        auto ra_gl = graph_lengths.mutable_unchecked();
+        auto ra_ge_l = graph_edge_lengths.mutable_unchecked();
         for (auto b = 0; b < batch_size; b++) {
+            ra_gl[b] *= 2;
+            ra_ge_l[b] *= 2;
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()) * 2;) {
                 ra(b, cur + j, 0) = (**it2)[(*it1)->at(j).first];
@@ -805,8 +822,10 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         }
     } else {
         auto ra_gl = graph_lengths.mutable_unchecked();
+        auto ra_ge_l = graph_edge_lengths.mutable_unchecked();
         for (auto b = 0; b < batch_size; b++) {
             ra_gl[b] *= 3;
+            ra_ge_l[b] *= 3;
             auto cur = curs[b];
             for (int j = 0; j < static_cast<int>((*it1)->size()); j++) {
                 ra(b, cur, 0) = (**it2)[(*it1)->at(j).first];
@@ -819,6 +838,25 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             ++it2;
         }
     }
+    if (include_nodes_in_graph_tokenization) {  // write in graph node list
+        auto it3 = batched_node_shuffle_map.begin();
+        graph_node_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
+        graph_node_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_node_shuffle_map.size()));
+        auto ra_gl = graph_lengths.mutable_unchecked();
+        for (auto b = 0; b < batch_size; b++) {
+            auto num_nodes = static_cast<int>((**it3).size());
+            ra_gl[b] += num_nodes;
+            auto cur = curs[b];
+            for (int j = 0; j < num_nodes; j++) {
+                ra(b, cur + j, 0) = (**it3)[j];
+                if (concat_edges) {
+                    ra(b, cur + j, 1) = (**it3)[j];
+                }
+                curs[b] += 1;
+            }
+        }
+    }
+
     // write in query if after graph
     if (query.size() && query_at_end) {
         query_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
@@ -833,7 +871,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
-    // write in thinking tokens between query and task
+    // write in thinking tokens between query and task, note these count as prefix so are not part of the task length
     if (num_thinking_tokens > 0) {
         auto thinking_token = dictionary["!"];
         for (auto b = 0; b < batch_size; b++) {
@@ -863,8 +901,6 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             if (concat_edges) {
                 ra(b, curs[b], 1) = end_marker; // end marker
             }
-            // cout << "curs[" << b << "] = " << curs[b] << " length " << src_lengths.at(b) << " of max " << max_seq_len << endl;
-            // curs[b]++; // for correct length, incase we ever add something after
         }
     } else {
         task_start_indices = py::array_t<int, py::array::c_style>({batch_size});
@@ -884,10 +920,12 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
     }
+
+    py::array_t<int, py::array::c_style> graph_edge_gather_indices;
     auto max_graph_length = max(0, *max_element(batched_edge_list_lengths.begin(),
-                                                          batched_edge_list_lengths.end()));
-    auto graph_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_length});
-    auto graph_gather_indices_ra = graph_gather_indices.mutable_unchecked();
+                                                  batched_edge_list_lengths.end()));
+    graph_edge_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_length});
+    auto graph_edge_gather_indices_ra = graph_edge_gather_indices.mutable_unchecked();
     for (int b = 0; b < batch_size; b++) {
         auto cur = graph_start_indices.at(b);  // already skips start marker
         if (!concat_edges) {
@@ -895,14 +933,37 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         }
         for (int j = 0; j < max_graph_length; j++) {
             if (j < graph_lengths.at(b)) {
-                graph_gather_indices_ra(b, j) = cur; // gather indices
+                graph_edge_gather_indices_ra(b, j) = cur; // gather indices
             } else {
-                graph_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
+                graph_edge_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
             }
             if (concat_edges) {
                 cur += 1;
             }else {
                 cur += 3;  // essentially multiple each index by 3
+            }
+        }
+    }
+
+    py::array_t<int, py::array::c_style> graph_node_gather_indices;
+    if (include_nodes_in_graph_tokenization) {
+        auto max_graph_node_length = 0;
+        for (auto &m: batched_node_shuffle_map) {
+            if (static_cast<int>((*m).size()) > max_graph_node_length) {
+                max_graph_node_length = (*m).size();
+            }
+        }
+        graph_node_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_node_length});
+        auto graph_node_gather_indices_ra = graph_node_gather_indices.mutable_unchecked();
+        for (int b = 0; b < batch_size; b++) {
+            auto cur = graph_node_start_indices.at(b);
+            for (int j = 0; j < max_graph_node_length; j++) {
+                if (j < graph_node_lengths.at(b)) {
+                    graph_node_gather_indices_ra(b, j) = cur; // gather indices
+                } else {
+                    graph_node_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
+                }
+                cur += 1;
             }
         }
     }
@@ -923,8 +984,19 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     }
     d["graph_start_indices"] = graph_start_indices;
     d["graph_lengths"] = graph_lengths;
-    d["graph_gather_indices"] = graph_gather_indices;
-
+    d["graph_edge_start_indices"] = graph_edge_start_indices;
+    d["graph_edge_lengths"] = graph_edge_lengths;
+    d["graph_edge_gather_indices"] = graph_edge_gather_indices;
+    if (include_nodes_in_graph_tokenization) {
+        d["graph_node_start_indices"] = graph_node_start_indices;
+        d["graph_node_lengths"] = graph_node_lengths;
+        d["graph_node_gather_indices"] = graph_node_gather_indices;
+    } else {
+        // return None
+        d["graph_node_start_indices"] = py::none();
+        d["graph_node_lengths"] = py::none();
+        d["graph_node_gather_indices"] = py::none();
+    }
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
@@ -945,27 +1017,17 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     d["num_thinking_tokens"] = num_thinking_tokens;
     d["align_prefix_front_pad"] = align_prefix_front_pad;
 
-    // also want stats
-    // 1) length of task (no special tokens),  actually already have this just minus 2
-    // 2) number of nodes
-    // 3) number of edges
-
     py::array_t<int, py::array::c_style> num_nodes(batch_size);
     py::array_t<int, py::array::c_style> num_edges(batch_size);
     auto nn_ra = num_nodes.mutable_unchecked();
+    auto bnsi = batched_node_shuffle_map.begin();
+    for (int b = 0; b < batch_size; b++, bnsi++) {
+        nn_ra(b) = static_cast<int>((*bnsi)->size());
+    }
     auto ne_ra = num_edges.mutable_unchecked();
-    auto it = batched_edge_list.begin();
-    for (int b = 0; b < batch_size; b++) {
-        ne_ra(b) = static_cast<int>((*it)->size());
-        // number of nodes as unique values in edge list, could just pass in the number form the graphs
-        // todo
-        set<int> nodes;
-        for (auto &p: **it) {
-            nodes.insert(p.first);
-            nodes.insert(p.second);
-        }
-        nn_ra(b) = nodes.size();
-        ++it;
+    auto beli = batched_edge_list.begin();
+    for (int b = 0; b < batch_size; b++, beli++) {
+        ne_ra(b) = static_cast<int>((*beli)->size());
     }
     d["num_nodes"] = num_nodes;
     d["num_edges"] = num_edges;
