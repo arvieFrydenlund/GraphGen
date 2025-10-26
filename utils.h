@@ -1051,12 +1051,22 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
                const int query_length,
                const int graph_start_ind,
                const int graph_length,
+               const int graph_edge_start_ind, // will set to -1 if not used
+               const int graph_edge_length,
+               const int graph_node_start_ind,  // will set to -1 if not used
+               const int graph_node_length,
                const int task_start_ind,
                const int task_length,
-               const bool mask_edges,
-               const int pos_pad_id) {
+               const bool use_edge_invariance,
+               const bool use_node_invariance,
+               const bool use_graph_invariance,
+               const bool use_query_invariance) {
 
     if (_in_range(cur_pos, query_start_ind, query_length)) {
+        if (use_query_invariance) {
+            auto query_invariance = pos_dictionary.find("query_invariance")->second;
+            return { query_invariance, query_invariance};
+        }
         auto pos_id = cur_positions["cur_query"]++;
         if (pos_id > pos_dictionary.find("query_end")->second) {
             cout << "Error: position id for query exceeded max limit " << pos_id << " > "
@@ -1065,8 +1075,17 @@ inline pair<int, int> _get_next_pos(const int cur_pos,
         return { pos_id,  pos_id};
     }
     if (_in_range(cur_pos, graph_start_ind, graph_length)) {
-        if (mask_edges) {
-            return { pos_pad_id, pos_pad_id};
+        if (use_edge_invariance and graph_edge_start_ind >=0 and _in_range(cur_pos, graph_edge_start_ind, graph_edge_length)) {
+            auto edge_invariance = pos_dictionary.find("edge_invariance")->second;
+            return { edge_invariance, edge_invariance};
+        }
+        if (use_node_invariance and graph_node_start_ind >=0 and _in_range(cur_pos, graph_node_start_ind, graph_node_length)) {
+            auto node_invariance = pos_dictionary.find("node_invariance")->second;
+            return { node_invariance, node_invariance};
+        }
+        if (use_graph_invariance) {
+            auto graph_invariance = pos_dictionary.find("graph_invariance")->second;
+            return { graph_invariance, graph_invariance};
         }
         auto pos_id = cur_positions["cur_graph"]++;
         if (pos_id > pos_dictionary.find("graph_end")->second) {
@@ -1105,12 +1124,19 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
     const py::array_t<int, py::array::c_style> &query_lengths,
     const py::array_t<int, py::array::c_style> &graph_start_indices,
     const py::array_t<int, py::array::c_style> &graph_lengths,
+    const py::array_t<int, py::array::c_style> &graph_edge_start_indices,
+    const py::array_t<int, py::array::c_style> &graph_edge_lengths,
     const py::array_t<int, py::array::c_style> &task_start_indices,
     const py::array_t<int, py::array::c_style> &task_lengths,
-    const bool mask_edges = false,  // for concated edges this allows true permutation invariance
+    const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
+    const bool use_node_invariance = false,
+    const bool use_graph_invariance = false,
+    const bool use_query_invariance = false,
     const bool use_task_structure = false,  // divide positions by task structure
     const bool use_graph_structure = false,  // 2d positions by graph structure
-    const int padding_token_id = 1
+    const int padding_token_id = 1,
+    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_start_indices = std::nullopt,
+    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_lengths = std::nullopt
     ){
 
     // get shape of scr_tokens
@@ -1166,6 +1192,13 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
                 }
             } else {
                 if (use_task_structure) {
+                    int graph_node_start_ind = -1;
+                    int graph_node_length = -1;
+
+                    if (graph_node_start_indices.has_value() and graph_node_lengths.has_value()) {
+                        graph_node_start_ind = graph_node_start_indices.value().at(b);
+                        graph_node_length = graph_node_lengths.value().at(b);
+                    }
                     auto pos_pair = _get_next_pos(s,
                         cur_positions,
                         pos_dictionary,
@@ -1173,10 +1206,16 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
                         query_lengths.at(b),
                         graph_start_indices.at(b),
                         graph_lengths.at(b),
+                        graph_edge_start_indices.at(b),
+                        graph_edge_lengths.at(b),
+                        graph_node_start_ind,
+                        graph_node_length,
                         task_start_indices.at(b),
                         task_lengths.at(b),
-                        mask_edges,
-                        pos_pad_id);
+                        use_edges_invariance,
+                        use_node_invariance,
+                        use_graph_invariance,
+                        use_query_invariance);
 
                     if (use_graph_structure) {
                         positions_ra(b, s, 0) = pos_pair.first;
@@ -1187,7 +1226,8 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
                     cur_pos++;
                 } else {
                     int temp_cur_pos = cur_pos;
-                    if (mask_edges && _in_range(s, graph_start_indices.at(b), graph_lengths.at(b))) {
+                    // not really fully set up, just used structure to separate graph positions
+                    if (use_graph_invariance && _in_range(s, graph_start_indices.at(b), graph_lengths.at(b))) {
                         temp_cur_pos = pos_pad_id;
                     } else {
                         cur_pos++;

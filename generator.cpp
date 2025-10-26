@@ -263,25 +263,24 @@ inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = fal
 }
 
 inline void set_default_pos_dictionary(const int max_vocab = 100) {
-    /* Sets a default dictionary
-    * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
-    * '|': 4, '!': 5, '=': 6, '.': 7,
-    * 't1': 8, 't2': 9, 't3': 10, 't4': 11, 't5': 12,
-    * '/': 13, '?': 14, '@': 15, '#': 16,
-    * 's1': 17, 's2': 18, 's3': 19, 's4': 20, 's5': 21,
+    /* Sets a default pos dictionary
     */
     pos_dictionary = {
-        {"pad", 0},  // needed for embeding look up
-        {"misc_start", 1},
-        {"misc_end", 10},
-        {"query_start", 11},
-        {"query_end", 20},
-        {"graph_start", 21},
-        {"graph_end", 200},
-        {"graph_sub_start", 201},
-        {"graph_sub_end", 203},
-        {"task_start", 211},
-        {"task_end", 300},
+        {"pad", 0},  // needed for embedding look-up
+        {"query_invariance", 1},
+        {"edge_invariance", 2},
+        {"node_invariance", 3},
+        {"graph_invariance", 4},
+        {"misc_start", 11},  // also does thinking tokens
+        {"misc_end", 100},
+        {"query_start", 101},
+        {"query_end", 200},
+        {"graph_start", 201},
+        {"graph_end", 500},
+        {"graph_sub_start", 501},
+        {"graph_sub_end", 503},
+        {"task_start", 601},
+        {"task_end", 800},
     };
 }
 
@@ -295,11 +294,18 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
     const py::array_t<int, py::array::c_style> &query_lengths,
     const py::array_t<int, py::array::c_style> &graph_start_indices,
     const py::array_t<int, py::array::c_style> &graph_lengths,
+    const py::array_t<int, py::array::c_style> &graph_edge_start_indices,
+    const py::array_t<int, py::array::c_style> &graph_edge_lengths,
     const py::array_t<int, py::array::c_style> &task_start_indices,
     const py::array_t<int, py::array::c_style> &task_lengths,
-    const bool mask_edges = false,  // for concated edges this allows true permutation invariance
+    const bool use_edges_invariance,  // for concated edges this allows true permutation invariance
+    const bool use_node_invariance = false,
+    const bool use_graph_invariance = false,
+    const bool use_query_invariance = false,
     const bool use_task_structure = false,  // divide positions by task structure
     const bool use_graph_structure = false,  // 2d positions by graph structure
+    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_start_indices = std::nullopt,
+    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_lengths = std::nullopt,
     const py::kwargs& kwargs = py::kwargs()
     ) {
     assert(!pos_dictionary.empty() && "Position dictionary is not set. Please set it before calling get_position_ids.");
@@ -310,12 +316,19 @@ inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::arr
                              query_lengths,
                              graph_start_indices,
                              graph_lengths,
+                             graph_edge_start_indices,
+                             graph_edge_lengths,
                              task_start_indices,
                              task_lengths,
-                             mask_edges,
+                             use_edges_invariance,
+                             use_node_invariance,
+                             use_graph_invariance,
+                             use_query_invariance,
                              use_task_structure,
                              use_graph_structure,
-                             padding_token_id);
+                             padding_token_id,
+                             graph_node_start_indices,
+                             graph_node_lengths);
 }
 
 
@@ -2053,10 +2066,17 @@ PYBIND11_MODULE(generator, m) {
           py::arg("query_lengths"),
           py::arg("graph_start_indices"),
           py::arg("graph_lengths"),
+          py::arg("graph_edge_start_indices"),
+          py::arg("graph_edge_lengths"),
           py::arg("task_start_indices"),
           py::arg("task_lengths"),
-          py::arg("mask_edges") = false,
+          py::arg("use_edges_invariance") = false,
+          py::arg("use_node_invariance") = false,
+          py::arg("use_graph_invariance") = false,
+          py::arg("use_query_invariance") = false,
           py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false
+          py::arg("use_graph_structure") = false,
+          py::arg("graph_node_start_indices") = py::none(),
+          py::arg("graph_node_lengths") = py::none()
     );
 }
