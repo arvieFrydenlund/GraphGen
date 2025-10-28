@@ -841,10 +841,12 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     if (include_nodes_in_graph_tokenization) {  // write in graph node list
         auto it3 = batched_node_shuffle_map.begin();
         graph_node_start_indices = py::array_t<int, py::array::c_style>(py::cast(curs));
-        graph_node_lengths = py::array_t<int, py::array::c_style>(py::cast(batched_node_shuffle_map.size()));
+        graph_node_lengths = py::array_t<int, py::array::c_style>(batch_size);
         auto ra_gl = graph_lengths.mutable_unchecked();
-        for (auto b = 0; b < batch_size; b++) {
+        auto ra_gn_l = graph_node_lengths.mutable_unchecked();
+        for (auto b = 0; b < batch_size; b++, ++it3) {
             auto num_nodes = static_cast<int>((**it3).size());
+            ra_gn_l[b] = num_nodes;
             ra_gl[b] += num_nodes;
             auto cur = curs[b];
             for (int j = 0; j < num_nodes; j++) {
@@ -954,16 +956,15 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
             }
         }
         graph_node_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_graph_node_length});
+        graph_node_gather_indices[py::make_tuple(py::ellipsis())] = 0; // initialize array
+
         auto graph_node_gather_indices_ra = graph_node_gather_indices.mutable_unchecked();
         for (int b = 0; b < batch_size; b++) {
             auto cur = graph_node_start_indices.at(b);
-            for (int j = 0; j < max_graph_node_length; j++) {
+            for (int j = 0; j < max_graph_node_length; j++, cur++) {
                 if (j < graph_node_lengths.at(b)) {
                     graph_node_gather_indices_ra(b, j) = cur; // gather indices
-                } else {
-                    graph_node_gather_indices_ra(b, j) = 0; // fake indices, must be masked out in criterion
                 }
-                cur += 1;
             }
         }
     }
@@ -1032,6 +1033,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
     }
     d["num_nodes"] = num_nodes;
     d["num_edges"] = num_edges;
+
     return d;
 }
 
