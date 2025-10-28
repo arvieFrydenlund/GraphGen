@@ -380,7 +380,6 @@ vector<pair<int, int> > get_edge_list(unique_ptr<Graph<D> > &g_ptr, vector<int> 
     return edge_list;
 }
 
-
 inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distances_ptr,
                                const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
                                const vector<float> &task_sample_dist = vector<float>()) {
@@ -483,7 +482,6 @@ inline vector<int> sample_path(const unique_ptr<vector<vector<int> > > &distance
     }
     return path;
 }
-
 
 template<typename T>
 int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path) {
