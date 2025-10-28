@@ -131,6 +131,21 @@ def _t_reconstruct(args, d, batch_size=20, plot=True):
         if plot:
             r.plot()
 
+
+def pretty_distance_print(d, min_node=0, max_node=500):
+    """
+    d in a n * n matrix, we add a column and a row for the range ids, then cut off at the min and max num nodes
+    """
+    d_out = d.copy()
+    d_out = d_out[min_node:max_node + 1, min_node:max_node + 1]
+
+    n = d_out.shape[0]
+    a1 = np.arange(min_node, max_node + 1)[:n]
+    d_out = np.concatenate([d_out, a1[None, :]], axis=0)
+    a2 = np.arange(min_node, max_node + 2)[:n+1]
+    d_out = np.concatenate([d_out, a2[:, None]], axis=1)
+    print(d_out)
+
 def _t_verify_paths(args, d, batch_size=20):
     args.task_type = 'shortest_path'
     # given distance matrices, make fake paths and verify them
@@ -151,8 +166,13 @@ def _t_verify_paths(args, d, batch_size=20):
         queries[b, 0] = src_tokens[b, query_start_indices[b], 0]
         queries[b, 1] = src_tokens[b, query_start_indices[b] + 1, 0]
 
-    print(gt_paths, 'should be all ones')
-    # print(distances[0])
+    print('First example, distances')
+    pretty_distance_print(distances[0], gt_paths[0, :task_lengths[0]].min(), gt_paths[0, :task_lengths[0]].max())
+    print('query and path', queries[0], gt_paths[0, :task_lengths[0]])
+    print()
+
+    print(gt_paths)
+    print('should be all ones')
     verify = generator.verify_paths(distances, queries, gt_paths, task_lengths)
     print(verify)
 
@@ -244,8 +264,8 @@ if __name__ == '__main__':
     # args.start_at_root = True
     # args.align_prefix_front_pad = True
     # _t_reconstruct(args, d)
-    # _t_verify_paths(args, d)
+    _t_verify_paths(args, d)
 
-    _t_positions(args, d, batch_size=20)
+    #_t_positions(args, d, batch_size=20)
 
     print('\n\nDone Testing')

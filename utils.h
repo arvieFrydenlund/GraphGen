@@ -997,6 +997,7 @@ inline py::dict package_for_model(const string &graph_type, const string &task_t
         d["graph_node_lengths"] = py::none();
         d["graph_node_gather_indices"] = py::none();
     }
+
     auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
     d["distances"] = bd;
     d["hashes"] = hash_distance_matrix<int>(bd);
