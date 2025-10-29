@@ -13,6 +13,7 @@
 
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "scratch_pads.h"
 #include "utils.h"
 #include <limits>
 #include <cmath>
@@ -176,7 +177,7 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
     }
 }
 
-inline void set_default_dictionary(const int max_vocab = 100) {
+inline void set_default_dictionary(const int max_vocab = 100, const int extra_after=0) {
     /* Sets a default dictionary
     * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
     * '|': 4, '!': 5, '=': 6, '.': 7,
@@ -189,24 +190,24 @@ inline void set_default_dictionary(const int max_vocab = 100) {
         {"<pad>", 1},
         {"</s>", 2},
         {"<unk>", 3},
-        {"|", 4},
-        {"!", 5},
-        {"=", 6},
-        {".", 7},
-        {"t1", 8},
+        {"|", 4},  // edge marker
+        {"!", 5},  // thinking token
+        {"=", 6},  // task start
+        {".", 7},  // task end
+        {"t1", 8}, // potentially mark task type for muliti-task learning
         {"t2", 9},
         {"t3", 10},
         {"t4", 11},
         {"t5", 12},
-        {"/", 13},
-        {"?", 14},
+        {"/", 13}, // query start
+        {"?", 14}, // query end
         {"@", 15},
-        {"#", 16},
-        {"s1", 17},
-        {"s2", 18},
-        {"s3", 19},
-        {"s4", 20},
-        {"s5", 21}
+        {"#", 16}, // scratchpad start
+        {"[", 17}, // bfs adjacency start
+        {"]", 18}, // bfs adjacency end
+        {"{", 19},
+        {"}", 20},
+        {"$", 21},
     };
 
     if (max_vocab > 0) {
@@ -216,12 +217,17 @@ inline void set_default_dictionary(const int max_vocab = 100) {
             dictionary[std::to_string(i - num_special)] = i;
         }
     }
+    if (extra_after > 0) {
+        auto current_size = static_cast<int>(dictionary.size());
+        for (int i = 0; i < extra_after; i++) {
+            dictionary["e" + std::to_string(i)] = current_size + i;
+        }
+    }
 }
 
 map<std::string, int> get_dictionary() {
     return dictionary;
 }
-
 
 /* ************************************************
  *  Dictionary for mapping positions to ids
@@ -817,7 +823,9 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
                     const int max_path_length, const int min_path_length, int start, int end,
                     list<unique_ptr<pair<vector<int>, vector<int> > > > &batched_centers,
                     list<pair<int, int> > &batched_center_lengths,
-                    int max_query_size, const int min_query_size
+                    int max_query_size, const int min_query_size,
+                    const string scratchpad_type,
+                    list<unique_ptr<ScratchPad> > &batched_scratchpads
 ) {
     const auto E = num_edges(*g_ptr);
     auto edge_list = get_edge_list<D>(g_ptr, edge_shuffle_map);
@@ -836,6 +844,13 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
             // time_after(path_t, "sample_path");
             batched_path_lengths.push_back(path.size());
             batched_paths.push_back(make_unique<vector<int> >(path));
+            if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
+                auto s =  BFSScratchPad(path[0], path[path.size() - 1], g_ptr);
+                batched_scratchpads.push_back(make_unique<BFSScratchPad>(s));
+            } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
+                // generate scratchpad
+                // TODO implement
+            }
         } else if (task_type == "center" || task_type == "centroid") {  // can only be one of these
             auto given_query = vector<int>();
             // auto center_t = time_before();
@@ -876,6 +891,8 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
     }
 }
 
+
+
 inline int attempt_check(const int E, const int max_edges, const int attempts, const int max_attempts) {
     if (E > max_edges) {
         if (attempts > max_attempts) {
@@ -899,6 +916,7 @@ inline py::dict erdos_renyi_n(
     const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
+    const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
@@ -935,6 +953,7 @@ inline py::dict erdos_renyi_n(
     auto batched_path_lengths = list<int>();
     auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
     auto batched_center_lengths = list<pair<int, int> >();
+    auto batched_scratchpads = list<unique_ptr<ScratchPad> >();
 
     int attempts = 0;
     int num = 0;
@@ -967,7 +986,8 @@ inline py::dict erdos_renyi_n(
                                            batched_paths, batched_path_lengths,
                                            max_path_length, min_path_length, -1, -1,
                                            batched_centers, batched_center_lengths,
-                                           max_query_size, min_query_size
+                                           max_query_size, min_query_size,
+                                           scratchpad_type, batched_scratchpads
         );
 
         // time_after(pack_t, "pack");
@@ -1021,6 +1041,7 @@ inline py::dict euclidean_n(
     const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
+    const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
@@ -1058,9 +1079,9 @@ inline py::dict euclidean_n(
     auto batched_path_lengths = list<int>();
     auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
     auto batched_center_lengths = list<pair<int, int> >();
+    auto batched_scratchpads = list<unique_ptr<ScratchPad> >();
     // this one is different from the rest
-    auto batched_positions = list<unique_ptr<vector<vector<float> > > >();
-    // [batch_size, dim + 1] of node_id, x, y etc.
+    auto batched_positions = list<unique_ptr<vector<vector<float> > > >(); // [batch_size, dim + 1] of node_id, x, y etc.
 
     int attempts = 0;
     int num = 0;
@@ -1096,7 +1117,8 @@ inline py::dict euclidean_n(
                                            batched_paths, batched_path_lengths,
                                            max_path_length, min_path_length, -1, -1,
                                            batched_centers, batched_center_lengths,
-                                           max_query_size, min_query_size
+                                           max_query_size, min_query_size,
+                                           scratchpad_type, batched_scratchpads
         );
         // time_after(pack_t, "pack");
         num += 1;
@@ -1152,6 +1174,7 @@ inline py::dict random_tree_n(
     const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
+    const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
@@ -1200,6 +1223,7 @@ inline py::dict random_tree_n(
     auto batched_path_lengths = list<int>();
     auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
     auto batched_center_lengths = list<pair<int, int> >();
+    auto batched_scratchpads = list<unique_ptr<ScratchPad> >();
 
     int attempts = 0;
     int num = 0;
@@ -1237,7 +1261,8 @@ inline py::dict random_tree_n(
                                            batched_paths, batched_path_lengths,
                                            max_path_length, min_path_length, start, -1,
                                            batched_centers, batched_center_lengths,
-                                           max_query_size, min_query_size
+                                           max_query_size, min_query_size,
+                                           scratchpad_type, batched_scratchpads
         );
         // time_after(pack_t, "pack");
         num += 1;
@@ -1322,6 +1347,7 @@ inline py::dict path_star_n(
     const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
+    const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
     const bool for_plotting = false,
@@ -1339,6 +1365,7 @@ inline py::dict path_star_n(
     auto batched_path_lengths = list<int>();
     auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
     auto batched_center_lengths = list<pair<int, int> >();
+    auto batched_scratchpads = list<unique_ptr<ScratchPad> >();
 
     int attempts = 0;
     int num = 0;
@@ -1365,7 +1392,8 @@ inline py::dict path_star_n(
                                          batched_paths, batched_path_lengths,  -1, -1,
                                          start_end.first, start_end.second,
                                          batched_centers, batched_center_lengths,
-                                         max_query_size, min_query_size
+                                         max_query_size, min_query_size,
+                                         scratchpad_type, batched_scratchpads
         );
         // time_after(pack_t, "pack");
         num += 1;
@@ -1416,6 +1444,7 @@ inline py::dict balanced_n(
     const bool include_nodes_in_graph_tokenization = false,
     const bool query_at_end = true,
     const int num_thinking_tokens = 0,
+    const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool for_plotting = false,
     const bool align_prefix_front_pad = false,
@@ -1450,6 +1479,7 @@ inline py::dict balanced_n(
     auto batched_path_lengths = list<int>();
     auto batched_centers = list<unique_ptr<pair<vector<int>, vector<int> > > >();
     auto batched_center_lengths = list<pair<int, int> >();
+    auto batched_scratchpads = list<unique_ptr<ScratchPad> >();
 
     int attempts = 0;
     int num = 0;
@@ -1492,7 +1522,8 @@ inline py::dict balanced_n(
                                          batched_paths, batched_path_lengths, -1, -1,
                                          start_end.first, start_end.second,
                                          batched_centers, batched_center_lengths,
-                                         max_query_size, min_query_size
+                                         max_query_size, min_query_size,
+                                         scratchpad_type, batched_scratchpads
         );
         // time_after(pack_t, "pack");
         num += 1;
@@ -1614,7 +1645,8 @@ PYBIND11_MODULE(generator, m) {
           "Sets the dictionary/vocabulary of token to token_idx.\n"
           "Parameters:\n\t"
           "None\n",
-          py::arg("max_vocab") = 100);
+          py::arg("max_vocab") = 100,
+          py::arg("extra_after") = 0);
 
     m.def("get_dictionary", &get_dictionary,
           "Gets the dictionary/vocabulary of token to token_idx.\n"
@@ -1825,6 +1857,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
@@ -1886,6 +1919,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
@@ -1942,6 +1976,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
@@ -1994,6 +2029,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
@@ -2053,6 +2089,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
           py::arg("align_prefix_front_pad") = false,
           py::arg("for_plotting") = false);
