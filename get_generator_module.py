@@ -362,7 +362,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
     return reconstructions
 
-def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'generator.cpp'),
+def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'scratch_pads.h', 'utils.h', 'generator.cpp'),
                          cpp_path='',
                          boost_path='/usr/include/boost/graph/',):
     """

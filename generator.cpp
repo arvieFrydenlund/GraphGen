@@ -845,6 +845,7 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
             batched_path_lengths.push_back(path.size());
             batched_paths.push_back(make_unique<vector<int> >(path));
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
+                cout << "Generating BFS scratchpad" << endl;
                 auto s =  BFSScratchPad(path[0], path[path.size() - 1], g_ptr);
                 batched_scratchpads.push_back(make_unique<BFSScratchPad>(s));
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
@@ -871,12 +872,22 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
         // time_after(path_d, "floyd_warshall");
         convert_boost_matrix<int, DistanceMatrix<D> >(boost_distances_ptr, distances_ptr, N, N);
         non_causal_ground_truths(distances_ptr, ground_truths_ptr, edge_list);
+        cout << "task type: " << task_type << "scratchpad type: " << scratchpad_type << endl;
+
         if (task_type == "shortest_path" || task_type == "path") {
             // auto path_t = time_before();
             auto path = sample_path(distances_ptr, max_path_length, min_path_length, start, end);
             // time_after(path_t, "sample_path");
             batched_path_lengths.push_back(path.size());
             batched_paths.push_back(make_unique<vector<int> >(path));
+            if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
+                cout << "Generating BFS scratchpad" << endl;
+                auto s =  BFSScratchPad(path[0], path[path.size() - 1], g_ptr);
+                batched_scratchpads.push_back(make_unique<BFSScratchPad>(s));
+            } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
+                // generate scratchpad
+                // TODO implement
+            }
         } else if (task_type == "center" || task_type == "centroid") {  // can only be one of these
             auto given_query = vector<int>();
             // auto center_t = time_before();

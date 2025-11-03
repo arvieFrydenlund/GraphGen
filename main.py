@@ -249,6 +249,18 @@ def _t_positions2(args, d, batch_size=7):
         print(_concat(src_tokens[b], pos_ids[b]))
 
 
+def _t_bfs(args, d, batch_size=3):
+    args.scratchpad_type = 'bfs'
+    d_n = get_batch(args, batch_size)
+
+    for k, v in d_n.items():
+        if isinstance(v, np.ndarray):
+            print(f'{k}: {v.shape}, {v.dtype}')
+        else:
+            print(f'{k}: {v}, {type(v)}')
+
+
+
 
 if __name__ == '__main__':
 
@@ -287,6 +299,8 @@ if __name__ == '__main__':
     # _t_reconstruct(args, d)
     # _t_verify_paths(args, d)
 
-    _t_positions2(args, d, batch_size=20)
+    #_t_positions2(args, d, batch_size=20)
+
+    _t_bfs(args, d, batch_size=7)
 
     print('\n\nDone Testing')
