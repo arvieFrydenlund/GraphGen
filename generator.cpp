@@ -208,6 +208,7 @@ inline void set_default_dictionary(const int max_vocab = 100, const int extra_af
         {"{", 19},
         {"}", 20},
         {"$", 21},
+        {"D", 22},
     };
 
     if (max_vocab > 0) {
@@ -220,7 +221,7 @@ inline void set_default_dictionary(const int max_vocab = 100, const int extra_af
     if (extra_after > 0) {
         auto current_size = static_cast<int>(dictionary.size());
         for (int i = 0; i < extra_after; i++) {
-            dictionary["e" + std::to_string(i)] = current_size + i;
+            dictionary["D" + std::to_string(i)] = current_size + i;
         }
     }
 }

@@ -25,11 +25,11 @@ public:
 
 class BFSScratchPad : public ScratchPad {
 public:
-       vector<vector<pair<int, vector<int>>>> levels;
+       vector<map<int, vector<int>>> levels;
        /*
        *  Have a vector for each level of the BFS
-       *  these then need to be a vector of pairs of vectors:  [(4, [8, 6]), (5, [7])].
-       *  Then  I can random shuffle the pairs and the adjacency lists within each pair
+       *  these then need to be a vmap of a node to its adjacency list
+       *  Then  I can random shuffle the adjacency lists within each pair
        *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
        */
        vector<int> tokenized_inputs;
@@ -38,7 +38,8 @@ public:
 
        	template<typename D>
         BFSScratchPad( const int start, const int end,
-           const unique_ptr<Graph<D> > &g_ptr) {
+           const unique_ptr<Graph<D> > &g_ptr
+           ) {
                 // constructor, fill in levels
 
             bool is_finished = false;  // don't stop at finding target but do entire level with target in it
@@ -48,7 +49,7 @@ public:
             q.push(start);
 
             while (!q.empty()){
-                vector<pair<int, vector<int>>> current_level_nodes;
+                map<int, vector<int>> current_level_nodes;
                 vector<int> next_level_nodes;
                 while (!q.empty()) { // process the current level
                     vector<int> cur_neighbors;
@@ -68,8 +69,7 @@ public:
                     //if (cur_neighbors.size() == 0) { // put this here if you want to prevent empty neighbor lists
                     //    continue;  // no new neighbors
                     //}
-                    pair<int, vector<int>> p = make_pair(cur, cur_neighbors);
-                    current_level_nodes.push_back(p);
+                    current_level_nodes[cur] = cur_neighbors;
                     for (auto n : cur_neighbors) {
                         next_level_nodes.push_back(n);
                     }
@@ -92,17 +92,42 @@ public:
        	    this->pprint_levels();
         }
 
-       void shuffle_levels() {
-       	    // note that order of neightbours [v1, v2] creates the order for the next level
-       	    // so only shuffle neighbour order here
+	   void _add(vector<int> & inputs,
+				  vector<vector<int>> & targets,
+				  const string e,
+				  const map<std::string, int> &dictionary){
+       		inputs.push_back(dictionary.at(e));
+       		targets.push_back(vector<int>{dictionary.at(e)});
+       	}
 
+        void _add(vector<int> & inputs,
+                  vector<vector<int>> & targets,
+                  const int e){
+       	    inputs.push_back(e);
+       	    targets.push_back(vector<int>{e});
+       	}
+
+        void _add(vector<int> & inputs,
+                  vector<vector<int>> & targets,
+                  const int e,
+                  const vector<int> &ts,
+                  const int up_to){
+       	    inputs.push_back(e);
+       	    // push back targets until up_to
+       	    auto nt = vector<int>{};
+       	    for (size_t i = 0; i < static_cast<size_t>(up_to); i++) {
+               	nt.push_back(ts[i]);
+       	    }
+       		targets.push_back(nt);
        	}
 
         void tokenize(
-            const vector<int> &node_shuffle_map,
             const map<std::string, int> &dictionary,
+            const unique_ptr<vector<int> > &node_shuffle_map,
             std::mt19937& gen,
-            const bool use_unique_depth_markers = true) {
+            const bool sort = false,
+            const bool use_unique_depth_markers = true
+            ) {
                 // tokenize the BFS levels into a single sequence
        	        // pair(inputs, targets)
                 // where targets can be multiple tokens due to label smoothing over order, ex.
@@ -112,9 +137,60 @@ public:
                 // real tokenization is D0 20 [6 7 10 ] D1 6 [8 9 18 ] 7 [3 15 ] 10 [1 4 ] if using unique depth markers
        	        // else, D 20 [6 7 10 ] D 6 [8 9 18 ] 7 [3 15 ] 10 [1 4 ]
 
+       	    // note that order of neighbours [v1, v2] creates the order for the next level
+       	    // so only shuffle neighbour order here, if sort, sort instead of shuffle
+
+       		// map all nodes, and either shuffle or sort adjacency lists
+       		vector<map<int, vector<int>>> new_levels; // copy to modify
+       		for (size_t i = 0; i < levels.size(); i++) {
+       	    	map<int, vector<int>> new_level;
+       	    	for (auto &p : levels[i]) {
+       	    		auto nbrs = p.second;
+       	    		vector<int> mapped_nbrs;
+       	    		for (size_t j = 0; j < nbrs.size(); j++) {
+       	    			mapped_nbrs.push_back(node_shuffle_map->at(nbrs[j]));
+       	    		}
+       	    		if (sort) {
+       	    			sort(mapped_nbrs.begin(), mapped_nbrs.end());
+       	    		} else {
+       	    			std::shuffle(mapped_nbrs.begin(), mapped_nbrs.end(), gen);
+       	    		}
+       	    		new_level[node_shuffle_map->at(p.first)] = mapped_nbrs;
+       	    	}
+       	    	new_levels.push_back(new_level);
 
        	    auto inputs = vector<int>{};
        	    auto targets = vector<vector<int>>{};
+       	    // Get the initial adjacency list order
+            // start node as only item in new_levels[0]
+       		auto start_node = new_levels[0].begin()->first;
+
+       	    auto prior_adj_orders = vector<vector<int>>{vector<int>{start_node}};
+       	    for (size_t i = 0; i < levels.size(); i++) {  // process level i
+       	    	// other example
+       	    	// D0 14 [13 17 ] D1 13 [10 ] 17 [8 11 20 ] D2 10 [9 ] 8 [] 11 [7 ] 20 [12 18 ] D3 9 [0 ] 7 [] 12 [5 ] 18 [1 ] D4 0 [19 ] 5 [2 ] 1 [3 4 15 ]
+       	    	// prior_adj_orders = [[14]], then [[13, 17]], then [[10], [8, 11, 20]], or
+       	    	// prior_adj_orders = [[14]], then [[17, 13]], then [[8, 11, 20], [10]]
+       	    	// and [8, 11, 20] can be shuffled any way
+
+                // add depth marker
+       	    	string marker = "D";
+                if (use_unique_depth_markers) {
+                    marker = "D" + to_string(i);;
+                }
+       	    	_add(inputs, targets, marker, dictionary);
+
+                // process each node in level
+       	    	auto next_adj_orders = vector<vector<int>>{};
+                for (size_t j = 0; j < prior_adj_orders.size(); j++) {
+                	auto next_order = vector<int>{};
+                	for (size_t k = 0; k < prior_adj_orders[j].size(); k++) {
+                		auto cur = prior_adj_orders[j][k];
+                		_add(inputs, targets, cur);
+                		_add(inputs, targets, "[", dictionary);
+                		auto neighbors = new_levels[i][cur];
+                }
+       	    }
 
        	    this->tokenized_inputs = inputs;
        	    this->tokenized_targets = targets;
