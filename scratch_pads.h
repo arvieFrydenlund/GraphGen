@@ -192,6 +192,7 @@ public:
                 }
        	    }
 
+
        	    this->tokenized_inputs = inputs;
        	    this->tokenized_targets = targets;
         }
