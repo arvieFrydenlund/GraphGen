@@ -16,10 +16,17 @@ using namespace std;
 
 class ScratchPad { // For easy passing of common variables to different scratch pad types
 public:
-  pair<vector<int>, vector<vector<int>>> tokenize(const bool use_unique_depth_markers = true) {
-    // targets, but input sequence is shifted by one
-   throw std::invalid_argument("Not implemented yet");
-  };
+
+	vector<int> tokenized_inputs;
+	vector<vector<int>> tokenized_targets;
+
+	void tokenize(const bool use_unique_depth_markers = true) {
+		throw std::invalid_argument("Not implemented yet");
+	};
+
+	pair<vector<int>, vector<vector<int>>> get_tokenized() {
+		return make_pair(this->tokenized_inputs, this->tokenized_targets);
+	}
 };
 
 
@@ -32,9 +39,6 @@ public:
        *  Then  I can random shuffle the adjacency lists within each pair
        *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
        */
-       vector<int> tokenized_inputs;
-       vector<vector<int>> tokenized_targets;
-
 
        	template<typename D>
         BFSScratchPad( const int start, const int end,
@@ -88,8 +92,6 @@ public:
                     }
                 }
             }
-       	    cout << "start " << start << " end " << end << endl;
-       	    this->pprint_levels();
         }
 
 	   void _add(vector<int> & inputs,
@@ -197,9 +199,7 @@ public:
        	    this->tokenized_targets = targets;
         }
 
-    pair<vector<int>, vector<vector<int>>> get_tokenized() {
-       	return make_pair(this->tokenized_inputs, this->tokenized_targets);
-    }
+
 
     void pprint_levels() { // basically the tokenization, for debugging
        	cout << "Num levels: " << levels.size()  << endl;

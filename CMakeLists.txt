@@ -16,7 +16,9 @@ add_executable(GraphGen main.cpp
         directed_graphs.h,
         scratch_pads.h
         utils.h,
-        generator.cpp)
+        generator.cpp
+        instance.h
+        tasks.h)
 
 
 set(CMAKE_VERBOSE_MAKEFILE ON)

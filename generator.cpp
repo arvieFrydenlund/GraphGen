@@ -848,6 +848,7 @@ void push_back_data(unique_ptr<Graph<D> > &g_ptr,
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
                 cout << "Generating BFS scratchpad" << endl;
                 auto s =  BFSScratchPad(path[0], path[path.size() - 1], g_ptr);
+                s.tokenize(dictionary, no
                 batched_scratchpads.push_back(make_unique<BFSScratchPad>(s));
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
                 // generate scratchpad
