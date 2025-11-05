@@ -25,16 +25,25 @@ using namespace py::literals;
 
 class Task {
 public:
-    vector<int> tokenized_query_inputs;
-    vector<int> tokenized_task_inputs;
-    vector<vector<int> > tokenized_task_targets;
+    /*
+     A task is split into a query and a task component,
+     with the query being part of the prompt and the task being the expected output
 
-    void tokenize(const bool use_unique_depth_markers = true) {
+     For graphs, targets are often multi-label,
+     thus we separate the 1-D input and (potentially) 2-D targets
+     */
+    vector<int> tokenized_query_inputs;
+    vector<int> tokenized_task_inputs;  // input part
+    vector<vector<int> > tokenized_task_targets;  // defines multi-label targets
+
+    // use polymorphism for different task types when passing them around
+    virtual void tokenize(const map<std::string, int> &dictionary,
+                          const unique_ptr<vector<int> > &node_shuffle_map,
+                          std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
 
-    int get_max_num_labels() {
-        // max size of tokenized_task_targets
+    int get_max_num_labels() {   // max size of tokenized_task_targets, for batching
         int max_labels = 0;
         for (size_t i = 0; i < tokenized_task_targets.size(); i++) {
             if (static_cast<int>(tokenized_task_targets[i].size()) > max_labels) {
@@ -47,19 +56,19 @@ public:
 
 
 class ShortestPathTask : public Task {
-
     vector<int> path;
-    vector<vector<int> > label_smoothed_path;
+    vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
 
     ShortestPathTask(std::mt19937 &gen,
-                 const unique_ptr<vector<vector<int> > > &distances_ptr,
-                 const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
-                 const vector<float> &task_sample_dist = vector<float>()) {
+                     const unique_ptr<vector<vector<int> > > &distances_ptr,
+                     const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
+                     const vector<float> &task_sample_dist = vector<float>()) {
         /*
-         * This is hardcoded for integer path lengths
+         * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
          * return length as vector of node ids
-         * This is hardcoded for checking for distances of 1 as a connection
+*
+         * B) This is hardcoded for checking for distances of 1 as a connection
          */
 
         // define d1
@@ -120,7 +129,7 @@ class ShortestPathTask : public Task {
                         attempts += 1;
                         if (attempts > 1000) {
                             throw std::invalid_argument(
-                                "Could not find a path in 1000 attempts.  This should never happen.");
+                                    "Could not find a path in 1000 attempts.  This should never happen.");
                         }
                     }
                     break;
@@ -141,7 +150,6 @@ class ShortestPathTask : public Task {
             }
             // shuffle neighbors and then sort by distance to end, dumb way to do this
             if (neighbors.size() == 0) {
-                // print_matrix(distances_ptr, (*distances_ptr).size(), (*distances_ptr)[0].size(), true, 100000, " ");
                 assert(neighbors.size() > 0);
                 throw std::invalid_argument("No neighbors found.  This should never happen.");
             }
@@ -153,7 +161,7 @@ class ShortestPathTask : public Task {
             cur = neighbors[0].first;
             path.push_back(cur);
         }
-        label_smooth_path(distances_ptr);
+        label_smooth_path(distances_ptr);  // get the smoothing values while we have distances
     }
 
     void label_smooth_path(const unique_ptr<vector<vector<int> > > &distances_ptr) {
@@ -179,34 +187,44 @@ class ShortestPathTask : public Task {
     }
 
     void tokenize(
-        const map<std::string, int> &dictionary,
-        const unique_ptr<vector<int> > &node_shuffle_map,
-        std::mt19937& gen) {
-        auto query_start_marker = dictionary["/"];
-        auto query_end_marker = dictionary["?"];
-        auto task_start_marker = dictionary["="];
-        auto task_end_marker = dictionary["."];
+            const map<std::string, int> &dictionary,
+            const unique_ptr<vector<int> > &node_shuffle_map,
+            std::mt19937 &gen) {
 
-        //  query tokenization
-        tokenized_query_inputs.push_back(query_end_marker);
-        tokenized_query_inputs.push_back(node_shuffle_map->at(path[0])); // start
-        tokenized_query_inputs.push_back(node_shuffle_map->at(path[path.size() - 1])); // end node
-        tokenized_query_inputs.push_back(query_end_marker);
+        /*  Ex. if the path is 0 -> 1 -> 2 -> 3 and there is an alternative path 0 -> 4 -> 2 -> 3
+         * query: / 0 3 ?
+         * task input: = 0 1 2 3 .
+         * task target: = [0] [1,4] [2] [3] .
+         */
 
-        //  task tokenization
-        tokenized_task_inputs.push_back(task_start_marker);
-        tokenized_task_targets.push_back(vector<int>({task_start_marker}));
-        // shuffle map new path and label_smoothed
-        for (size_t i = 0; i < path.size(); i++) {
-            tokenized_task_inputs.push_back(node_shuffle_map->at(path[i]));
-            auto labels = vector<int>();
+        auto query_start_marker = dictionary.at("/");
+        auto query_end_marker = dictionary.at("?");
+        auto task_start_marker = dictionary.at("=");
+        auto task_end_marker = dictionary.at(".");
+
+        auto query_size = 4; // q_start, start_node, end_node, q_end
+        auto task_size = static_cast<int>(path.size()) + 2; // t_start, path nodes, t_end
+        tokenized_query_inputs = vector<int>(query_size);
+        tokenized_task_inputs = vector<int>(task_size);
+        tokenized_task_targets = vector<vector<int> >(task_size, vector<int>());
+
+        // query tokenization
+        tokenized_query_inputs[0] = query_start_marker;
+        tokenized_query_inputs[1] = node_shuffle_map->at(path[0]); // start
+        tokenized_query_inputs[2] = node_shuffle_map->at(path[path.size() - 1]); // end node
+        tokenized_query_inputs[3] = query_end_marker;
+
+        // task tokenization
+        tokenized_task_inputs[0] = task_start_marker;
+        tokenized_task_targets[0].push_back(task_start_marker);
+        for (size_t i = 0; i < path.size(); i++) {  // shuffle map new path and label_smoothed
+            tokenized_task_inputs[i + 1] = node_shuffle_map->at(path[i]);
             for (size_t j = 0; j < label_smoothed_path[i].size(); j++) {
-                labels.push_back(node_shuffle_map->at(label_smoothed_path[i][j]));
+                tokenized_task_targets[i + 1].push_back(node_shuffle_map->at(label_smoothed_path[i][j]));
             }
-            tokenized_task_targets.push_back(labels);
         }
-        tokenized_task_inputs.push_back(task_end_marker);
-        tokenized_task_targets.push_back(vector<int>({task_end_marker}));
+        tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
+        tokenized_task_targets[tokenized_task_targets.size() - 1].push_back(task_end_marker);
     }
 
 
@@ -283,13 +301,115 @@ class ShortestPathTask : public Task {
 
 
 class CenterTask : public Task {
-    vector<int> path;
-    vector<vector<int> > label_smoothed_path;
 
-    CenterTask (std::mt19937 &gen,
-                 const unique_ptr<vector<vector<int> > > &distances_ptr,
-                 const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
-                 const vector<float> &task_sample_dist = vector<float>()) {
+    vector<int> new_query;
+    vector<int> outputs;
+    bool is_center = true;  // otherwise centroid
+
+    CenterTask(std::mt19937 &gen,
+               const unique_ptr<vector<vector<int> > > &distances_ptr,
+               vector<int> &given_query,
+               int max_query_size = -1, const int min_query_size = 2,
+               const bool is_center = true) {
+        this->is_center = is_center;
+
+        auto N = static_cast<int>(distances_ptr->size());
+        if (max_query_size == -1 || max_query_size > N) {
+            max_query_size = N;
+        }
+        new_query = vector<int>();
+        if (given_query.empty()) {
+            //sample query
+            // stackoverflow.com/questions/33802205/how-to-sample-without-replacement-using-c-uniform-int-distribution
+            uniform_int_distribution<int> d1(min_query_size, max_query_size);
+            auto query_length = d1(gen);
+            auto nodes = std::vector<int>(N);
+            std::iota(nodes.begin(), nodes.end(), 0);
+            sample(nodes.begin(), nodes.end(), std::back_inserter(new_query), query_length, gen);
+            // std::ranges::shuffle(new_query, gen);  // so that nodes are out of order, this doesn't matter with permute
+        } else {
+            // copy over elements from given query
+            for (auto i: given_query) {
+                new_query.push_back(i);
+            }
+        }
+        auto Q = static_cast<int>(new_query.size());
+        // calculate center or centroid of graph given queries
+        auto values = vector<float>(N, static_cast<float>(inf));
+        for (int v = 0; v < N; v++) {
+            auto d = vector<float>(Q, 0.0);
+            for (int q = 0; q < Q; q++) {
+                d[q] = static_cast<float>((*distances_ptr)[v][new_query[q]]);
+            }
+            if (is_center) {  // get max of d
+                values[v] = *std::max_element(d.begin(), d.end());
+            } else {  // get average
+                values[v] = static_cast<float>(std::accumulate(d.begin(), d.end(), 0.0)); // / Q);  avoid float div
+            }
+        }
+
+        outputs = vector<int>();
+        auto min_value = *std::min_element(values.begin(), values.end());
+        for (int i = 0; i < N; i++) {
+            if (float_equality(values[i], min_value)) {
+                outputs.push_back(i);
+            }
+        }
+        if (outputs.empty()) {
+            // this will be due to float equality and means the function needs to be reimplemented better
+            auto s = "Center/centroid error no outputs found for min value " + std::to_string(min_value);
+            throw std::invalid_argument(s);
+        }
+
     }
+
+    bool float_equality(double a, double b) {
+        return std::fabs(a - b) < std::numeric_limits<double>::epsilon();
+    }
+
+    void tokenize(
+            const map<std::string, int> &dictionary,
+            const unique_ptr<vector<int> > &node_shuffle_map,
+            std::mt19937 &gen) {
+
+        /* Ex if the query is 0,1,2 and the center is 3,4
+         * query : / 0 1 2 ?
+         * task input: = 3 4 .
+         * task target: = [3 4] [4] .
+         */
+
+        auto query_start_marker = dictionary.at("/");
+        auto query_end_marker = dictionary.at("?");
+        auto task_start_marker = dictionary.at("=");
+        auto task_end_marker = dictionary.at(".");
+
+        auto query_size = static_cast<int>(new_query.size()) + 2; // q_start, num_nodes q_end
+        auto task_size = static_cast<int>(outputs.size()) + 2; // t_start, path nodes, t_end
+        tokenized_query_inputs = vector<int>(query_size);
+        tokenized_task_inputs = vector<int>(task_size);
+        tokenized_task_targets = vector<vector<int> >(task_size, vector<int>());
+
+        // query tokenization
+        tokenized_query_inputs[0] = query_start_marker;
+        for (size_t i = 0; i < new_query.size(); i++) {
+            tokenized_query_inputs[i + 1] = node_shuffle_map->at(new_query[i]);
+        }
+        tokenized_query_inputs[tokenized_query_inputs.size() - 1] = query_end_marker;
+
+        // task tokenization
+        tokenized_task_inputs[0] = task_start_marker;
+        tokenized_task_targets[0].push_back(task_start_marker);
+        for (size_t i = 0; i < outputs.size(); i++) {
+            tokenized_task_inputs[i + 1] = node_shuffle_map->at(outputs[i]);
+            for (size_t j = i; j < outputs.size(); j++) {  // label smoothing outputs since they have no order
+                tokenized_task_targets[i + 1].push_back(node_shuffle_map->at(outputs[j]));
+            }
+        }
+        tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
+        tokenized_task_targets[tokenized_task_targets.size() - 1].push_back(task_end_marker);
+    }
+
+
+};
 
 #endif //GRAPHGEN_TASKS_H

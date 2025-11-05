@@ -11,6 +11,9 @@
 #include <map>
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "tasks.h"
+#include "scratch_pads.h"
+#include "graph_tokenizer.h"
 
 using namespace std;
 
