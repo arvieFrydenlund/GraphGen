@@ -20,7 +20,7 @@ public:
     vector<vector<int> > tokenized_targets;
 
     virtual void tokenize(const map<std::string, int> &dictionary,
-                          const unique_ptr<vector<int> > &node_shuffle_map,
+                          const vector<int> &node_shuffle_map,
                           std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
@@ -134,7 +134,7 @@ public:
 
     void tokenize(
             const map<std::string, int> &dictionary,
-            const unique_ptr<vector<int> > &node_shuffle_map,
+            const vector<int> &node_shuffle_map,
             std::mt19937 &gen
     ) {
         // tokenize the BFS levels into a single sequence
@@ -157,14 +157,14 @@ public:
                 auto nbrs = p.second;
                 vector<int> mapped_nbrs;
                 for (size_t j = 0; j < nbrs.size(); j++) {
-                    mapped_nbrs.push_back(node_shuffle_map->at(nbrs[j]));
+                    mapped_nbrs.push_back(node_shuffle_map.at(nbrs[j]));
                 }
                 if (sort_adjacency_lists) {
                     sort(mapped_nbrs.begin(), mapped_nbrs.end());
                 } else {
                     std::shuffle(mapped_nbrs.begin(), mapped_nbrs.end(), gen);
                 }
-                new_level[node_shuffle_map->at(p.first)] = mapped_nbrs;
+                new_level[node_shuffle_map.at(p.first)] = mapped_nbrs;
             }
             new_levels.push_back(new_level);
         }

@@ -38,7 +38,7 @@ public:
 
     // use polymorphism for different task types when passing them around
     virtual void tokenize(const map<std::string, int> &dictionary,
-                          const unique_ptr<vector<int> > &node_shuffle_map,
+                          const vector<int> &node_shuffle_map,
                           std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
@@ -188,7 +188,7 @@ class ShortestPathTask : public Task {
 
     void tokenize(
             const map<std::string, int> &dictionary,
-            const unique_ptr<vector<int> > &node_shuffle_map,
+            const vector<int> &node_shuffle_map,
             std::mt19937 &gen) {
 
         /*  Ex. if the path is 0 -> 1 -> 2 -> 3 and there is an alternative path 0 -> 4 -> 2 -> 3
@@ -210,17 +210,17 @@ class ShortestPathTask : public Task {
 
         // query tokenization
         tokenized_query_inputs[0] = query_start_marker;
-        tokenized_query_inputs[1] = node_shuffle_map->at(path[0]); // start
-        tokenized_query_inputs[2] = node_shuffle_map->at(path[path.size() - 1]); // end node
+        tokenized_query_inputs[1] = node_shuffle_map.at(path[0]); // start
+        tokenized_query_inputs[2] = node_shuffle_map.at(path[path.size() - 1]); // end node
         tokenized_query_inputs[3] = query_end_marker;
 
         // task tokenization
         tokenized_task_inputs[0] = task_start_marker;
         tokenized_task_targets[0].push_back(task_start_marker);
         for (size_t i = 0; i < path.size(); i++) {  // shuffle map new path and label_smoothed
-            tokenized_task_inputs[i + 1] = node_shuffle_map->at(path[i]);
+            tokenized_task_inputs[i + 1] = node_shuffle_map.at(path[i]);
             for (size_t j = 0; j < label_smoothed_path[i].size(); j++) {
-                tokenized_task_targets[i + 1].push_back(node_shuffle_map->at(label_smoothed_path[i][j]));
+                tokenized_task_targets[i + 1].push_back(node_shuffle_map.at(label_smoothed_path[i][j]));
             }
         }
         tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
@@ -369,7 +369,7 @@ class CenterTask : public Task {
 
     void tokenize(
             const map<std::string, int> &dictionary,
-            const unique_ptr<vector<int> > &node_shuffle_map,
+            const vector<int> &node_shuffle_map,
             std::mt19937 &gen) {
 
         /* Ex if the query is 0,1,2 and the center is 3,4
@@ -392,7 +392,7 @@ class CenterTask : public Task {
         // query tokenization
         tokenized_query_inputs[0] = query_start_marker;
         for (size_t i = 0; i < new_query.size(); i++) {
-            tokenized_query_inputs[i + 1] = node_shuffle_map->at(new_query[i]);
+            tokenized_query_inputs[i + 1] = node_shuffle_map.at(new_query[i]);
         }
         tokenized_query_inputs[tokenized_query_inputs.size() - 1] = query_end_marker;
 
@@ -400,9 +400,9 @@ class CenterTask : public Task {
         tokenized_task_inputs[0] = task_start_marker;
         tokenized_task_targets[0].push_back(task_start_marker);
         for (size_t i = 0; i < outputs.size(); i++) {
-            tokenized_task_inputs[i + 1] = node_shuffle_map->at(outputs[i]);
+            tokenized_task_inputs[i + 1] = node_shuffle_map.at(outputs[i]);
             for (size_t j = i; j < outputs.size(); j++) {  // label smoothing outputs since they have no order
-                tokenized_task_targets[i + 1].push_back(node_shuffle_map->at(outputs[j]));
+                tokenized_task_targets[i + 1].push_back(node_shuffle_map.at(outputs[j]));
             }
         }
         tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
