@@ -6,8 +6,8 @@ Generate graphs and distances in C++ for use in Python via pybind11
 This repository contains:
 1. C++ code to generate batches of graphs in C++ and pass them to Python via pybind11
 2. Python code to create datastreams for training and testing
-3. Python code for the loss functions for training models (criterion.py)
-4. Python code to plot graphs
+3. Python code for the loss functions for training models (criterion.py) [todo]
+4. Python code to plot graphs and attention over graphs  [todo]
 
 This does not include the training code, but you can use the datastreams and loss functions to train your own models.
 Full code will not be provided for some time, but the setup is very easy to reproduce given the code provided here.
@@ -36,7 +36,7 @@ examples:
 
 ## Citation
 
-Code based on C++ code from [https://github.com/asaparov/learning_to_search](https://github.com/asaparov/learning_to_search)
+C++ code from [https://github.com/asaparov/learning_to_search](https://github.com/asaparov/learning_to_search) was a great help in figuring out some things, like seeding with threads.
 
 from paper:
 > @inproceedings{
@@ -48,4 +48,3 @@ year={2025},
 url={https://openreview.net/forum?id=qFVVBzXxR2V}
 }
 
-Please cite if you use this code in your research.
