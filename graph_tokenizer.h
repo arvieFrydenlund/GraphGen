@@ -16,21 +16,24 @@ using namespace std;
 
 class GraphTokenizer {
 public:
-    vector<vector<int> > tokenized_inputs;  // 2D inputs when using concatentated edges
-    vector<int> node_list;  // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
-    vector<pair<int, int> >  edge_list; // already shuffled
-    unique_ptr<vector<vector<int>>> distances_ptr;
-    unique_ptr<vector<vector<int>>> edge_ground_truths_ptr;  // -1 for unreachable
-    unique_ptr<vector<vector<int>>> node_ground_truths_ptr;   // -1 for unreachable
+    vector<vector<int> > tokenized_inputs; // 2D inputs when using concatentated edges
+
+    vector<int> node_list;
+    // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
+    vector<pair<int, int> > edge_list; // already shuffled
+    unique_ptr<vector<vector<int> > > distances_ptr;
+    unique_ptr<vector<vector<int> > > edge_ground_truths_ptr; // -1 for unreachable
+    unique_ptr<vector<vector<int> > > node_ground_truths_ptr; // -1 for unreachable
     bool concat_edges = true;
     bool duplicate_edges = false;
     bool include_nodes_in_graph_tokenization;
 
     GraphTokenizer(vector<pair<int, int> > edge_list,
-            const bool concat_edges = true, const bool duplicate_edges = false, const bool include_nodes_in_graph_tokenization = false){
+                   const bool concat_edges = true, const bool duplicate_edges = false,
+                   const bool include_nodes_in_graph_tokenization = false) {
         this->edge_list = edge_list;
         this->concat_edges = concat_edges;
-        this->duplicate_edges = duplicate_edges;  // needs to be false for directed graphs
+        this->duplicate_edges = duplicate_edges; // needs to be false for directed graphs
         this->include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization;
 
         // build node list by edge list order, this is not always needed
@@ -49,12 +52,12 @@ public:
     }
 
     void tokenize(const map<std::string, int> &dictionary,
-                          const vector<int> &node_shuffle_map,
-                          std::mt19937 &gen) {
+                  const vector<int> &node_shuffle_map,
+                  std::mt19937 &gen) {
         // node order by edge appearance
         auto num_tokens = static_cast<int>(edge_list.size());
         vector<pair<int, int> > new_edge_list;
-         // remap edges according to node shuffle map
+        // remap edges according to node shuffle map
         if (duplicate_edges) {
             num_tokens *= 2;
             // make copy of edge list with reversed edges
@@ -63,13 +66,13 @@ public:
                 new_edge_list.push_back(make_pair(
                         node_shuffle_map.at(edge_list[i].second),
                         node_shuffle_map.at(edge_list[i].first)
-                                        )
+                    )
                 );
             }
         } else {
             new_edge_list = this->edge_list;
         }
-        if ( !concat_edges) {
+        if (!concat_edges) {
             num_tokens *= 3;
         }
         if (include_nodes_in_graph_tokenization) {
@@ -78,7 +81,7 @@ public:
         auto cur = 0;
         tokenized_inputs = vector<vector<int> >(num_tokens, vector<int>(2, dictionary.at("<pad>")));
         // write in new edge list
-        if ( !concat_edges) {
+        if (!concat_edges) {
             for (size_t i = 0; i < new_edge_list.size(); i++, cur += 3) {
                 tokenized_inputs[i * 3][0] = node_shuffle_map.at(new_edge_list[i].first);
                 tokenized_inputs[i * 3 + 1][0] = node_shuffle_map.at(new_edge_list[i].second);
@@ -94,13 +97,14 @@ public:
             // write in node list at end
             for (size_t i = 0; i < node_list.size(); i++) {
                 tokenized_inputs[cur + i][0] = node_shuffle_map.at(node_list[i]);
-                if (concat_edges){
-                    tokenized_inputs[cur + i][1] = tokenized_inputs[cur + i][0];  // duplicate it
+                if (concat_edges) {
+                    tokenized_inputs[cur + i][1] = tokenized_inputs[cur + i][0]; // duplicate it
                 }
             }
             // cur += static_cast<int>(node_list.size());  // incase we need cur later
         }
     }
+
 
     // helper functions for getting gather_ids  TODO
 
@@ -111,7 +115,7 @@ public:
      * and that will handle the map and shift to vocab ids
      */
     template<class D>
-    void get_distances(unique_ptr<Graph<D>> &g_ptr){
+    void get_distances(unique_ptr<Graph<D> > &g_ptr) {
         /*
          * Just the distance matrix [N X N] in the original graph node order
          */
@@ -119,7 +123,7 @@ public:
         unique_ptr<DistanceMatrix<D> > boost_distances_ptr;
         johnson<D>(g_ptr, boost_distances_ptr, false);
         // convert boost to c++ matrix
-        distances_ptr = make_unique<vector<vector<int>>>(N, vector<int>(N, inf));
+        distances_ptr = make_unique<vector<vector<int> > >(N, vector<int>(N, inf));
         for (int i = 0; i < static_cast<int>(N); i++) {
             for (int j = 0; j < static_cast<int>(N); j++) {
                 (*distances_ptr)[i][j] = (*boost_distances_ptr)[i][j];
@@ -128,13 +132,14 @@ public:
     }
 
     template<class D>
-    void get_edge_ground_truths(unique_ptr<Graph<D>> &g_ptr,
-                                const bool is_causal){
+    void get_edge_ground_truths(unique_ptr<Graph<D> > &g_ptr,
+                                const bool is_causal) {
         /*
          * Just the distance matrix but in edge_list order  [E X N], this is possibly causally constrained
          * Note these only work for the projected ranking loss so N is in vocab order
          */
-        if (is_causal) {  // this will calculate the distances as well
+        if (is_causal) {
+            // this will calculate the distances as well
             if (distances_ptr) {
                 throw runtime_error("Causal ground truths should not be calculated with precomputed distances");
             }
@@ -142,12 +147,11 @@ public:
 
             // convert both to node shuffle map order
             auto N = distances_ptr->size();
-            unique_ptr<vector<vector<int>>> distances_ptr;
-            unique_ptr<vector<vector<int>>> ground_truths_ptr;
-
+            unique_ptr<vector<vector<int> > > distances_ptr;
+            unique_ptr<vector<vector<int> > > ground_truths_ptr;
         } else {
             if (!distances_ptr) {
-                get_distances<D>(g_ptr);  // already node_shuffle_map, so edges will be too
+                get_distances<D>(g_ptr); // already node_shuffle_map, so edges will be too
             }
             auto N = num_vertices(*g_ptr);
             auto E = edge_list.size();
@@ -158,11 +162,10 @@ public:
                     (*edge_ground_truths_ptr)[t][i] = (*distances_ptr)[edge_list[t].first][i];
                 }
             }
-
         }
     }
 
-    void get_node_ground_truths(const bool is_direct_ranking){
+    void get_node_ground_truths(const bool is_direct_ranking) {
         /*
          * Just the distance matrix but in node_list order in the first dimension.
          *
@@ -196,8 +199,6 @@ public:
             }
         }
     }
-
-
 };
 
 #endif //GRAPH_TOKENIZER_H
