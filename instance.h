@@ -31,6 +31,7 @@ public:
     unique_ptr<GraphTokenizer> graph_tokenizer;
     unique_ptr<Task> task;
     unique_ptr<ScratchPad> scratch_pad;
+    unique_ptr<vector<vector<float> > > positions_ptr;
 
     vector<int> get_node_shuffle_map(std::mt19937 &gen, const int min_vocab, int max_vocab, const bool shuffle = false) {
         // Shuffle nodes and map to the new range [min_vocab, max_vocab)
@@ -74,29 +75,29 @@ public:
         return edge_list;
     }
 
+
     Instance(unique_ptr<Graph<D> > &g_ptr,
              std::mt19937 &gen,
              const map<std::string, int> &dictionary,
              const int min_vocab, int max_vocab, const bool shuffle_nodes, const bool shuffle_edges,
              // task parameters
              const string &task_type,  const string scratchpad_type,
-             const int max_path_length, const int min_path_length, int start, int end,  // shortest path
+             const int max_path_length, const int min_path_length, int start, int end,  const optional<vector<float>> &task_sample_dist, // shortest path
              const bool sort_adjacency_lists, const bool use_unique_depth_markers, // DFS/BFS scratchpad
-             int max_query_size, const int min_query_size, // center
+             optional<vector<int>> &given_query, int max_query_size, const int min_query_size, const bool is_center, // center
              // tokenization parameters
              const bool is_causal,
              const bool is_direct_ranking,
              const bool concat_edges,
              const bool duplicate_edges,
-             const bool include_nodes_in_graph_tokenization
+             const bool include_nodes_in_graph_tokenization,
+             optional<unique_ptr<vector<vector<float> > >> positions_ptr = nullopt
             ){
-
-        this->g_ptr = std::move(g_ptr); // take ownership of the graph pointer
 
         N = num_vertices(*g_ptr);
         E = num_edges(*g_ptr);
+        node_shuffle_map = get_node_shuffle_map(gen, min_vocab, max_vocab, shuffle_nodes);
         edge_shuffle_map = get_edge_shuffle_map(gen, shuffle_edges);
-        node_shuffle_map = get_node_shuffle_map(N, min_vocab, max_vocab, shuffle_nodes);
 
         auto edge_list = get_edge_list(g_ptr, edge_shuffle_map);
         graph_tokenizer = make_unique<GraphTokenizer>(edge_list, concat_edges, duplicate_edges, include_nodes_in_graph_tokenization);
@@ -104,21 +105,21 @@ public:
 
         if (include_nodes_in_graph_tokenization){
             graph_tokenizer->get_distances(g_ptr);
-            graph_tokenizer->get_node_ground_truths(g_ptr, is_direct_ranking);
+            graph_tokenizer->get_node_ground_truths(is_direct_ranking);
         } else {
             // this also gets the distances due to legacy code
             graph_tokenizer->get_edge_ground_truths(g_ptr, is_causal);
         }
 
         if (task_type == "shortest_path") {
-            task = make_unique<ShortestPathTask>(start, end, max_path_length, min_path_length, g_ptr);
+            task = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,  max_path_length, min_path_length, start, end, task_sample_dist);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS"){
                 scratch_pad = make_unique<BFSScratchPad>(start, end, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS"){
                 // scratch_pad = make_unique<DFSScratchPad>(start, end, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
             }
         } else if (task_type == "center") {
-            task = make_unique<CenterTask>(max_query_size, min_query_size, g_ptr);
+            task = make_unique<CenterTask>(gen, graph_tokenizer->distances_ptr, given_query, max_query_size, min_query_size, is_center);
             // scratch_pad in future?
         }
         if (task) {
@@ -127,16 +128,60 @@ public:
         if (scratch_pad) {
             scratch_pad->tokenize(dictionary, node_shuffle_map, gen);
         }
+
+        this->g_ptr = std::move(g_ptr); // take ownership of the graph pointer
     }
+
+    // todo positional embeddings too
+    pair<vector<vector<int>>, vector<vector<vector<int>>>> get_tokenized(bool query_at_end,
+     int num_thinking_tokens,
+     bool is_flat_model,
+     bool align_prefix_front_pad) {
+        /*
+         * Get the tokenized inputs and targets for the instance
+         * returns: pair of tokenized_inputs [2D] and tokenized_targets [3D]
+         * where tokenized_targets is a list of lists for each target (for multi-target tasks)
+         */
+        vector<vector<int>> tokenized_inputs;
+        vector<vector<vector<int>>> tokenized_targets;
+        if (task) {
+            auto t = task->get_tokenized();
+            // concatenate task inputs to graph inputs
+            tokenized_inputs.insert(tokenized_inputs.end(), t.first.begin(), t.first.end());
+            tokenized_targets = t.second;
+        }
+        if (scratch_pad) {
+            auto s = scratch_pad->get_tokenized();
+            // concatenate scratch pad inputs to graph + task inputs
+            tokenized_inputs.insert(tokenized_inputs.end(), s.first.begin(), s.first.end());
+            // concatenate scratch pad targets to task targets
+            tokenized_targets.insert(tokenized_targets.end(), s.second.begin(), s.second.end());
+        }
+        return make_pair(tokenized_inputs, tokenized_targets);
+    }
+
+
 
 
 };
 
 template<typename D>
 class BatchedInstances {
-    BatchedInstances(vector<Instance<D>> &instances,
-                     const string &graph_type, const string &task_type,
-                     const int attempts, const int max_attempts,
+public:
+    vector<Instance<D>> instances;
+    string graph_type;
+    string task_type;
+    int attempts;
+    int max_attempts;
+    int min_vocab;
+    int max_vocab;
+     // tokenization parameters
+     bool query_at_end;
+     int num_thinking_tokens;
+     bool is_flat_model;
+     bool align_prefix_front_pad;
+
+    BatchedInstances(const string &graph_type, const string &task_type,
              const int min_vocab, int max_vocab,
 
              // tokenization parameters
@@ -144,8 +189,34 @@ class BatchedInstances {
              const int num_thinking_tokens = 0,
              const bool is_flat_model = true,
              const bool align_prefix_front_pad = false
-
     ) {
+        this->graph_type = graph_type;
+        this->task_type = task_type;
+        this->min_vocab = min_vocab;
+        this->max_vocab = max_vocab;
+        this->query_at_end = query_at_end;
+        this->num_thinking_tokens = num_thinking_tokens;
+        this->is_flat_model = is_flat_model;
+        this->align_prefix_front_pad = align_prefix_front_pad;
+
+        instances = vector<Instance<D>>();
+    }
+
+    void add(Instance<D> &instance) {
+        instances.push_back(std::move(instance));
+    }
+
+    int size() {
+        return static_cast<int>(instances.size());
+    }
+
+    py::dict package_for_model() {
+        py::dict d;
+
+        return d;
+    }
+
+    void print(py::dict) {
 
     }
 

@@ -56,13 +56,14 @@ public:
 
 
 class ShortestPathTask : public Task {
+public:
     vector<int> path;
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
 
     ShortestPathTask(std::mt19937 &gen,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
-                     const vector<float> &task_sample_dist = vector<float>()) {
+                     const optional<vector<float>> &task_sample_dist = nullopt) {
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
@@ -73,12 +74,12 @@ class ShortestPathTask : public Task {
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (task_sample_dist.empty()) {
+        if (task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
             vector<float> uweights(max_path_length - min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
         } else {
-            d1 = std::discrete_distribution<int>(task_sample_dist.begin(), task_sample_dist.end());
+            d1 = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end());
         }
 
         pair<int, int> start_end;
@@ -301,14 +302,14 @@ class ShortestPathTask : public Task {
 
 
 class CenterTask : public Task {
-
+public:
     vector<int> new_query;
     vector<int> outputs;
     bool is_center = true;  // otherwise centroid
 
     CenterTask(std::mt19937 &gen,
                const unique_ptr<vector<vector<int> > > &distances_ptr,
-               vector<int> &given_query,
+               optional<vector<int>> &given_query,
                int max_query_size = -1, const int min_query_size = 2,
                const bool is_center = true) {
         this->is_center = is_center;
@@ -318,7 +319,7 @@ class CenterTask : public Task {
             max_query_size = N;
         }
         new_query = vector<int>();
-        if (given_query.empty()) {
+        if (given_query.has_value()) {
             //sample query
             // stackoverflow.com/questions/33802205/how-to-sample-without-replacement-using-c-uniform-int-distribution
             uniform_int_distribution<int> d1(min_query_size, max_query_size);
@@ -329,7 +330,7 @@ class CenterTask : public Task {
             // std::ranges::shuffle(new_query, gen);  // so that nodes are out of order, this doesn't matter with permute
         } else {
             // copy over elements from given query
-            for (auto i: given_query) {
+            for (auto i: given_query.value()) {
                 new_query.push_back(i);
             }
         }

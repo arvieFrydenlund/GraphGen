@@ -162,7 +162,6 @@ public:
         }
     }
 
-    template<class D>
     void get_node_ground_truths(const bool is_direct_ranking){
         /*
          * Just the distance matrix but in node_list order in the first dimension.

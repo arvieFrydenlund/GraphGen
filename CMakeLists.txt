@@ -18,7 +18,8 @@ add_executable(GraphGen main.cpp
         utils.h,
         generator.cpp
         instance.h
-        tasks.h)
+        tasks.h
+        tests.h)
 
 
 set(CMAKE_VERBOSE_MAKEFILE ON)

@@ -1,2 +1,0 @@
-Really what we want is each componenet -- graph, task, scratchpad, query, to be its own class
-Then each class can have a tokenization function and the batch just needs to collate the outputs of those functions
