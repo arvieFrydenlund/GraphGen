@@ -251,7 +251,7 @@ inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = fal
     }
 }
 
-inline void set_default_pos_dictionary(const int max_vocab = 100) {
+inline void set_default_pos_dictionary() {
     /* Sets a default pos dictionary
     */
     pos_dictionary = {
@@ -260,16 +260,18 @@ inline void set_default_pos_dictionary(const int max_vocab = 100) {
         {"edge_invariance", 2},
         {"node_invariance", 3},
         {"graph_invariance", 4},
-        {"misc_start", 11},  // also does thinking tokens
-        {"misc_end", 100},
-        {"query_start", 101},
-        {"query_end", 200},
-        {"graph_start", 201},
-        {"graph_end", 500},
-        {"graph_sub_start", 501},
-        {"graph_sub_end", 503},
-        {"task_start", 601},
-        {"task_end", 800},
+        {"misc_start", 11},
+        {"misc_end", 99},
+        {"query_start", 100},
+        {"query_end", 199},
+        {"graph_start", 200},
+        {"graph_end", 499},
+        {"graph_sub_start", 500},
+        {"graph_sub_end", 599},  // only really need 3
+        {"thinking_start", 600},
+        {"thinking_end", 699},
+        {"task_start", 700},
+        {"task_end", 999},
     };
 }
 
@@ -394,6 +396,12 @@ inline py::dict erdos_renyi_n(
     const string scratchpad_type = "none",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
+    const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
+    const bool use_node_invariance = false,
+    const bool use_graph_invariance = false,
+    const bool use_query_invariance = false,
+    const bool use_task_structure = false,  // divide positions by task structure
+    const bool use_graph_structure = false,  // 2d positions by graph structure
     const py::kwargs& kwargs = py::kwargs()) {
 
     check_args(c_min, c_max, batch_size, min_path_length, max_path_length, num_thinking_tokens);
@@ -421,7 +429,7 @@ inline py::dict erdos_renyi_n(
         // auto graph_t = time_before();
         erdos_renyi_generator(g_ptr, num_nodes, gen, p, c_min, c_max, false);
         // time_after(graph_t, "graph gen");
-        const auto N = num_vertices(*g_ptr);
+        // const auto N = num_vertices(*g_ptr);
         const auto E = num_edges(*g_ptr);
         if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
             attempts += a;
@@ -435,7 +443,9 @@ inline py::dict erdos_renyi_n(
             max_path_length, min_path_length, -1, -1, task_sample_dist,
             sort_adjacency_lists, use_unique_depth_markers,
             given_query, max_query_size, min_query_size, is_center,
-            is_causal, is_direct_ranking, concat_edges, duplicate_edges, include_nodes_in_graph_tokenization
+            is_causal, is_direct_ranking, concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+            pos_dictionary, use_edges_invariance, use_node_invariance, use_graph_invariance, use_query_invariance,
+            use_task_structure, use_graph_structure
             );
         // time_after(pack_t, "pack");
         batched_instances.add(instance);
@@ -536,8 +546,7 @@ PYBIND11_MODULE(generator, m) {
     m.def("set_default_pos_dictionary", &set_default_pos_dictionary,
           "Sets the pos dictionary.\n"
           "Parameters:\n\t"
-          "None\n",
-          py::arg("max_vocab") = 100);
+          "None\n");
 
     m.def("get_pos_dictionary", &get_pos_dictionary,
           "Gets the pos dictionary.\n"
@@ -626,27 +635,11 @@ PYBIND11_MODULE(generator, m) {
           py::arg("num_thinking_tokens") = 0,
           py::arg("scratchpad_type") = "none",
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false);
-
-
-    m.def("get_position_ids", &get_position_ids,
-          "Get the position ids for the pos embeddings.\nParameters:\n\t",
-          py::arg("src_tokens"),
-          py::arg("query_start_indices"),
-          py::arg("query_lengths"),
-          py::arg("graph_start_indices"),
-          py::arg("graph_lengths"),
-          py::arg("graph_edge_start_indices"),
-          py::arg("graph_edge_lengths"),
-          py::arg("task_start_indices"),
-          py::arg("task_lengths"),
+          py::arg("align_prefix_front_pad") = false,
           py::arg("use_edges_invariance") = false,
           py::arg("use_node_invariance") = false,
           py::arg("use_graph_invariance") = false,
           py::arg("use_query_invariance") = false,
           py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false,
-          py::arg("graph_node_start_indices") = py::none(),
-          py::arg("graph_node_lengths") = py::none()
-    );
+          py::arg("use_graph_structure") = false);
 }

@@ -9,25 +9,25 @@
 #include <random>
 #include <queue>
 #include <map>
-#include "undirected_graphs.h"
-#include "directed_graphs.h"
+#include "matrix.h"
+
 
 using namespace std;
 
 class ScratchPad {
 public:
-    vector<int> tokenized_inputs;
-    vector<vector<int> > tokenized_targets;
+    Matrix<int> tokenized_inputs;
+    Matrix<int> tokenized_targets;
+    // Matrix<int> tokenized_pos;  these can not exist since they are really part of the task
 
     virtual void tokenize(const map<std::string, int> &dictionary,
                           const vector<int> &node_shuffle_map,
+                          const map<std::string, int> pos_dictionary,
                           std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
 
-    pair<vector<int>, vector<vector<int> > > get_tokenized() {
-        return make_pair(this->tokenized_inputs, this->tokenized_targets);
-    }
+
 };
 
 
@@ -135,6 +135,7 @@ public:
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,
+            const map<std::string, int> pos_dictionary,
             std::mt19937 &gen
     ) {
         // tokenize the BFS levels into a single sequence
@@ -204,8 +205,8 @@ public:
             }
         }
 
-        this->tokenized_inputs = inputs;
-        this->tokenized_targets = targets;
+        // this->tokenized_inputs = inputs;
+        // this->tokenized_targets = targets;
     }
 
     /*
@@ -228,6 +229,10 @@ public:
     */
 
 };
+
+// todo DFS
+
+// node list BFS -- complete node list in BFS order (and then what order after target is found?)
 
 
 #endif //SCRATCH_PADS_H

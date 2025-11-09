@@ -9,6 +9,7 @@
 #include <random>
 #include <queue>
 #include <map>
+#include "matrix.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
 
@@ -16,7 +17,8 @@ using namespace std;
 
 class GraphTokenizer {
 public:
-    vector<vector<int> > tokenized_inputs; // 2D inputs when using concatentated edges
+    Matrix<int> tokenized_inputs; // possibly 2D inputs when using concat_edges
+    Matrix<int> tokenized_pos;  // possibly 2D positions when using use_graph_structure
 
     vector<int> node_list;
     // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
@@ -27,14 +29,26 @@ public:
     bool concat_edges = true;
     bool duplicate_edges = false;
     bool include_nodes_in_graph_tokenization;
+    bool use_edges_invariance;
+    bool use_node_invariance;
+    bool use_graph_invariance;
+    bool use_graph_structure;
 
     GraphTokenizer(vector<pair<int, int> > edge_list,
                    const bool concat_edges = true, const bool duplicate_edges = false,
-                   const bool include_nodes_in_graph_tokenization = false) {
+                   const bool include_nodes_in_graph_tokenization = false,
+                   const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
+                   const bool use_node_invariance = false,
+                   const bool use_graph_invariance = false,  // divide positions by task structure
+                   const bool use_graph_structure = false) {  // 2d positions by graph structure
         this->edge_list = edge_list;
         this->concat_edges = concat_edges;
         this->duplicate_edges = duplicate_edges; // needs to be false for directed graphs
         this->include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization;
+        this->use_edges_invariance = use_edges_invariance;
+        this->use_node_invariance = use_node_invariance;
+        this->use_graph_invariance = use_graph_invariance;
+        this->use_graph_structure = use_graph_structure;
 
         // build node list by edge list order, this is not always needed
         node_list = vector<int>();
@@ -53,6 +67,7 @@ public:
 
     void tokenize(const map<std::string, int> &dictionary,
                   const vector<int> &node_shuffle_map,
+                  const map<std::string, int> pos_dictionary,
                   std::mt19937 &gen) {
         // node order by edge appearance
         auto num_tokens = static_cast<int>(edge_list.size());
@@ -78,35 +93,84 @@ public:
         if (include_nodes_in_graph_tokenization) {
             num_tokens += static_cast<int>(node_list.size());
         }
+
+        auto edge_invariance_marker = pos_dictionary.at("edge_invariance");
+        auto node_invariance_marker = pos_dictionary.at("node_invariance");
+        auto graph_invariance_marker = pos_dictionary.at("graph_invariance");
+        auto graph_start = pos_dictionary.at("graph_start");
+        auto graph_end = pos_dictionary.at("graph_end");
+        auto graph_sub_start = pos_dictionary.at("graph_sub_start");
+        // auto graph_sub_end = pos_dictionary.at("graph_sub_end");
+
+        if (num_tokens > graph_end - graph_start + 1) { // not a correct check but easy enough to just do other values in dictionary
+            throw runtime_error("Graph tokenization length exceeds allocated position ids.  Please increase graph position id range in the pos dictionary.");
+        }
+
         auto cur = 0;
-        tokenized_inputs = vector<vector<int> >(num_tokens, vector<int>(2, dictionary.at("<pad>")));
+        // padding below is for sanity, there should be no pads left after writing in graph (at least in zero dim)
+        if (concat_edges) {
+            tokenized_inputs.resize(num_tokens, 2, dictionary.at("<pad>"));
+        } else {
+            tokenized_inputs.resize(num_tokens, 1, dictionary.at("<pad>"));
+        }
+        if (use_graph_structure) {
+            tokenized_pos.resize(num_tokens, 2, pos_dictionary.at("pad"));
+        } else {
+            tokenized_pos.resize(num_tokens, 1, pos_dictionary.at("pad"));
+        }
+
         // write in new edge list
         if (!concat_edges) {
             for (size_t i = 0; i < new_edge_list.size(); i++, cur += 3) {
-                tokenized_inputs[i * 3][0] = node_shuffle_map.at(new_edge_list[i].first);
-                tokenized_inputs[i * 3 + 1][0] = node_shuffle_map.at(new_edge_list[i].second);
-                tokenized_inputs[i * 3 + 2][0] = dictionary.at("|");
+                tokenized_inputs(i * 3, 0) = node_shuffle_map.at(new_edge_list[i].first);
+                tokenized_inputs(i * 3 + 1, 0) = node_shuffle_map.at(new_edge_list[i].second);
+                tokenized_inputs(i * 3 + 2, 0) = dictionary.at("|");
+                if (use_graph_structure){
+                    auto edge_pos = graph_sub_start + static_cast<int>(i);
+                    tokenized_pos(i * 3, 0) = edge_pos;
+                    tokenized_pos(i * 3 + 1, 0) = edge_pos;
+                    tokenized_pos(i * 3 + 2, 0) = edge_pos;
+                    tokenized_pos(i * 3, 1) = graph_sub_start;
+                    tokenized_pos(i * 3 + 1, 1) = graph_sub_start + 1;
+                    tokenized_pos(i * 3 + 2, 1) = graph_sub_start + 2;
+                } else {
+                    tokenized_pos(i * 3, 0) = graph_start + cur;
+                    tokenized_pos(i * 3 + 1, 0) = graph_start + cur + 1;
+                    tokenized_pos(i * 3 + 2, 0) = graph_start + cur + 2;
+                }
             }
         } else {
             for (size_t i = 0; i < new_edge_list.size(); i++, cur++) {
-                tokenized_inputs[i][0] = node_shuffle_map.at(new_edge_list[i].first);
-                tokenized_inputs[i][1] = node_shuffle_map.at(new_edge_list[i].second);
-            }
-        }
-        if (include_nodes_in_graph_tokenization) {
-            // write in node list at end
-            for (size_t i = 0; i < node_list.size(); i++) {
-                tokenized_inputs[cur + i][0] = node_shuffle_map.at(node_list[i]);
-                if (concat_edges) {
-                    tokenized_inputs[cur + i][1] = tokenized_inputs[cur + i][0]; // duplicate it
+                tokenized_inputs(i, 0) = node_shuffle_map.at(new_edge_list[i].first);
+                tokenized_inputs(i, 1) = node_shuffle_map.at(new_edge_list[i].second);
+                if (use_edges_invariance) {
+                    tokenized_pos(i, 0) = edge_invariance_marker;
+                } else if (use_graph_invariance){
+                    tokenized_pos(i, 0) = graph_invariance_marker;
+                } else {
+                    tokenized_pos(i, 0) = graph_start + cur;
                 }
             }
-            // cur += static_cast<int>(node_list.size());  // incase we need cur later
+        }
+        if (include_nodes_in_graph_tokenization) { // write in node list at end
+            for (size_t i = 0; i < node_list.size(); i++, cur++) {
+                tokenized_inputs(cur, 0) = node_shuffle_map.at(node_list[i]);
+                if (concat_edges) {  // duplicate node if concat edges in both dims
+                    tokenized_inputs(cur, 1) = tokenized_inputs(cur, 0);
+                }
+                if (use_node_invariance) {
+                    tokenized_pos(cur, 0) = node_invariance_marker;
+                } else if (use_graph_invariance){
+                    tokenized_pos(cur, 0) = graph_invariance_marker;
+                } else {
+                    tokenized_pos(cur, 0) = graph_start + cur;
+                }
+            }
         }
     }
 
 
-    // helper functions for getting gather_ids  TODO
+    // helper functions for getting gather_ids of edges and nodes TODO
 
 
     /*
@@ -145,8 +209,8 @@ public:
             }
             floyd_warshall_frydenlund(g_ptr, distances_ptr, edge_ground_truths_ptr, edge_list, false);
 
-            // convert both to node shuffle map order
-            auto N = distances_ptr->size();
+            // convert both to node shuffle map order TODO
+            // auto N = distances_ptr->size();
             unique_ptr<vector<vector<int> > > distances_ptr;
             unique_ptr<vector<vector<int> > > ground_truths_ptr;
         } else {

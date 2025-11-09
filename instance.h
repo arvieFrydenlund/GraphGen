@@ -8,6 +8,7 @@
 #include <iostream>
 #include <random>
 #include <map>
+#include "matrix.h"
 #include "tasks.h"
 #include "scratch_pads.h"
 #include "graph_tokenizer.h"
@@ -87,6 +88,13 @@ public:
              const bool concat_edges,
              const bool duplicate_edges,
              const bool include_nodes_in_graph_tokenization,
+             const map<std::string, int> pos_dictionary,
+             const bool use_edges_invariance,  // for concated edges this allows true permutation invariance
+             const bool use_node_invariance,
+             const bool use_graph_invariance,
+             const bool use_query_invariance,
+             const bool use_task_structure,  // divide positions by task structure
+             const bool use_graph_structure,  // 2d positions by graph structure
              optional<unique_ptr<vector<vector<float> > > > positions_ptr = nullopt
     ) {
         N = num_vertices(*g_ptr);
@@ -97,7 +105,7 @@ public:
         auto edge_list = get_edge_list(g_ptr, edge_shuffle_map);
         graph_tokenizer = make_unique<GraphTokenizer>(edge_list, concat_edges, duplicate_edges,
                                                       include_nodes_in_graph_tokenization);
-        graph_tokenizer->tokenize(dictionary, node_shuffle_map, gen);
+        graph_tokenizer->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
 
         if (include_nodes_in_graph_tokenization) {
             graph_tokenizer->get_distances(g_ptr);
@@ -122,96 +130,158 @@ public:
             // scratch_pad in future?
         }
         if (task) {
-            task->tokenize(dictionary, node_shuffle_map, gen);
+            task->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
         }
         if (scratch_pad) {
-            scratch_pad->tokenize(dictionary, node_shuffle_map, gen);
+            scratch_pad->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
         }
 
         this->g_ptr = std::move(g_ptr); // take ownership of the graph pointer
     }
 
     // todo positional embeddings too
-    pair<vector<vector<int> >, vector<vector<int> > > tokenize_inputs(
+    pair<Matrix<int>, Matrix<int> > tokenize_inputs(
         const map<std::string, int> &dictionary,
+        const map<std::string, int> pos_dictionary,
         bool query_at_end,
         int num_thinking_tokens,
         bool is_flat_model,
         bool align_prefix_front_pad) const {
 
-        int num_graph_tokens = static_cast<int>(graph_tokenizer->tokenized_inputs.size());
-        int num_query_tokens = 0;
+        int num_tokens = static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]) + 2;  // +2 for start and end tokens
         if (task) {
-            num_query_tokens = static_cast<int>(task->tokenized_query_inputs.size());
+            num_tokens += static_cast<int>(task->tokenized_query_inputs.shape()[0]);
         }
-        int num_target_tokens = 0;
-        if (task) {
-            num_target_tokens = static_cast<int>(task->tokenized_task_inputs.size());
+        if (task and is_flat_model) {
+            num_tokens += static_cast<int>(task->tokenized_task_inputs.shape()[0]);
         }
-        int num_scratchpad_input_tokens = 0;
-        if (scratch_pad) {
-            num_scratchpad_input_tokens = static_cast<int>(scratch_pad->tokenized_inputs.size());
-        }
-
-        auto num_tokens = num_graph_tokens + num_query_tokens + num_scratchpad_input_tokens + num_thinking_tokens;
-        if (is_flat_model) {
-            num_tokens += num_target_tokens;
+        if (scratch_pad and is_flat_model) {
+            num_tokens += static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
         }
 
         auto concat_edges = graph_tokenizer->concat_edges;
+        auto use_graph_structure = graph_tokenizer->use_graph_structure;
 
-        auto tokenized_inputs = vector<vector<int> >(num_tokens, vector<int>(1 + static_cast<int>(concat_edges), -1));  // -1 pad but this should go away if correct
-        auto tokenized_positions = vector<vector<int> >();
+        Matrix<int> tokenized_inputs;
+        if (concat_edges) {
+            tokenized_inputs = Matrix<int>(num_tokens, 1, dictionary.at("<pad>"));
+        } else {
+            tokenized_inputs = Matrix<int>(num_tokens, 2, dictionary.at("<pad>"));
+        }
+
+        Matrix<int> tokenized_positions;
+        if (use_graph_structure) {
+            tokenized_positions = Matrix<int>(num_tokens, 2, pos_dictionary.at("pad"));
+        } else {
+            tokenized_positions = Matrix<int>(num_tokens, 1, pos_dictionary.at("pad"));
+        }
 
         auto cur = 0;
+
+        // start of sequence
+        auto start_marker = dictionary.at("<s>");
+        tokenized_inputs(cur, 0) = start_marker;
+        if (concat_edges) {
+            tokenized_inputs(cur, 1) = start_marker;
+        }
+        tokenized_positions(cur, 0) = pos_dictionary.at("misc_start");
+        if (use_graph_structure){
+            tokenized_positions(cur, 1) = pos_dictionary.at("misc_start");
+        }
+        cur++;
+
         if (!query_at_end and task) {  // write in query if before graph
-            for (size_t i = 0; i < task->tokenized_query_inputs.size(); i++, cur++) {
-                tokenized_inputs[cur][0] = task->tokenized_query_inputs[i];
-                if (concat_edges == false) {
-                    tokenized_inputs[cur][1] = tokenized_inputs[i][0];
+            for (size_t i = 0; i < task->tokenized_query_inputs.shape()[0]; i++, cur++) {
+                tokenized_inputs(cur, 0) = task->tokenized_query_inputs(i);
+                if (concat_edges) {  // replicate query if concat edges in both dims
+                    tokenized_inputs(cur, 1) = tokenized_inputs(i, 0);
                 }
+                tokenized_positions(cur, 0) = task->tokenized_query_pos(i);
             }
         }
         // write in graph tokens
-        for (size_t i = 0; i < graph_tokenizer->tokenized_inputs.size(); i++, cur++) {
-            tokenized_inputs[cur][0] = graph_tokenizer->tokenized_inputs[i][0];
-            if (concat_edges == false) {
-                tokenized_inputs[cur][1] = graph_tokenizer->tokenized_inputs[i][1];
+        for (size_t i = 0; i < graph_tokenizer->tokenized_inputs.shape()[0]; i++, cur++) {
+            tokenized_inputs(cur, 0) = graph_tokenizer->tokenized_inputs(i, 0);
+            if (concat_edges) {
+                tokenized_inputs(cur, 1) = graph_tokenizer->tokenized_inputs(i, 1);
+            }
+            tokenized_positions(cur, 0) = graph_tokenizer->tokenized_pos(i, 0);
+            if (use_graph_structure) {
+                tokenized_positions(cur, 1) = graph_tokenizer->tokenized_pos(i, 1);
             }
         }
         if (query_at_end and task) {  // write in query if after graph
-            for (size_t i = 0; i < task->tokenized_query_inputs.size(); i++, cur++) {
-                tokenized_inputs[cur][0] = task->tokenized_query_inputs[i];
-                if (concat_edges == false) {
-                    tokenized_inputs[cur][1] = tokenized_inputs[i][0];
+            for (size_t i = 0; i < task->tokenized_query_inputs.shape()[0]; i++, cur++) {
+                tokenized_inputs(cur, 0) = task->tokenized_query_inputs(i);
+                if (concat_edges) {
+                    tokenized_inputs(cur, 1) = tokenized_inputs(i, 0);
                 }
+                tokenized_positions(cur, 0) = task->tokenized_query_pos(i);
             }
         }
         if (num_thinking_tokens > 0) { // write in thinking tokens
+
             auto thinking_token_id = dictionary.at("!");
+            auto thinking_start_marker = pos_dictionary.at("thinking_start");
+            auto thinking_end_marker = pos_dictionary.at("thinking_end");
+            if (num_thinking_tokens > thinking_end_marker - thinking_start_marker + 1) {
+                throw std::invalid_argument("num_thinking_tokens exceeds available thinking position markers");
+            }
             for (int i = 0; i < num_thinking_tokens; i++, cur++) {
-                tokenized_inputs[cur][0] = thinking_token_id;
-                if (concat_edges == false) {
-                    tokenized_inputs[cur][1] = thinking_token_id;
+                tokenized_inputs(cur, 0) = thinking_token_id;
+                if (concat_edges) {
+                    tokenized_inputs(cur, 1) = thinking_token_id;
                 }
+                tokenized_positions(cur, 0) = thinking_start_marker + i;
             }
         }
-        if (scratch_pad) { // write in scratchpad tokens
-            for (size_t i = 0; i < scratch_pad->tokenized_inputs.size(); i++, cur++) {
-                tokenized_inputs[cur][0] = scratch_pad->tokenized_inputs[i];
-                if (concat_edges == false) {
-                    tokenized_inputs[cur][1] = scratch_pad->tokenized_inputs[i];
+
+
+
+        if (is_flat_model and task) { // write in task and scratchpad
+            auto cur_task_pos = 0;
+            auto task_start = pos_dictionary.at("task_start");
+            auto task_end = pos_dictionary.at("task_end");
+            auto task_size = static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
+
+            if (scratch_pad) { // write in scratchpad tokens
+                auto scratch_pad_size = static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
+                if (task_size + scratch_pad_size > task_end - task_start + 1) {
+                    throw std::invalid_argument("Task size exceeds available position tokens.");
+                }
+                for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++, cur_task_pos++) {
+                    tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
+                    if (concat_edges) {
+                        tokenized_inputs(cur, 1) = tokenized_inputs(i, 0);
+                    }
+                    tokenized_positions(cur, 0) = task_start + cur_task_pos;
                 }
             }
-        }
-        if (is_flat_model and task) {  // write in targets (as part of input)
-            for (size_t i = 0; i < task->tokenized_task_inputs.size(); i++, cur++) {
-                tokenized_inputs[cur][0] = task->tokenized_task_inputs[i];
-                if (concat_edges == false) {
-                    tokenized_inputs[cur][1] = task->tokenized_task_inputs[i];
-                }
+            // write in task
+            if (task_size > task_end - task_start + 1) {
+                throw std::invalid_argument("Task size exceeds available position tokens.");
             }
-        }
+            for (size_t i = 0; i < task->tokenized_task_inputs.shape()[0]; i++, cur++, cur_task_pos++) {
+                tokenized_inputs(cur, 0) = task->tokenized_task_inputs(i);
+                if (concat_edges) {
+                    tokenized_inputs(cur, 1) = task->tokenized_task_inputs(i);
+                }
+                tokenized_positions(cur, 0) = task_start + cur_task_pos;
+            }
+            // end of sequence
+            auto end_marker = dictionary.at("</s>");
+            tokenized_inputs(cur, 0) = end_marker;
+            if (concat_edges) {
+                tokenized_inputs(cur, 1) = end_marker;
+            }
+            tokenized_positions(cur, 0) = task_start + cur_task_pos;
+            if (use_graph_structure){
+                tokenized_positions(cur, 1) = task_start + cur_task_pos;
+            }
+            cur++;
+            cur_task_pos++;
+
+        }  // not implemented for non-flat models yet
 
         return make_pair(tokenized_inputs, tokenized_positions);
     }

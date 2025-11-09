@@ -9,8 +9,8 @@
 #include <random>
 #include <queue>
 #include <map>
+#include "matrix.h"
 #include "undirected_graphs.h"
-#include "directed_graphs.h"
 
 #include <Python.h>
 #include <chrono>
@@ -32,26 +32,53 @@ public:
      For graphs, targets are often multi-label,
      thus we separate the 1-D input and (potentially) 2-D targets
      */
-    vector<int> tokenized_query_inputs;
-    vector<int> tokenized_task_inputs;  // input part
-    vector<vector<int> > tokenized_task_targets;  // defines multi-label targets
+    Matrix<int> tokenized_query_inputs;
+    Matrix<int> tokenized_task_inputs;  // input part
+    Matrix<int> tokenized_task_targets;  // defines multi-label targets
+    Matrix<int> tokenized_query_pos;
+    // Matrix<int> tokenized_task_pos;  these get made in the instance due to scratchpad obeing part of task
+
+    bool use_query_invariance;
 
     // use polymorphism for different task types when passing them around
     virtual void tokenize(const map<std::string, int> &dictionary,
                           const vector<int> &node_shuffle_map,
+                          const map<std::string, int> pos_dictionary,
                           std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
 
-    int get_max_num_labels() {   // max size of tokenized_task_targets, for batching
-        int max_labels = 0;
-        for (size_t i = 0; i < tokenized_task_targets.size(); i++) {
-            if (static_cast<int>(tokenized_task_targets[i].size()) > max_labels) {
-                max_labels = static_cast<int>(tokenized_task_targets[i].size());
+    void set_tokenized_pos(const int query_size, const int task_size, const map<std::string, int> pos_dictionary){
+
+        auto query_invariance_marker = pos_dictionary.at("query_invariance");
+        auto query_start = pos_dictionary.at("query_start");
+        auto query_end = pos_dictionary.at("query_end");
+        auto task_start = pos_dictionary.at("task_start");
+        auto task_end = pos_dictionary.at("task_end");
+
+        if (query_size > query_end - query_start + 1) {
+            throw std::invalid_argument("Query size exceeds available position tokens.");
+        }
+        if (task_size > task_end - task_start + 1) {
+            throw std::invalid_argument("Task size exceeds available position tokens.");
+        }
+
+        tokenized_query_pos.resize(query_size);
+        // tokenized_task_pos.resize(task_size);
+
+        for (size_t i = 0; i < static_cast<size_t>(query_size); i++) {
+            if (use_query_invariance) {
+                tokenized_query_pos(i) = query_invariance_marker;
+            } else {
+                tokenized_query_pos(i) = query_start + static_cast<int>(i);
             }
         }
-        return max_labels;
+
+        //for (size_t i = 0; i < static_cast<size_t>(task_size); i++) {
+        //    tokenized_task_pos(i) = task_start + static_cast<int>(i);
+        //}
     }
+
 };
 
 
@@ -59,11 +86,13 @@ class ShortestPathTask : public Task {
 public:
     vector<int> path;
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
+    int max_num_labels = 1;
 
     ShortestPathTask(std::mt19937 &gen,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
-                     const optional<vector<float>> &task_sample_dist = nullopt) {
+                     const optional<vector<float>> &task_sample_dist = nullopt,
+                     const bool use_query_invariance = false) {
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
@@ -71,6 +100,8 @@ public:
 *
          * B) This is hardcoded for checking for distances of 1 as a connection
          */
+
+        this->use_query_invariance = use_query_invariance;
 
         // define d1
         std::discrete_distribution<int> d1;
@@ -183,6 +214,9 @@ public:
                     labels[i].push_back(j);
                 }
             }
+            if (labels[i].size() > static_cast<size_t>(max_num_labels)) {
+                max_num_labels = static_cast<int>(labels[i].size());
+            }
         }
         this->label_smoothed_path = labels;
     }
@@ -190,6 +224,7 @@ public:
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,
+            const map<std::string, int> pos_dictionary,
             std::mt19937 &gen) {
 
         /*  Ex. if the path is 0 -> 1 -> 2 -> 3 and there is an alternative path 0 -> 4 -> 2 -> 3
@@ -198,6 +233,7 @@ public:
          * task target: = [0] [1,4] [2] [3] .
          */
 
+        auto pad = dictionary.at("<pad>");
         auto query_start_marker = dictionary.at("/");
         auto query_end_marker = dictionary.at("?");
         auto task_start_marker = dictionary.at("=");
@@ -205,29 +241,32 @@ public:
 
         auto query_size = 4; // q_start, start_node, end_node, q_end
         auto task_size = static_cast<int>(path.size()) + 2; // t_start, path nodes, t_end
-        tokenized_query_inputs = vector<int>(query_size);
-        tokenized_task_inputs = vector<int>(task_size);
-        tokenized_task_targets = vector<vector<int> >(task_size, vector<int>());
+
+
+        tokenized_query_inputs.resize(query_size);
+        tokenized_task_inputs.resize(task_size);
+        tokenized_task_targets.resize(task_size, max_num_labels, pad);
 
         // query tokenization
-        tokenized_query_inputs[0] = query_start_marker;
-        tokenized_query_inputs[1] = node_shuffle_map.at(path[0]); // start
-        tokenized_query_inputs[2] = node_shuffle_map.at(path[path.size() - 1]); // end node
-        tokenized_query_inputs[3] = query_end_marker;
+        tokenized_query_inputs(0) = query_start_marker;
+        tokenized_query_inputs(1) = node_shuffle_map.at(path[0]); // start
+        tokenized_query_inputs(2) = node_shuffle_map.at(path[path.size() - 1]); // end node
+        tokenized_query_inputs(3) = query_end_marker;
 
         // task tokenization
-        tokenized_task_inputs[0] = task_start_marker;
-        tokenized_task_targets[0].push_back(task_start_marker);
+        tokenized_task_inputs(0) = task_start_marker;
+        tokenized_task_targets(0, 0) = task_start_marker;
         for (size_t i = 0; i < path.size(); i++) {  // shuffle map new path and label_smoothed
-            tokenized_task_inputs[i + 1] = node_shuffle_map.at(path[i]);
+            tokenized_task_inputs(i + 1) = node_shuffle_map.at(path[i]);
             for (size_t j = 0; j < label_smoothed_path[i].size(); j++) {
-                tokenized_task_targets[i + 1].push_back(node_shuffle_map.at(label_smoothed_path[i][j]));
+                tokenized_task_targets(i + 1, j) = node_shuffle_map.at(label_smoothed_path[i][j]);
             }
         }
-        tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
-        tokenized_task_targets[tokenized_task_targets.size() - 1].push_back(task_end_marker);
-    }
+        tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
+        tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
 
+        set_tokenized_pos(query_size, task_size, pos_dictionary);
+    }
 
     template<typename T>
     static int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path) {
@@ -306,13 +345,15 @@ public:
     vector<int> new_query;
     vector<int> outputs;
     bool is_center = true;  // otherwise centroid
+    bool use_query_invariance;
 
     CenterTask(std::mt19937 &gen,
                const unique_ptr<vector<vector<int> > > &distances_ptr,
                optional<vector<int>> &given_query,
                int max_query_size = -1, const int min_query_size = 2,
-               const bool is_center = true) {
+               const bool is_center = true, const bool use_query_invariance = false) {
         this->is_center = is_center;
+        this->use_query_invariance = use_query_invariance;
 
         auto N = static_cast<int>(distances_ptr->size());
         if (max_query_size == -1 || max_query_size > N) {
@@ -371,6 +412,7 @@ public:
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,
+            const map<std::string, int> pos_dictionary,
             std::mt19937 &gen) {
 
         /* Ex if the query is 0,1,2 and the center is 3,4
@@ -386,28 +428,31 @@ public:
 
         auto query_size = static_cast<int>(new_query.size()) + 2; // q_start, num_nodes q_end
         auto task_size = static_cast<int>(outputs.size()) + 2; // t_start, path nodes, t_end
-        tokenized_query_inputs = vector<int>(query_size);
-        tokenized_task_inputs = vector<int>(task_size);
-        tokenized_task_targets = vector<vector<int> >(task_size, vector<int>());
+
+        tokenized_query_inputs.resize(query_size);
+        tokenized_task_inputs.resize(task_size);
+        tokenized_task_targets.resize(task_size, static_cast<int>(outputs.size()), dictionary.at("<pad>"));
 
         // query tokenization
-        tokenized_query_inputs[0] = query_start_marker;
+        tokenized_query_inputs(0) = query_start_marker;
         for (size_t i = 0; i < new_query.size(); i++) {
-            tokenized_query_inputs[i + 1] = node_shuffle_map.at(new_query[i]);
+            tokenized_query_inputs(i + 1) = node_shuffle_map.at(new_query[i]);
         }
-        tokenized_query_inputs[tokenized_query_inputs.size() - 1] = query_end_marker;
+        tokenized_query_inputs(tokenized_query_inputs.shape()[0] - 1) = query_end_marker;
 
         // task tokenization
-        tokenized_task_inputs[0] = task_start_marker;
-        tokenized_task_targets[0].push_back(task_start_marker);
+        tokenized_task_inputs(0) = task_start_marker;
+        tokenized_task_targets(0, 0) = task_start_marker;
         for (size_t i = 0; i < outputs.size(); i++) {
-            tokenized_task_inputs[i + 1] = node_shuffle_map.at(outputs[i]);
+            tokenized_task_inputs(i + 1) = node_shuffle_map.at(outputs[i]);
             for (size_t j = i; j < outputs.size(); j++) {  // label smoothing outputs since they have no order
-                tokenized_task_targets[i + 1].push_back(node_shuffle_map.at(outputs[j]));
+                tokenized_task_targets(i + 1, j) = node_shuffle_map.at(outputs[j]);
             }
         }
-        tokenized_task_inputs[tokenized_task_inputs.size() - 1] = task_end_marker;
-        tokenized_task_targets[tokenized_task_targets.size() - 1].push_back(task_end_marker);
+        tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
+        tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
+
+        set_tokenized_pos(query_size, task_size, pos_dictionary);
     }
 
 
