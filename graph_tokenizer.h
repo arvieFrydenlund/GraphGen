@@ -126,7 +126,7 @@ public:
                 tokenized_inputs(i * 3 + 1, 0) = node_shuffle_map.at(new_edge_list[i].second);
                 tokenized_inputs(i * 3 + 2, 0) = dictionary.at("|");
                 if (use_graph_structure){
-                    auto edge_pos = graph_sub_start + static_cast<int>(i);
+                    auto edge_pos = graph_start + static_cast<int>(i);
                     tokenized_pos(i * 3, 0) = edge_pos;
                     tokenized_pos(i * 3 + 1, 0) = edge_pos;
                     tokenized_pos(i * 3 + 2, 0) = edge_pos;

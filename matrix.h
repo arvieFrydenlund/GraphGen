@@ -61,9 +61,15 @@ public:
     }
 
     T& operator()(size_t r, size_t c) {
+        if (r >= rows_ || c >= cols_) {
+            throw std::out_of_range("Matrix index out of range");
+        }
         return data_[r * cols_ + c];
     }
     const T& operator()(size_t r, size_t c) const {
+        if (r >= rows_ || c >= cols_) {
+            throw std::out_of_range("Matrix index out of range");
+        }
         return data_[r * cols_ + c];
     }
 

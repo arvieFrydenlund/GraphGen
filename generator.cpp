@@ -279,49 +279,6 @@ map<std::string, int> get_pos_dictionary() {
     return pos_dictionary;
 }
 
-inline std::tuple<py::array_t<int, py::array::c_style>, py::array_t<int, py::array::c_style>> get_position_ids(
-    const py::array_t<int, py::array::c_style> &src_tokens,
-    const py::array_t<int, py::array::c_style> &query_start_indices,
-    const py::array_t<int, py::array::c_style> &query_lengths,
-    const py::array_t<int, py::array::c_style> &graph_start_indices,
-    const py::array_t<int, py::array::c_style> &graph_lengths,
-    const py::array_t<int, py::array::c_style> &graph_edge_start_indices,
-    const py::array_t<int, py::array::c_style> &graph_edge_lengths,
-    const py::array_t<int, py::array::c_style> &task_start_indices,
-    const py::array_t<int, py::array::c_style> &task_lengths,
-    const bool use_edges_invariance,  // for concated edges this allows true permutation invariance
-    const bool use_node_invariance = false,
-    const bool use_graph_invariance = false,
-    const bool use_query_invariance = false,
-    const bool use_task_structure = false,  // divide positions by task structure
-    const bool use_graph_structure = false,  // 2d positions by graph structure
-    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_start_indices = std::nullopt,
-    const std::optional<py::array_t<int, py::array::c_style>> &graph_node_lengths = std::nullopt,
-    const py::kwargs& kwargs = py::kwargs()
-    ) {
-    assert(!pos_dictionary.empty() && "Position dictionary is not set. Please set it before calling get_position_ids.");
-    auto padding_token_id = dictionary["<pad>"];
-    return _get_position_ids(pos_dictionary,
-                             src_tokens,
-                             query_start_indices,
-                             query_lengths,
-                             graph_start_indices,
-                             graph_lengths,
-                             graph_edge_start_indices,
-                             graph_edge_lengths,
-                             task_start_indices,
-                             task_lengths,
-                             use_edges_invariance,
-                             use_node_invariance,
-                             use_graph_invariance,
-                             use_query_invariance,
-                             use_task_structure,
-                             use_graph_structure,
-                             padding_token_id,
-                             graph_node_start_indices,
-                             graph_node_lengths);
-}
-
 
 /* ************************************************
  *  Batched graph generation
@@ -450,7 +407,7 @@ inline py::dict erdos_renyi_n(
         // time_after(pack_t, "pack");
         batched_instances.add(instance);
     }
-    return batched_instances.package_for_model();
+    return batched_instances.package_for_model(dictionary, pos_dictionary);
 }
 
 

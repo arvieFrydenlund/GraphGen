@@ -90,7 +90,7 @@ public:
 
     ShortestPathTask(std::mt19937 &gen,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
-                     const int max_path_length = 10, const int min_path_length = 1, int start = -1, int end = -1,
+                     const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
                      const optional<vector<float>> &task_sample_dist = nullopt,
                      const bool use_query_invariance = false) {
         /*
@@ -281,8 +281,7 @@ public:
         auto cur = start;
         for (int i = 1; i < path.size(); i++) {
             auto next = path[i];
-            if (distances.at(cur, next) != 1) {
-                // hardcoded for distance of 1
+            if (distances.at(cur, next) != 1) { // hardcoded for distance of 1
                 return -1;
             }
             cur = next;
