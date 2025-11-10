@@ -32,12 +32,18 @@ public:
     unique_ptr<vector<vector<float> > > positions_ptr;
 
     Matrix<int> tokenized_inputs;
+    Matrix<int> tokenized_targets;
     Matrix<int> tokenized_positions;
     int query_start_idx = -1; // index in the tokenized input where the query starts
+    int query_length = 0;
     int graph_start_idx = -1; // index in the tokenized input where the graph starts
+    int graph_length = 0;
     int graph_nodes_start_idx = -1; // index in the tokenized input where the graph nodes start
+    int graph_nodes_length = 0; // should just be N again
     int scratch_pad_start_idx = -1; // index in the tokenized input
+    int scratch_pad_length = 0;
     int task_start_idx = -1; // index in the tokenized input where the task starts
+    int task_length = 0;
 
     void make_node_shuffle_map(std::mt19937 &gen, const int min_vocab, int max_vocab,
                                const bool shuffle = false) {
@@ -117,6 +123,8 @@ public:
                                                       use_graph_invariance, use_graph_structure);
         graph_tokenizer->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
 
+        // issue of when to convert these to node shuffle map order, it can not be before we make the task
+        // since these need the original distance matrix in the original node order
         if (include_nodes_in_graph_tokenization) {
             graph_tokenizer->get_distances(g_ptr);
             graph_tokenizer->get_node_ground_truths(is_direct_ranking);
@@ -129,7 +137,7 @@ public:
             auto short_path = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,
                                                             max_path_length, min_path_length,
                                                             start, end, task_sample_dist, use_query_invariance);
-            start = short_path->path.front();
+            start = short_path->path.front();  // get task-specific info before casting to base class
             end = short_path->path.back();
             task = std::move(short_path);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
@@ -403,17 +411,77 @@ public:
     py::dict package_for_model(const map<std::string, int> &dictionary, const map<std::string, int> pos_dictionary) {
         py::dict d;
 
+        // make all the info needed for the model input
         for (size_t i = 0; i < instances.size(); i++) {
+            // inputs, targets and positions, and component start_indices and lengths
             instances[i].tokenize(
-                dictionary,
-                pos_dictionary,
-                query_at_end,
-                num_thinking_tokens,
-                is_flat_model
+                    dictionary,
+                    pos_dictionary,
+                    query_at_end,
+                    num_thinking_tokens,
+                    is_flat_model
             );
 
             instances[i].pprint();
         }
+        // batch the info
+
+        auto batch_size = static_cast<int>(instances.size());
+
+        py::array_t<int, py::array::c_style> query_lengths(batch_size);
+        py::array_t<int, py::array::c_style> task_targets; // tgt-side ground-truths
+        py::array_t<int, py::array::c_style> task_lengths(batch_size);
+        task_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
+
+
+
+
+
+
+
+        d["src_tokens"] = src_tokens;
+        d["src_lengths"] = src_lengths;
+        d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
+        d["task_start_indices"] = task_start_indices;
+        d["task_lengths"] = task_lengths;
+        d["task_gather_indices"] = task_gather_indices;
+
+        if (!query.empty()) {
+            d["query_start_indices"] = query_start_indices;
+            d["query_lengths"] = query_lengths;
+        }else {
+            d["query_start_indices"] = py::none();
+            d["query_lengths"] = py::none();
+        }
+        d["graph_start_indices"] = graph_start_indices;
+        d["graph_lengths"] = graph_lengths;
+        d["graph_edge_start_indices"] = graph_edge_start_indices;
+        d["graph_edge_lengths"] = graph_edge_lengths;
+        d["graph_edge_gather_indices"] = graph_edge_gather_indices;
+        if (include_nodes_in_graph_tokenization) {
+            d["graph_node_start_indices"] = graph_node_start_indices;
+            d["graph_node_lengths"] = graph_node_lengths;
+            d["graph_node_gather_indices"] = graph_node_gather_indices;
+        } else {
+            // return None
+            d["graph_node_start_indices"] = py::none();
+            d["graph_node_lengths"] = py::none();
+            d["graph_node_gather_indices"] = py::none();
+        }
+
+        d["distances"] = bd;
+        d["hashes"] = hash_distance_matrix<int>(bd);
+        d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
+        d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+        d["graph_type"] = graph_type;
+        d["task_type"] = task_type;
+        d["is_flat_model"] = is_flat_model;
+        d["concat_edges"] = concat_edges;
+        d["query_at_end"] = query_at_end;
+        d["num_thinking_tokens"] = num_thinking_tokens;
+        d["align_prefix_front_pad"] = align_prefix_front_pad;
+        d["num_nodes"] = num_nodes;
+        d["num_edges"] = num_edges;
 
         return d;
     }

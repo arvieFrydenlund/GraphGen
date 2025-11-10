@@ -174,9 +174,9 @@ public:
 
 
     /*
-     * note none of these are in the node shuffle map order,
+     * Note THESE  ARE NOT IN NODE SHUFFLE MAP ORDER!!!
      * this is because we will convert everything to gather_ids for the model
-     * and that will handle the map and shift to vocab ids
+     * and that will handle the map and shift to vocab ids, except for the final distance matrix
      */
     template<class D>
     void get_distances(unique_ptr<Graph<D> > &g_ptr) {
