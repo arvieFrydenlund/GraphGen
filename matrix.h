@@ -43,8 +43,8 @@ public:
         }
     }
 
-    vector<int> shape() const {
-        return {static_cast<int>(rows_), static_cast<int>(cols_)};
+    vector<size_t> shape() const {
+        return {rows_, cols_};
     }
 
     T& operator()(size_t i) {

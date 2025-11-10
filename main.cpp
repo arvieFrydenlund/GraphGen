@@ -51,6 +51,7 @@ int main() {
   py::scoped_interpreter guard{};
   // needed to run pybind11 code as a C++ program, not needed for module
 
+  set_seed(42);
   cout << "Seed: " << get_seed() << endl;
 
   set_default_dictionary(100, 10);  // 10 extra tokens D0-D9

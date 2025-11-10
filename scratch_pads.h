@@ -30,7 +30,11 @@ public:
 
 };
 
-
+/*
+ * MINOR ISSUE:  todo
+ * when there are multiple valid paths, we randomly choose one path, and randomly choose one BFS order
+ * However to be content with khops we should make it that the path chosen int he khops one.
+ */
 class BFSScratchPad : public ScratchPad {
 public:
     vector<map<int, vector<int> > > levels;
@@ -59,8 +63,6 @@ public:
         visited[start] = true;
         queue<int> q;
         q.push(start);
-
-        cout << "Starting BFS scratchpad from node " << start << " to node " << end << endl;
 
         while (!q.empty()) {
             map<int, vector<int> > current_level_nodes;

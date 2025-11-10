@@ -169,12 +169,8 @@ public:
         }
     }
 
-
-    // helper functions for getting gather_ids of edges and nodes TODO
-
-
     /*
-     * Note THESE  ARE NOT IN NODE SHUFFLE MAP ORDER!!!
+     * Note THESE ARE NOT IN NODE SHUFFLE MAP ORDER!!!
      * this is because we will convert everything to gather_ids for the model
      * and that will handle the map and shift to vocab ids, except for the final distance matrix
      */

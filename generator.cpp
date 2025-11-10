@@ -178,9 +178,9 @@ inline void set_default_dictionary(const int max_vocab = 100, const int extra_af
         {".", 7},  // task end
         {"t1", 8}, // potentially mark task type for muliti-task learning
         {"t2", 9},
-        {"t3", 10},
-        {"t4", 11},
-        {"t5", 12},
+        {"t1", 10},
+        {"t2", 11},
+        {"t3", 12},
         {"/", 13}, // query start
         {"?", 14}, // query end
         {"@", 15},

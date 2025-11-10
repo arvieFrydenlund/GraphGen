@@ -105,7 +105,7 @@ public:
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (task_sample_dist.has_value()) {
+        if (!task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
             vector<float> uweights(max_path_length - min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
@@ -200,25 +200,24 @@ public:
         /* Return a vector of labels for each node in the path if they are alternative valid shortest paths
          * The labels for at labels[:][0] are just the original path
          */
-        auto labels = vector<vector<int> >(path.size(), vector<int>());
-        labels[0].push_back(path[0]); // start
+        label_smoothed_path = vector<vector<int> >(path.size(), vector<int>());
+        label_smoothed_path[0].push_back(path[0]); // start
         auto end = path[path.size() - 1];
-        labels[path.size() - 1].push_back(end); // end
+        label_smoothed_path[path.size() - 1].push_back(end); // end
         for (int i = 1; i < static_cast<int>(path.size() - 1); i++) {
             auto prev = path[i - 1];
             auto path_node = path[i];
-            labels[i].push_back(path_node); // add true path
+            label_smoothed_path[i].push_back(path_node); // add true path
             for (int j = 0; j < static_cast<int>(distances_ptr->size()); j++) {
                 if ((*distances_ptr)[prev][j] == 1 && j != path_node &&
                     (*distances_ptr)[j][end] == (*distances_ptr)[path_node][end]) {
-                    labels[i].push_back(j);
+                    label_smoothed_path[i].push_back(j);
                 }
             }
-            if (labels[i].size() > static_cast<size_t>(max_num_labels)) {
-                max_num_labels = static_cast<int>(labels[i].size());
+            if (label_smoothed_path[i].size() > static_cast<size_t>(max_num_labels)) {
+                max_num_labels = static_cast<int>(label_smoothed_path[i].size());
             }
         }
-        this->label_smoothed_path = labels;
     }
 
     void tokenize(
@@ -257,14 +256,13 @@ public:
         tokenized_task_inputs(0) = task_start_marker;
         tokenized_task_targets(0, 0) = task_start_marker;
         for (size_t i = 0; i < path.size(); i++) {  // shuffle map new path and label_smoothed
-            tokenized_task_inputs(i + 1) = node_shuffle_map.at(path[i]);
+            tokenized_task_inputs(i + 1) = node_shuffle_map.at(path[i]);  // + 1 for start marker
             for (size_t j = 0; j < label_smoothed_path[i].size(); j++) {
                 tokenized_task_targets(i + 1, j) = node_shuffle_map.at(label_smoothed_path[i][j]);
             }
         }
-        tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
-        tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
-
+        tokenized_task_inputs(static_cast<int>(tokenized_task_inputs.shape()[0] - 1)) = task_end_marker;
+        tokenized_task_targets(static_cast<int>(tokenized_task_targets.shape()[0] - 1), 0) = task_end_marker;
         set_tokenized_pos(query_size, task_size, pos_dictionary);
     }
 

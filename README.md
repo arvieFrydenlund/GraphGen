@@ -4,9 +4,9 @@
 
 This repository contains:
 1. C++ code to generate numpy batches of graphs in C++ and pass them to Python via pybind11
-2. Python code to create 'infinite' datastreams for training which sample graphs on the fly 
-3. Python code for the loss functions for training models (criterion.py) [todo]
-4. Python code to plot graphs and attention over graphs  [todo]
+2. Python code to create 'infinite' datastreams for training which sample graphs on the fly [todo move from private repo]
+3. Python code for the loss functions for training models (criterion.py) [todo move from private repo]
+4. Python code to plot graphs and attention over graphs  [todo move from private repo]
 
 This does not include the training code, but you can use the datastreams and loss functions to train your own models.
 
