@@ -17,7 +17,7 @@ void test_erdos_renyi_n( // basic one
     const int batch_size = 3,
     const bool concat_edges = true,
     const bool duplicate_edges = false,
-    const bool include_nodes_in_graph_tokenization = false,
+    const bool include_nodes_in_graph_tokenization = true,
     const bool query_at_end = false,
     const int num_thinking_tokens = 0,
     const string scratchpad_type = "none",

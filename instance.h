@@ -316,23 +316,31 @@ public:
         }
 
         string s = "Tokenized Inputs and Positions:\n";
-        s += "Input:\n";
+        s += "Input: "; // 7
         for (size_t j = 0; j < tokenized_inputs.shape()[1]; j++) {
             for (size_t i = 0; i < tokenized_inputs.shape()[0]; i++) {
                 s += to_string(tokenized_inputs(i, j));
                 s += string(max_num_digits - to_string(tokenized_inputs(i, j)).size() + 1, ' ');
             }
-            s += "\n";
+            if (j == tokenized_inputs.shape()[1] -1) {
+                s += "\n";
+            } else {
+                s += "\n       ";
+            }
         }
-        s += "Pos:\n";
+        s += "Pos:   ";
         for (size_t j = 0; j < tokenized_positions.shape()[1]; j++) {
             for (size_t i = 0; i < tokenized_positions.shape()[0]; i++) {
                 s += to_string(tokenized_positions(i, j));
                 s += string(max_num_digits - to_string(tokenized_positions(i, j)).size() + 1, ' ');
             }
-            s += "\n";
+            if (j == tokenized_positions.shape()[1] -1) {
+                s += "\n";
+            } else {
+                s += "\n       ";
+            }
         }
-        s += "Idx:\n"; // just print range for reference
+        s += "Idx:   "; // just print range for reference
         for (size_t i = 0; i < tokenized_inputs.shape()[0]; i++) {
             s += to_string(i);
             s += string(max_num_digits - to_string(i).size() + 1, ' ');

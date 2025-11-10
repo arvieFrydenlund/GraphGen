@@ -252,7 +252,7 @@ public:
          *  [d(y,w), d(y,u), d(y,y), d(y,v), d(y,x)] ]
          */
         auto N = node_list.size();
-        edge_ground_truths_ptr = make_unique<vector<vector<int> > >(N, vector<int>(N, -1));
+        node_ground_truths_ptr = make_unique<vector<vector<int> > >(N, vector<int>(N, -1));
         for (int i = 0; i < static_cast<int>(N); i++) {
             for (int j = 0; j < static_cast<int>(N); j++) {
                 if (is_direct_ranking) {
