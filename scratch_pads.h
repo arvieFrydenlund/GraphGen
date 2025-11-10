@@ -60,6 +60,8 @@ public:
         queue<int> q;
         q.push(start);
 
+        cout << "Starting BFS scratchpad from node " << start << " to node " << end << endl;
+
         while (!q.empty()) {
             map<int, vector<int> > current_level_nodes;
             vector<int> next_level_nodes;
@@ -103,35 +105,6 @@ public:
         }
     }
 
-    static void _add(vector<int> &inputs,
-              vector<vector<int> > &targets,
-              const string &e,
-              const map<std::string, int> &dictionary) {
-        inputs.push_back(dictionary.at(e));
-        targets.push_back(vector<int>{dictionary.at(e)});
-    }
-
-    static void _add(vector<int> &inputs,
-              vector<vector<int> > &targets,
-              const int e) {
-        inputs.push_back(e);
-        targets.push_back(vector<int>{e});
-    }
-
-    static void _add(vector<int> &inputs,
-              vector<vector<int> > &targets,
-              const int e,
-              const vector<int> &ts,
-              const int up_to) {
-        inputs.push_back(e);
-        // push back targets until up_to
-        auto nt = vector<int>{};
-        for (size_t i = 0; i < static_cast<size_t>(up_to); i++) {
-            nt.push_back(ts[i]);
-        }
-        targets.push_back(nt);
-    }
-
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,
@@ -152,10 +125,17 @@ public:
 
         // map all nodes, and either shuffle or sort adjacency lists
         vector<map<int, vector<int> > > new_levels; // copy to modify
+        int num_tokens = 1;  // start of scratchpad
+        int max_targets = 1;
         for (size_t i = 0; i < levels.size(); i++) {
             map<int, vector<int> > new_level;
+            num_tokens += 1; // depth marker
             for (auto &p: levels[i]) {
                 auto nbrs = p.second;
+                num_tokens += 1 + 2 + nbrs.size(); //start of adjacency list, and node and end of adjacency list
+                if (nbrs.size() > static_cast<size_t>(max_targets)) {
+                    max_targets = static_cast<int>(nbrs.size());
+                }
                 vector<int> mapped_nbrs;
                 for (size_t j = 0; j < nbrs.size(); j++) {
                     mapped_nbrs.push_back(node_shuffle_map.at(nbrs[j]));
@@ -170,63 +150,58 @@ public:
             new_levels.push_back(new_level);
         }
 
-        auto inputs = vector<int>{};
-        auto targets = vector<vector<int> >{};
+        tokenized_inputs = Matrix<int>(num_tokens, 1);
+        tokenized_targets = Matrix<int>(num_tokens, max_targets, dictionary.at("<pad>"));
+        int cur = 0;
+        tokenized_inputs(cur, 0) = dictionary.at("#");
+        tokenized_targets(cur, 0) = dictionary.at("#");
+        cur += 1;
+
         // Get the initial adjacency list order
         // start node as only item in new_levels[0]
-        auto start_node = new_levels[0].begin()->first;
-
-        auto prior_adj_orders = vector<vector<int> >{vector<int>{start_node}};
-        for (size_t i = 0; i < levels.size(); i++) {
+        auto prior_adj_orders = vector<int>{new_levels[0].begin()->first};  // start node
+        for (size_t i = 0; i < new_levels.size(); i++) {
             // process level i
             // other example
             // D0 14 [13 17 ] D1 13 [10 ] 17 [8 11 20 ] D2 10 [9 ] 8 [] 11 [7 ] 20 [12 18 ] D3 9 [0 ] 7 [] 12 [5 ] 18 [1 ] D4 0 [19 ] 5 [2 ] 1 [3 4 15 ]
-            // prior_adj_orders = [[14]], then [[13, 17]], then [[10], [8, 11, 20]], or
-            // prior_adj_orders = [[14]], then [[17, 13]], then [[8, 11, 20], [10]]
+            // prior_adj_orders = [14], then [13, 17], then [10, 8, 11, 20], or
             // and [8, 11, 20] can be shuffled any way
 
-            // add depth marker
             string marker = "D";
             if (use_unique_depth_markers) {
                 marker = "D" + to_string(i);;
             }
-            _add(inputs, targets, marker, dictionary);
+            tokenized_inputs(cur, 0) = dictionary.at(marker);
+            tokenized_targets(cur, 0) = dictionary.at(marker);
+            cur += 1;
 
-            // process each node in level
-            auto next_adj_orders = vector<vector<int> >{};
-            for (size_t j = 0; j < prior_adj_orders.size(); j++) {
-                auto next_order = vector<int>{};
-                for (size_t k = 0; k < prior_adj_orders[j].size(); k++) {
-                    auto cur = prior_adj_orders[j][k];
-                    _add(inputs, targets, cur);
-                    _add(inputs, targets, "[", dictionary);
-                    auto neighbors = new_levels[i][cur];
+
+            auto next_adj_orders = vector<int>{};
+            for (size_t j = 0; j < prior_adj_orders.size(); j++) {  // process each node in level
+                auto node = prior_adj_orders[j];
+                auto nbrs = new_levels[i][node];
+                // write in node and its adjacency list
+                tokenized_inputs(cur, 0) = node;
+                tokenized_targets(cur, 0) = node;
+                cur++;
+                tokenized_inputs(cur, 0) = dictionary.at("[");
+                tokenized_targets(cur, 0) = dictionary.at("[");
+                cur++;
+                for (size_t k = 0; k < nbrs.size(); k++, cur++) {
+                    tokenized_inputs(cur, 0) = nbrs[k];
+                    for (size_t t = k; t < nbrs.size(); t++) {
+                        tokenized_targets(cur, t - k) = nbrs[t];
+                    }
+                    next_adj_orders.push_back(nbrs[k]);
                 }
+                tokenized_inputs(cur, 0) = dictionary.at("]");
+                tokenized_targets(cur, 0) = dictionary.at("]");
+                cur++;
             }
+            prior_adj_orders = next_adj_orders;
         }
 
-        // this->tokenized_inputs = inputs;
-        // this->tokenized_targets = targets;
     }
-
-    /*
-    void pprint_levels() {
-        // basically the tokenization, for debugging
-        cout << "Num levels: " << levels.size() << endl;
-        for (size_t i = 0; i < levels.size(); i++) {
-            cout << "D" << i << ": ";
-            for (size_t j = 0; j < levels[i].size(); j++) {
-                cout << "" << levels[i][j].first << " [";
-                for (size_t k = 0; k < levels[i][j].second.size(); k++) {
-                    cout << levels[i][j].second[k] << " ";
-                }
-                cout << "] ";
-            }
-            // cout << endl;
-        }
-        cout << endl;
-    }
-    */
 
 };
 
