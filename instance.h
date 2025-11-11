@@ -8,15 +8,18 @@
 #include <iostream>
 #include <random>
 #include <map>
-#include "matrix.h"
-#include "tasks.h"
-#include "scratch_pads.h"
-#include "graph_tokenizer.h"
 
 #include <Python.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+
+#include "matrix.h"
+#include "undirected_graphs.h"
+#include "directed_graphs.h"
+#include "graph_tokenizer.h"
+#include "tasks.h"
+#include "scratch_pads.h"
 
 using namespace std;
 
@@ -63,7 +66,6 @@ public:
     int task_length = 0;
 
 
-
     void make_node_shuffle_map(std::mt19937 &gen, const int min_vocab, int max_vocab,
                                const bool shuffle = false) {
         // Shuffle nodes and map to the new range [min_vocab, max_vocab)
@@ -108,14 +110,14 @@ public:
              std::mt19937 &gen,
              const map<std::string, int> &dictionary,
              const int min_vocab, int max_vocab, const bool shuffle_nodes, const bool shuffle_edges,
-             // task parameters
+            // task parameters
              const string &task_type, const string scratchpad_type,
              const int max_path_length, const int min_path_length, int start, int end,
              const optional<vector<float> > &task_sample_dist, // shortest path
              const bool sort_adjacency_lists, const bool use_unique_depth_markers, // DFS/BFS scratchpad
              optional<vector<int> > &given_query, int max_query_size, const int min_query_size, const bool is_center,
-             // center
-             // tokenization parameters
+            // center
+            // tokenization parameters
              const bool is_causal,
              const bool is_direct_ranking,
              const bool concat_edges,
@@ -180,14 +182,14 @@ public:
     }
 
     void tokenize(
-        /*
-         * Creates the input sequence, the target sequence, and the positional embeddings
-         */
-        const map<std::string, int> &dictionary,
-        const map<std::string, int> pos_dictionary,
-        bool query_at_end,
-        int num_thinking_tokens,
-        bool is_flat_model) {
+            /*
+             * Creates the input sequence, the target sequence, and the positional embeddings
+             */
+            const map<std::string, int> &dictionary,
+            const map<std::string, int> pos_dictionary,
+            bool query_at_end,
+            int num_thinking_tokens,
+            bool is_flat_model) {
         // set lengths
         int num_tokens = 2; // +2 for start and end tokens
         if (task) {
@@ -410,7 +412,6 @@ public:
 
         s += "TGT:   "; // these are multi line, if pad_id then just print empty padded to length
         auto empty = string(max_num_digits + 1, ' ');
-        auto prefix_size = task_start_idx;
         for (size_t j = 0; j < tokenized_targets.shape()[1]; j++) {
             s += string(task_start_idx * (max_num_digits + 1), ' '); // pad to align with inputs
             for (size_t i = 0; i < tokenized_targets.shape()[0]; i++) {
@@ -455,7 +456,7 @@ public:
     BatchedInstances(const string &graph_type, const string &task_type,
                      const int min_vocab, int max_vocab,
 
-                     // tokenization parameters
+            // tokenization parameters
                      const bool query_at_end = false,
                      const int num_thinking_tokens = 0,
                      const bool is_flat_model = true,
@@ -499,11 +500,11 @@ public:
         for (size_t i = 0; i < instances.size(); i++) {
             // inputs, targets and positions, and component start_indices and lengths
             instances[i].tokenize(
-                dictionary,
-                pos_dictionary,
-                query_at_end,
-                num_thinking_tokens,
-                is_flat_model
+                    dictionary,
+                    pos_dictionary,
+                    query_at_end,
+                    num_thinking_tokens,
+                    is_flat_model
             );
             // batch the info
             if (static_cast<int>(instances[i].tokenized_inputs.shape()[0]) > max_tokenized_inputs_len) {
@@ -530,15 +531,18 @@ public:
         if (align_prefix_front_pad and is_flat_model) {  // only align if flat model since non-flat separate prefixes
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
-        auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len, concat_edges ? 2 : 1});
+        auto src_tokens = py::array_t<int, py::array::c_style>(
+                {batch_size, new_max_tokenized_inputs_len, concat_edges ? 2 : 1});
         src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
-        auto task_targets = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_targets_len, max_tokenized_targets_labels});
+        auto task_targets = py::array_t<int, py::array::c_style>(
+                {batch_size, max_tokenized_targets_len, max_tokenized_targets_labels});
         task_targets[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto task_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
-        auto positions = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len, use_graph_structure ? 2 : 1});
+        auto positions = py::array_t<int, py::array::c_style>(
+                {batch_size, new_max_tokenized_inputs_len, use_graph_structure ? 2 : 1});
         positions[py::make_tuple(py::ellipsis())] = pos_dictionary.at("pad");
 
         py::array_t<int, py::array::c_style> num_nodes(batch_size);
@@ -547,7 +551,8 @@ public:
         py::array_t<int, py::array::c_style> query_start_indices(batch_size);
         py::array_t<int, py::array::c_style> query_lengths(batch_size);
 
-        py::array_t<int, py::array::c_style> graph_start_indices(batch_size); // includes both edges and nodes if applicable
+        py::array_t<int, py::array::c_style> graph_start_indices(
+                batch_size); // includes both edges and nodes if applicable
         py::array_t<int, py::array::c_style> graph_lengths(batch_size); // includes both edges and nodes if applicable
         py::array_t<int, py::array::c_style> graph_edge_start_indices(batch_size); // includes only edges
         py::array_t<int, py::array::c_style> graph_edge_lengths(batch_size); // includes only edges
@@ -678,15 +683,13 @@ public:
         //d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
         //d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
 
-       // arguments
+        // arguments
         d["graph_type"] = graph_type;
         d["task_type"] = task_type;
         d["is_flat_model"] = is_flat_model;
         d["concat_edges"] = concat_edges;
         d["query_at_end"] = query_at_end;
         d["align_prefix_front_pad"] = align_prefix_front_pad;
-
-
 
         return d;
     }
@@ -723,9 +726,9 @@ public:
 
     template<typename T>
     py::array_t<T, py::array::c_style> batch_ground_truths(
-        const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
-        const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-        const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+            const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
+            const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+            const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
         // indices are nodes, values are distances
         auto max_E = 0;
         for (auto &m: batched_ground_truths) {
@@ -758,9 +761,9 @@ public:
 
     template<typename T>
     pair<py::array_t<T, py::array::c_style>, py::array_t<T, py::array::c_style> > batch_ground_truth_gather_indices(
-        const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
-        const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-        const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+            const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
+            const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+            const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
         // indices are nodes, values are distances
         auto max_E = 0;
         for (auto &m: batched_ground_truths) {
@@ -785,8 +788,9 @@ public:
 
         py::array_t<T, py::array::c_style> arr_indices({static_cast<int>(batched_ground_truths.size()), max_E, max_k});
         py::array_t<T, py::array::c_style> arr_distances({
-            static_cast<int>(batched_ground_truths.size()), max_E, max_k
-        });
+                                                                 static_cast<int>(batched_ground_truths.size()), max_E,
+                                                                 max_k
+                                                         });
         arr_indices[py::make_tuple(py::ellipsis())] = 0;; // initialize array
         arr_distances[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
         auto ra_i = arr_indices.mutable_unchecked();
@@ -813,7 +817,7 @@ public:
     // has each distance matrix as a string, return the hashes as a numpy array
     template<typename T>
     py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(
-        const py::array_t<T, py::array::c_style> &batched_distances) {
+            const py::array_t<T, py::array::c_style> &batched_distances) {
         // Convert a distance matrix [N, N] to a numpy array [new_N, new_N] by mapping node ids
         auto shape = batched_distances.shape();
         py::array_t<std::uint64_t, py::array::c_style> arr({static_cast<int>(shape[0])});
@@ -835,35 +839,61 @@ public:
         return arr;
     }
 
-    template<typename T>
-    void print_np(py::array_t<T, py::array::c_style> arr, bool full, const int cutoff = 100000) {
-        auto ra = arr.mutable_unchecked();
-        // std::cout << "Shape: " << arr.ndim() << std::endl;
-        for (int i = 0; i < arr.ndim(); i++) {
-            std::cout << "Dim " << i << ": " << arr.shape(i) << " ";
+
+};
+
+
+template<typename T>
+void print_np(py::array_t<T, py::array::c_style> arr, const string &title = "", bool full = true,
+              const int cutoff = 100000) {
+    if (!title.empty()) {
+        std::cout << title << std::endl;
+    }
+    auto ra = arr.mutable_unchecked();
+    // std::cout << "Shape: " << arr.ndim() << std::endl;
+    for (int i = 0; i < arr.ndim(); i++) {
+        std::cout << "Dim " << i << ": " << arr.shape(i) << " ";
+    }
+    std::cout << std::endl;
+    if (arr.ndim() == 1) {
+        for (int i = 0; i < arr.shape(0); i++) {
+            std::cout << ra(i) << " ";
         }
-        std::cout << std::endl;
-        if (arr.ndim() == 1) {
-            for (int i = 0; i < arr.shape(0); i++) {
-                std::cout << ra(i) << " ";
+    } else if (arr.ndim() == 2) {
+        for (int i = 0; i < arr.shape(0); i++) {
+            for (int j = (full) ? 0 : i; j < arr.shape(1); j++) {
+                if (ra(i, j) >= cutoff) {
+                    std::cout << "inf " << std::endl;
+                } else {
+                    std::cout << ra(i, j) << " ";
+                }
             }
-        } else if (arr.ndim() == 2) {
-            for (int i = 0; i < arr.shape(0); i++) {
-                for (int j = (full) ? 0 : i; j < arr.shape(1); j++) {
-                    if (ra(i, j) >= cutoff) {
+            std::cout << std::endl;
+        }
+    } else if (arr.ndim() == 3) {
+        for (int b = 0; b < arr.shape(0); b++) {
+            std::cout << "Batch " << b << ":" << std::endl;
+            for (int i = 0; i < arr.shape(1); i++) {
+                for (int j = (full) ? 0 : i; j < arr.shape(2); j++) {
+                    if (ra(b, i, j) >= cutoff) {
                         std::cout << "inf " << std::endl;
                     } else {
-                        std::cout << ra(i, j) << " ";
+                        std::cout << ra(b, i, j) << " ";
                     }
                 }
-                std::cout << std::endl;
+                std::cout << std::endl << std::endl;
             }
         }
     }
+}
 
-    void pprint(py::dict) {
-    }
-};
+void pprint_dict(const py::dict &d) {
+    // not very useful, just do this this in python at this point
+    auto src_tokens = d["src_tokens"];
+    print_np(src_tokens.cast<py::array_t<int, py::array::c_style> >(), "src_tokens");
+
+
+}
 
 
 #endif //GRAPHGEN_INSTANCE_H

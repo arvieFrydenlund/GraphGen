@@ -10,6 +10,8 @@
 #include <queue>
 #include <map>
 #include "matrix.h"
+#include "undirected_graphs.h"
+#include "directed_graphs.h"
 
 
 using namespace std;

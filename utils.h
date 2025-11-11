@@ -13,8 +13,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
-#include "undirected_graphs.h"
-#include "directed_graphs.h"
 
 using namespace std;
 

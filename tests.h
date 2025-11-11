@@ -5,6 +5,9 @@
 #ifndef GRAPHGEN_TESTS_H
 #define GRAPHGEN_TESTS_H
 
+#include <iostream>
+#include "instance.h"
+
 
 void test_erdos_renyi_n( // basic one
     int min_num_nodes, int max_num_nodes,
@@ -54,7 +57,6 @@ void test_erdos_renyi_n( // basic one
         use_task_structure,
         use_graph_structure
     );
-
 }
 
 #endif //GRAPHGEN_TESTS_H

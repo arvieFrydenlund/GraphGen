@@ -11,6 +11,7 @@
 #include <map>
 #include "matrix.h"
 #include "undirected_graphs.h"
+#include "directed_graphs.h"
 
 #include <Python.h>
 #include <chrono>

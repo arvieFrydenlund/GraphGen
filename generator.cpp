@@ -11,16 +11,14 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
-#include "undirected_graphs.h"
-#include "directed_graphs.h"
-#include "scratch_pads.h"
-#include "utils.h"
 #include <limits>
 #include <cmath>
 
 #include <thread>
 #include <mutex>
 
+#include "undirected_graphs.h"
+#include "utils.h"
 #include "instance.h"
 
 using namespace std;

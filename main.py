@@ -267,9 +267,8 @@ if __name__ == '__main__':
     parser = generator.get_args_parser()
     args = parser.parse_args()
 
-    for arg in vars(args):
-        print(f'{arg}: {getattr(args, arg)}')
-
+    # for arg in vars(args):
+    #    print(f'{arg}: {getattr(args, arg)}')
 
     # h = pydoc.render_doc(generator, "Help on %s")
     # print(generator.help_str() + '\n\n\n')
@@ -281,14 +280,15 @@ if __name__ == '__main__':
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(args.max_vocab)
+    generator.set_default_dictionary(args.max_vocab, 20)
     d = generator.get_dictionary()
     # sort by value
     d = dict(sorted(d.items(), key=lambda item: item[1]))
-    print('Dictionary ...')
+    s = 'Dictionary: '
     for k, v in d.items():
-        print(f'{k}: {v}')
-    print()
+        s+= f'{k}: {v} '
+    print(s)
+    generator.set_default_pos_dictionary()
 
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
@@ -301,6 +301,6 @@ if __name__ == '__main__':
 
     #_t_positions2(args, d, batch_size=20)
 
-    _t_bfs(args, d, batch_size=7)
+    # _t_bfs(args, d, batch_size=7)
 
     print('\n\nDone Testing')
