@@ -36,7 +36,7 @@ public:
     Matrix<int> tokenized_task_inputs;  // input part
     Matrix<int> tokenized_task_targets;  // defines multi-label targets
     Matrix<int> tokenized_query_pos;
-    // Matrix<int> tokenized_task_pos;  these get made in the instance due to scratchpad obeing part of task
+    // tokenized_task_pos; these get made in the instance due to scratchpad being part of task
 
     bool use_query_invariance;
 
@@ -64,8 +64,6 @@ public:
         }
 
         tokenized_query_pos.resize(query_size);
-        // tokenized_task_pos.resize(task_size);
-
         for (size_t i = 0; i < static_cast<size_t>(query_size); i++) {
             if (use_query_invariance) {
                 tokenized_query_pos(i) = query_invariance_marker;
@@ -73,10 +71,6 @@ public:
                 tokenized_query_pos(i) = query_start + static_cast<int>(i);
             }
         }
-
-        //for (size_t i = 0; i < static_cast<size_t>(task_size); i++) {
-        //    tokenized_task_pos(i) = task_start + static_cast<int>(i);
-        //}
     }
 
 };
@@ -97,7 +91,6 @@ public:
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
          * return length as vector of node ids
-*
          * B) This is hardcoded for checking for distances of 1 as a connection
          */
 

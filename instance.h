@@ -13,7 +13,17 @@
 #include "scratch_pads.h"
 #include "graph_tokenizer.h"
 
+#include <Python.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+
 using namespace std;
+
+namespace py = pybind11;
+using namespace py::literals;
+
+static const py::bool_ py_true(true);
 
 /*
  * Instance class to hold graph and related data i.e. all info for a single instance
@@ -34,21 +44,24 @@ public:
     Matrix<int> tokenized_inputs;
     Matrix<int> tokenized_targets;
     Matrix<int> tokenized_positions;
+    // prefix
     int query_start_idx = -1; // index in the tokenized input where the query starts
     int query_length = 0;
     int graph_start_idx = -1; // index in the tokenized input where the graph starts
     int graph_length = 0;
     int graph_nodes_start_idx = -1; // index in the tokenized input where the graph nodes start
     int graph_nodes_length = 0; // should just be N again
-    int scratch_pad_start_idx = -1; // index in the tokenized input
-    int scratch_pad_length = 0;
     int thinking_tokens_start_idx = -1;
     int thinking_tokens_length = 0;
+    // task
+    int scratch_pad_start_idx = -1; // index in the tokenized input
+    int scratch_pad_length = 0;
+    int true_task_start_idx = -1; // index in the tokenized input where the task starts excluding any scratch pad
+    int true_task_length = 0;
     // task is anything the model generates i.e scratch pad and actual task
     int task_start_idx = -1; // index in the tokenized input where the task starts
     int task_length = 0;
-    int true_task_start_idx = -1; // index in the tokenized input where the task starts excluding any scratch pad
-    int true_task_length = 0;
+
 
 
     void make_node_shuffle_map(std::mt19937 &gen, const int min_vocab, int max_vocab,
@@ -95,14 +108,14 @@ public:
              std::mt19937 &gen,
              const map<std::string, int> &dictionary,
              const int min_vocab, int max_vocab, const bool shuffle_nodes, const bool shuffle_edges,
-            // task parameters
+             // task parameters
              const string &task_type, const string scratchpad_type,
              const int max_path_length, const int min_path_length, int start, int end,
              const optional<vector<float> > &task_sample_dist, // shortest path
              const bool sort_adjacency_lists, const bool use_unique_depth_markers, // DFS/BFS scratchpad
              optional<vector<int> > &given_query, int max_query_size, const int min_query_size, const bool is_center,
-            // center
-            // tokenization parameters
+             // center
+             // tokenization parameters
              const bool is_causal,
              const bool is_direct_ranking,
              const bool concat_edges,
@@ -143,7 +156,7 @@ public:
             auto short_path = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,
                                                             max_path_length, min_path_length,
                                                             start, end, task_sample_dist, use_query_invariance);
-            start = short_path->path.front();  // get task-specific info before casting to base class
+            start = short_path->path.front(); // get task-specific info before casting to base class
             end = short_path->path.back();
             task = std::move(short_path);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
@@ -167,17 +180,16 @@ public:
     }
 
     void tokenize(
-            /*
-             * Creates the input sequence, the target sequence, and the positional embeddings
-             */
-            const map<std::string, int> &dictionary,
-            const map<std::string, int> pos_dictionary,
-            bool query_at_end,
-            int num_thinking_tokens,
-            bool is_flat_model) {
-
+        /*
+         * Creates the input sequence, the target sequence, and the positional embeddings
+         */
+        const map<std::string, int> &dictionary,
+        const map<std::string, int> pos_dictionary,
+        bool query_at_end,
+        int num_thinking_tokens,
+        bool is_flat_model) {
         // set lengths
-        int num_tokens = 2;  // +2 for start and end tokens
+        int num_tokens = 2; // +2 for start and end tokens
         if (task) {
             query_length = static_cast<int>(task->tokenized_query_inputs.shape()[0]);
             num_tokens += query_length;
@@ -199,12 +211,12 @@ public:
             if (scratch_pad) {
                 scratch_pad_length = static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
                 task_length += scratch_pad_length;
-                if (static_cast<int>(scratch_pad->tokenized_targets.shape()[1]) > max_labels){
+                if (static_cast<int>(scratch_pad->tokenized_targets.shape()[1]) > max_labels) {
                     max_labels = static_cast<int>(scratch_pad->tokenized_targets.shape()[1]);
                 }
             }
             num_tokens += task_length;
-        }  // todo later
+        } // todo later
 
         // init output matrices
         auto concat_edges = graph_tokenizer->concat_edges;
@@ -215,8 +227,9 @@ public:
         } else {
             tokenized_inputs = Matrix<int>(num_tokens, 1, dictionary.at("<pad>"));
         }
-        if (task){  // + 1 for end of sequence token
-            tokenized_targets = Matrix<int>( task_length + 1, max_labels, dictionary.at("<pad>"));
+        if (task) {
+            // + 1 for end of sequence token
+            tokenized_targets = Matrix<int>(task_length + 1, max_labels, dictionary.at("<pad>"));
         }
         if (use_graph_structure) {
             tokenized_positions = Matrix<int>(num_tokens, 2, pos_dictionary.at("pad"));
@@ -278,7 +291,8 @@ public:
             }
         }
 
-        if (num_thinking_tokens > 0) { // write in thinking tokens, these are part of the prefix!
+        if (num_thinking_tokens > 0) {
+            // write in thinking tokens, these are part of the prefix!
             thinking_tokens_start_idx = cur;
             auto thinking_token_id = dictionary.at("!");
             auto thinking_start_marker = pos_dictionary.at("thinking_start");
@@ -296,7 +310,7 @@ public:
         }
 
         // the task
-        task_start_idx = cur;  // this gets defined regardless since it is also prefix end index
+        task_start_idx = cur; // this gets defined regardless since it is also prefix end index
         if (is_flat_model and task) {
             // write in task and scratchpad
             auto cur_task_pos = 0;
@@ -306,7 +320,8 @@ public:
                 throw std::invalid_argument("Task size exceeds available position tokens.");
             }
 
-            if (scratch_pad) { // write in scratchpad tokens
+            if (scratch_pad) {
+                // write in scratchpad tokens
                 scratch_pad_start_idx = cur;
                 for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++, cur_task_pos++) {
                     tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
@@ -393,7 +408,7 @@ public:
             }
         }
 
-        s += "TGT:   ";  // these are multi line, if pad_id then just print empty padded to length
+        s += "TGT:   "; // these are multi line, if pad_id then just print empty padded to length
         auto empty = string(max_num_digits + 1, ' ');
         auto prefix_size = task_start_idx;
         for (size_t j = 0; j < tokenized_targets.shape()[1]; j++) {
@@ -440,7 +455,7 @@ public:
     BatchedInstances(const string &graph_type, const string &task_type,
                      const int min_vocab, int max_vocab,
 
-            // tokenization parameters
+                     // tokenization parameters
                      const bool query_at_end = false,
                      const int num_thinking_tokens = 0,
                      const bool is_flat_model = true,
@@ -467,36 +482,386 @@ public:
     }
 
     py::dict package_for_model(const map<std::string, int> &dictionary, const map<std::string, int> pos_dictionary) {
+        if (instances.size() == 0) {
+            throw std::invalid_argument("No instances to package for model.");
+        }
         py::dict d;
 
         // make all the info needed for the model input
+        int max_tokenized_inputs_len = 0;
+        int max_tokenized_targets_len = 0;
+        int max_tokenized_targets_labels = 0;
+        auto max_prefix_size = 0;
+        auto concat_edges = instances[0].graph_tokenizer->concat_edges;
+        auto use_graph_structure = instances[0].graph_tokenizer->use_graph_structure;
+        auto include_nodes_in_graph_tokenization = instances[0].graph_tokenizer->include_nodes_in_graph_tokenization;
+
         for (size_t i = 0; i < instances.size(); i++) {
             // inputs, targets and positions, and component start_indices and lengths
             instances[i].tokenize(
-                    dictionary,
-                    pos_dictionary,
-                    query_at_end,
-                    num_thinking_tokens,
-                    is_flat_model
+                dictionary,
+                pos_dictionary,
+                query_at_end,
+                num_thinking_tokens,
+                is_flat_model
             );
-
+            // batch the info
+            if (static_cast<int>(instances[i].tokenized_inputs.shape()[0]) > max_tokenized_inputs_len) {
+                max_tokenized_inputs_len = static_cast<int>(instances[i].tokenized_inputs.shape()[0]);
+            }
+            if (instances[i].task_start_idx > max_prefix_size) {  // use task start index to get prefix size
+                max_prefix_size = instances[i].task_start_idx;
+            }
+            if (instances[i].task) {
+                if (static_cast<int>(instances[i].tokenized_targets.shape()[0]) > max_tokenized_targets_len) {
+                    max_tokenized_targets_len = static_cast<int>(instances[i].tokenized_targets.shape()[0]);
+                }
+                if (static_cast<int>(instances[i].tokenized_targets.shape()[1]) > max_tokenized_targets_labels) {
+                    max_tokenized_targets_labels = static_cast<int>(instances[i].tokenized_targets.shape()[1]);
+                }
+            }
             instances[i].pprint();
         }
-        // batch the info
 
+        // set up numpy arrays
         auto batch_size = static_cast<int>(instances.size());
 
+        auto new_max_tokenized_inputs_len = max_tokenized_inputs_len;
+        if (align_prefix_front_pad and is_flat_model) {  // only align if flat model since non-flat separate prefixes
+            new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
+        }
+        auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len, concat_edges ? 2 : 1});
+        src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
+        auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
+
+        auto task_targets = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_targets_len, max_tokenized_targets_labels});
+        task_targets[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
+        auto task_lengths = py::array_t<int, py::array::c_style>({batch_size});
+
+        auto positions = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len, use_graph_structure ? 2 : 1});
+        positions[py::make_tuple(py::ellipsis())] = pos_dictionary.at("pad");
+
+        py::array_t<int, py::array::c_style> num_nodes(batch_size);
+        py::array_t<int, py::array::c_style> num_edges(batch_size);
+
+        py::array_t<int, py::array::c_style> query_start_indices(batch_size);
         py::array_t<int, py::array::c_style> query_lengths(batch_size);
-        py::array_t<int, py::array::c_style> task_targets; // tgt-side ground-truths
-        py::array_t<int, py::array::c_style> task_lengths(batch_size);
-        task_lengths[py::make_tuple(py::ellipsis())] = 0; // initialize array
+
+        py::array_t<int, py::array::c_style> graph_start_indices(batch_size); // includes both edges and nodes if applicable
+        py::array_t<int, py::array::c_style> graph_lengths(batch_size); // includes both edges and nodes if applicable
+        py::array_t<int, py::array::c_style> graph_edge_start_indices(batch_size); // includes only edges
+        py::array_t<int, py::array::c_style> graph_edge_lengths(batch_size); // includes only edges
+        py::array_t<int, py::array::c_style> graph_node_start_indices(batch_size); // includes nodes if applicable
+        py::array_t<int, py::array::c_style> graph_node_lengths(batch_size); // includes nodes if applicable
+
+        py::array_t<int, py::array::c_style> thinking_tokens_start_idx(batch_size);
+        py::array_t<int, py::array::c_style> thinking_tokens_length(batch_size);
+
+        py::array_t<int, py::array::c_style> task_start_indices(batch_size);
+        py::array_t<int, py::array::c_style> scratch_pad_start_indices(batch_size);
+        py::array_t<int, py::array::c_style> scratch_pad_lengths(batch_size);
+        py::array_t<int, py::array::c_style> true_task_start_indices(batch_size);
+        py::array_t<int, py::array::c_style> true_task_lengths(batch_size);
+
+        // write into numpy arrays
+        auto src_tokens_ar = src_tokens.mutable_unchecked();
+        auto src_lengths_ar = src_lengths.mutable_unchecked();
+        auto positions_ar = positions.mutable_unchecked();
+        auto task_targets_ar = task_targets.mutable_unchecked();
+        auto task_lengths_ar = task_lengths.mutable_unchecked();
+
+        auto num_nodes_ar = num_nodes.mutable_unchecked();
+        auto num_edges_ar = num_edges.mutable_unchecked();
+
+        auto query_start_indices_ar = query_start_indices.mutable_unchecked();
+        auto query_lengths_ar = query_lengths.mutable_unchecked();
+        auto graph_start_indices_ar = graph_start_indices.mutable_unchecked();
+        auto graph_lengths_ar = graph_lengths.mutable_unchecked();
+        auto graph_edge_start_indices_ar = graph_edge_start_indices.mutable_unchecked();
+        auto graph_edge_lengths_ar = graph_edge_lengths.mutable_unchecked();
+        auto graph_node_start_indices_ar = graph_node_start_indices.mutable_unchecked();
+        auto graph_node_lengths_ar = graph_node_lengths.mutable_unchecked();
+        auto thinking_tokens_start_idx_ar = thinking_tokens_start_idx.mutable_unchecked();
+        auto thinking_tokens_length_ar = thinking_tokens_length.mutable_unchecked();
+        auto task_start_indices_ar = task_start_indices.mutable_unchecked();
+        auto scratch_pad_start_indices_ar = scratch_pad_start_indices.mutable_unchecked();
+        auto scratch_pad_lengths_ar = scratch_pad_lengths.mutable_unchecked();
+        auto true_task_start_indices_ar = true_task_start_indices.mutable_unchecked();
+        auto true_task_lengths_ar = true_task_lengths.mutable_unchecked();
+
+        for (size_t i = 0; i < instances.size(); i++) {
+            auto offset = 0;
+            if (align_prefix_front_pad and is_flat_model) {
+                offset = new_max_tokenized_inputs_len - instances[i].tokenized_inputs.shape()[0];
+            }
+            for (size_t j = 0; j < instances[i].tokenized_inputs.shape()[0]; j++) {
+                for (size_t k = 0; k < instances[i].tokenized_inputs.shape()[1]; k++) {
+                    src_tokens_ar(i, j + offset, k) = instances[i].tokenized_inputs(j, k);
+                }
+                for (size_t k = 0; k < instances[i].tokenized_positions.shape()[1]; k++) {
+                    positions_ar(i, j + offset, k) = instances[i].tokenized_positions(j, k);
+                }
+            }
+            src_lengths_ar(i) = instances[i].tokenized_inputs.shape()[0];
+            if (instances[i].task) {
+                for (size_t j = 0; j < instances[i].tokenized_targets.shape()[0]; j++) {
+                    for (size_t k = 0; k < instances[i].tokenized_targets.shape()[1]; k++) {
+                        task_targets_ar(i, j, k) = instances[i].tokenized_targets(j, k);
+                    }
+                }
+                task_lengths_ar(i) = instances[i].task_length;
+            }
+            // all others
+            num_nodes_ar(i) = instances[i].N;
+            num_edges_ar(i) = instances[i].E;
+            query_start_indices_ar(i) = instances[i].query_start_idx;
+            query_lengths_ar(i) = instances[i].query_length;
+            graph_start_indices_ar(i) = instances[i].graph_start_idx;
+            graph_lengths_ar(i) = instances[i].graph_length;
+            graph_edge_start_indices_ar(i) = instances[i].graph_start_idx;
+            graph_edge_lengths_ar(i) = instances[i].graph_length;
+            graph_node_start_indices_ar(i) = instances[i].graph_nodes_start_idx;
+            graph_node_lengths_ar(i) = instances[i].graph_nodes_length;
+            thinking_tokens_start_idx_ar(i) = instances[i].thinking_tokens_start_idx;
+            thinking_tokens_length_ar(i) = instances[i].thinking_tokens_length;
+            task_start_indices_ar(i) = instances[i].task_start_idx;
+            scratch_pad_start_indices_ar(i) = instances[i].scratch_pad_start_idx;
+            scratch_pad_lengths_ar(i) = instances[i].scratch_pad_length;
+            true_task_start_indices_ar(i) = instances[i].true_task_start_idx;
+            true_task_lengths_ar(i) = instances[i].true_task_length;
+        }
+
+        d["num_nodes"] = num_nodes;
+        d["num_edges"] = num_edges;
+
+        d["src_tokens"] = src_tokens;
+        d["src_lengths"] = src_lengths;
+        d["positions"] = positions;
+
+        // has task
+        if (instances[0].task) {
+            d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
+        } else {
+            d["prev_output_tokens"] = py::none();
+        }
+
+        d["query_start_indices"] = query_start_indices;
+        d["query_lengths"] = query_lengths;
+        d["graph_start_indices"] = graph_start_indices;
+        d["graph_lengths"] = graph_lengths;
+        d["graph_edge_start_indices"] = graph_edge_start_indices;
+        d["graph_edge_lengths"] = graph_edge_lengths;
+        if (include_nodes_in_graph_tokenization) {
+            d["graph_node_start_indices"] = graph_node_start_indices;
+            d["graph_node_lengths"] = graph_node_lengths;
+        } else {
+            d["graph_node_start_indices"] = py::none();
+            d["graph_node_lengths"] = py::none();
+        }
+        d["thinking_tokens_start_idx"] = thinking_tokens_start_idx;
+        d["thinking_tokens_length"] = thinking_tokens_length;
+
+        d["task_start_indices"] = task_start_indices;
+        d["task_lengths"] = task_lengths;
+        d["scratch_pad_start_indices"] = scratch_pad_start_indices;
+        d["scratch_pad_lengths"] = scratch_pad_lengths;
+        d["true_task_start_indices"] = true_task_start_indices;
+        d["true_task_lengths"] = true_task_lengths;
+
+        //auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
+        //d["distances"] = bd;
+
+        //d["hashes"] = hash_distance_matrix<int>(bd);
+
+        //auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>(
+        //batched_ground_truths, batched_node_shuffle_map, max_vocab);
+        //d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
+        //d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+
+       // arguments
+        d["graph_type"] = graph_type;
+        d["task_type"] = task_type;
+        d["is_flat_model"] = is_flat_model;
+        d["concat_edges"] = concat_edges;
+        d["query_at_end"] = query_at_end;
+        d["align_prefix_front_pad"] = align_prefix_front_pad;
 
 
 
         return d;
     }
 
-    void print(py::dict) {
+    template<typename T>
+    py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<vector<T> > > > &batched_distances,
+                                                       const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+                                                       const int new_N, T cuttoff = 100000, T max_value = -1,
+                                                       T pad = -1) {
+        py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_distances.size()), new_N, new_N});
+        arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
+        auto ra = arr.mutable_unchecked();
+
+        auto it1 = batched_distances.begin();
+        auto it2 = batched_node_shuffle_map.begin();
+        int b = 0;
+        for (; it1 != batched_distances.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
+                    auto mapped_j = (**it2)[j];
+                    auto mapped_k = (**it2)[k];
+                    if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
+                        ra(b, mapped_j, mapped_k) = max_value;
+                    } else {
+                        ra(b, mapped_j, mapped_k) = (**it1)[j][k];
+                    }
+                }
+            }
+            b += 1;
+        }
+        return arr;
+    }
+
+
+    template<typename T>
+    py::array_t<T, py::array::c_style> batch_ground_truths(
+        const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
+        const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+        const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+        // indices are nodes, values are distances
+        auto max_E = 0;
+        for (auto &m: batched_ground_truths) {
+            if (static_cast<int>((*m).size()) > max_E) {
+                max_E = (*m).size();
+            }
+        }
+
+        py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_ground_truths.size()), max_E, new_N});
+        arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
+        auto ra = arr.mutable_unchecked();
+        auto it1 = batched_ground_truths.begin();
+        auto it2 = batched_node_shuffle_map.begin();
+        int cur = 0;
+        for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
+            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
+                    if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
+                        ra(cur, j, (**it2)[k]) = max_value;
+                    } else {
+                        ra(cur, j, (**it2)[k]) = (**it1)[j][k];
+                    }
+                }
+            }
+            cur += 1;
+        }
+        return arr;
+    }
+
+
+    template<typename T>
+    pair<py::array_t<T, py::array::c_style>, py::array_t<T, py::array::c_style> > batch_ground_truth_gather_indices(
+        const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
+        const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
+        const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+        // indices are nodes, values are distances
+        auto max_E = 0;
+        for (auto &m: batched_ground_truths) {
+            if (static_cast<int>((*m).size()) > max_E) {
+                max_E = (*m).size();
+            }
+        }
+        auto max_k = 0; // number of non -1 entries in ground truths
+        for (auto b = batched_ground_truths.begin(); b != batched_ground_truths.end(); ++b) {
+            for (int j = 0; j < static_cast<int>((**b).size()); j++) {
+                int count = 0;
+                for (int k = 0; k < static_cast<int>((**b)[j].size()); k++) {
+                    if ((**b)[j][k] >= 0 && ((cuttoff <= 0) || ((**b)[j][k] < cuttoff))) {
+                        count += 1;
+                    }
+                }
+                if (count > max_k) {
+                    max_k = count;
+                }
+            }
+        }
+
+        py::array_t<T, py::array::c_style> arr_indices({static_cast<int>(batched_ground_truths.size()), max_E, max_k});
+        py::array_t<T, py::array::c_style> arr_distances({
+            static_cast<int>(batched_ground_truths.size()), max_E, max_k
+        });
+        arr_indices[py::make_tuple(py::ellipsis())] = 0;; // initialize array
+        arr_distances[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
+        auto ra_i = arr_indices.mutable_unchecked();
+        auto ra_d = arr_distances.mutable_unchecked();
+        auto it1 = batched_ground_truths.begin();
+        auto it2 = batched_node_shuffle_map.begin();
+        int cur = 0;
+        for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2, cur++) {
+            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+                auto cur_gt = 0;
+                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
+                    if (((**it1)[j][k] >= 0) && ((cuttoff <= 0) || ((**it1)[j][k] < cuttoff))) {
+                        ra_i(cur, j, cur_gt) = (**it2)[k];
+                        ra_d(cur, j, cur_gt) = (**it1)[j][k];
+                        cur_gt += 1;
+                    }
+                }
+            }
+        }
+        return make_pair(arr_indices, arr_distances);
+    }
+
+    // Hashing
+    // has each distance matrix as a string, return the hashes as a numpy array
+    template<typename T>
+    py::array_t<std::uint64_t, py::array::c_style> hash_distance_matrix(
+        const py::array_t<T, py::array::c_style> &batched_distances) {
+        // Convert a distance matrix [N, N] to a numpy array [new_N, new_N] by mapping node ids
+        auto shape = batched_distances.shape();
+        py::array_t<std::uint64_t, py::array::c_style> arr({static_cast<int>(shape[0])});
+        auto ra = arr.mutable_unchecked();
+        auto bd = batched_distances.unchecked();
+        for (int b = 0; b < shape[0]; b++) {
+            // make string from distance matrix
+            std::string str = "";
+            for (int i = 0; i < shape[1]; i++) {
+                for (int j = 0; j < shape[2]; j++) {
+                    str += std::to_string(bd(b, i, j));
+                }
+            }
+            auto hash = std::hash<std::string>{}(str);
+            // auto has2 = static_cast<std::uint64_t>(hash);
+            // cout << "hash: " << hash << " has2: " << has2 << endl;
+            ra(b) = static_cast<std::uint64_t>(hash);
+        }
+        return arr;
+    }
+
+    template<typename T>
+    void print_np(py::array_t<T, py::array::c_style> arr, bool full, const int cutoff = 100000) {
+        auto ra = arr.mutable_unchecked();
+        // std::cout << "Shape: " << arr.ndim() << std::endl;
+        for (int i = 0; i < arr.ndim(); i++) {
+            std::cout << "Dim " << i << ": " << arr.shape(i) << " ";
+        }
+        std::cout << std::endl;
+        if (arr.ndim() == 1) {
+            for (int i = 0; i < arr.shape(0); i++) {
+                std::cout << ra(i) << " ";
+            }
+        } else if (arr.ndim() == 2) {
+            for (int i = 0; i < arr.shape(0); i++) {
+                for (int j = (full) ? 0 : i; j < arr.shape(1); j++) {
+                    if (ra(i, j) >= cutoff) {
+                        std::cout << "inf " << std::endl;
+                    } else {
+                        std::cout << ra(i, j) << " ";
+                    }
+                }
+                std::cout << std::endl;
+            }
+        }
+    }
+
+    void pprint(py::dict) {
     }
 };
 
