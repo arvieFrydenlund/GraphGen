@@ -29,10 +29,15 @@ def get_args_parser():
 
     # graph settings
     parser.add_argument('--graph_type', type=str, default='erdos_renyi')  # 'erdos_renyi' # 'euclidean'  # 'path_star'  # 'balanced'
-    parser.add_argument('--min_num_nodes', type=int, default=20)
-    parser.add_argument('--max_num_nodes', type=int, default=25)
-    parser.add_argument('--c_min', type=int, default=75)  # for graphs with multiple connected components
-    parser.add_argument('--c_max', type=int, default=125)
+    parser.add_argument('--min_num_nodes', type=int, default=15,
+                        help="Minimum number of nodes for generated graphs.  "
+                             "We strongly recommend using shuffle_nodes and a vocab range map via min_vocab and max_vocab.")
+    parser.add_argument('--max_num_nodes', type=int, default=25,
+                        help='If -1 use max=min only i.e. only sample a single size')
+    parser.add_argument('--c_min', type=int, default=75,
+                        help='Min number of sampled edges to form a single connected component')  # for graphs with multiple connected components
+    parser.add_argument('--c_max', type=int, default=125,
+                        help='Max number of sampled edges to form a single connected component')
 
     parser.add_argument('--p', type=float, default=-1.0,
                         help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
@@ -69,29 +74,73 @@ def get_args_parser():
 
     # task settings
     parser.add_argument('--task_type', type=str, default='shortest_path') #'shortest_path')  # 'center'  # 'centroid'
-    parser.add_argument('--max_path_length', type=int, default=12)
-    parser.add_argument('--min_path_length', type=int, default=3)
-    parser.add_argument('--max_query_size', type=int, default=10)
-    parser.add_argument('--min_query_size', type=int, default=2)
+    parser.add_argument('--min_path_length', type=int, default=3,
+                        help='Minimum path length for shortest path tasks (inclusive)')
+    parser.add_argument('--max_path_length', type=int, default=12,
+                        help='Maximum path length for shortest path tasks (inclusive)')
+    parser.add_argument('--sort_adjacency_lists', action='store_true', default=False,
+                        help='Whether to sort adjacency lists when generating BFS/DFS scratchpad.')
+    parser.add_argument('--use_unique_depth_markers', action='store_true', default=False,
+                        help='Whether to use unique depth markers when generating BFS/DFS scratchpad.')
+    parser.add_argument('--task_sample_dist', nargs='*', default=None,
+                        help='Optional sampling distribution for different task types.'
+                             ' E.g. for shortest path tasks, [shortest_path, center, centroid].'
+                             ' Should sum to 1.0.')
+    parser.add_argument('--min_query_size', type=int, default=2,
+                        help='Minimum query size for center/centroid tasks (inclusive)')
+    parser.add_argument('--max_query_size', type=int, default=10,
+                        help='Maximum query size for center/centroid tasks (inclusive)')
 
     # tokenization settings
-    parser.add_argument('--is_causal', action='store_true', default=False)
-    parser.add_argument('--shuffle_edges', action='store_false', default=True)
-    parser.add_argument('--shuffle_nodes', action='store_false', default=True)
+    parser.add_argument('--is_causal', action='store_true', default=False,
+                        help='Whether to use causal tokenization of distances'
+                             ' (i.e. decoder-only style) or non-causal (i.e. encoder-only style).')
+    parser.add_argument('--is_direct_ranking', action='store_true', default=False,
+                        help='Whether to use direct ranking for graph distance ranking loss on node-list.'
+                             'This assumes include_nodes_in_graph_tokenization'
+                        )
+    parser.add_argument('--shuffle_edges', action='store_true', default=True,
+                        help='Whether to shuffle edge list when generating the graph tokenization.')
     parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
+    parser.add_argument('--shuffle_nodes', action='store_true', default=True,
+                        help='Whether to shuffle node ids when generating the graph tokenization.'
+                             'This randomly maps nodes across the whole spectrum of available vocab ids.')
     parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
-    parser.add_argument('--min_vocab', type=int, default=22)
-    parser.add_argument('--max_vocab', type=int, default=100)
+    parser.add_argument('--min_vocab', type=int, default=22,
+                        help='Minimum vocab id to use when shuffling nodes.')
+    parser.add_argument('--max_vocab', type=int, default=100,
+                        help='Maximum vocab id to use when shuffling nodes.')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_edges', type=int, default=512)
     parser.add_argument('--max_attempts', type=int, default=1000)
-    parser.add_argument('--concat_edges', action='store_true', default=True)
+    parser.add_argument('--concat_edges', action='store_true', default=True,
+                        help='Whether to concatenate edge pairs into a single token or use separate tokens.'
+                             'This happens in the model but produces a 2d tensor for src_tokens [seq_len, 2]')
     parser.add_argument('--dont_concat_edges', action='store_false', dest='concat_edges')
-    parser.add_argument('--query_at_end', action='store_true', default=False)
+    parser.add_argument('--duplicate_edges', action='store_true', default=False,
+                        help='Whether to allow duplicate edges when generating the graph tokenization.'
+                             'Only makes sense for undirected graphs.')
+    parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=True,
+                        help='Whether to include node tokens in the graph tokenization, after the edges, '
+                             'i.e. edge list and then node list.')
+
+    parser.add_argument('--query_at_end', action='store_true', default=False,
+                        help='Whether to place the query at the end of the graph or before.')
     parser.add_argument('--num_thinking_tokens', type=int, default=0)
-    parser.add_argument('--is_decoder_model', action='store_true', dest='is_flat_model', default=True)
-    parser.add_argument('--is_encoder_model', action='store_false', dest='is_flat_model')
-    parser.add_argument('--for_plotting', action='store_true', default=False)
+    parser.add_argument('--scratchpad_type', type=str, default='none') #'none' 'BFS'  # 'DFS'
+    parser.add_argument('--is_flat_model', action='store_true', default=True,
+                        help='Whether the model is flat (i.e. single input tensor) or uses separate encoder/decoder inputs.')
+    parser.add_argument('--align_prefix_front_pad', action='store_true', default=False,
+                        help='Whether to align the prefix (up to target seq) by front padding the input. '
+                             'Only makes sense for flat models.')
+
+    # positional encoding settings
+    parser.add_argument('--use_edges_invariance', action='store_true', default=False,)
+    parser.add_argument('--use_node_invariance', action='store_true', default=False,)
+    parser.add_argument('--use_graph_invariance', action='store_true', default=False,)
+    parser.add_argument('--use_query_invariance', action='store_true', default=False,)
+    parser.add_argument('--use_task_structure', action='store_true', default=False,)
+    parser.add_argument('--use_graph_structure', action='store_true', default=False,)
 
     return parser
 
@@ -245,6 +294,7 @@ class ReconstructedGraph(object):
     def pprint(self):
         pass
 
+
 def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, ids=None):
     """
     Take the c++ output and reconstruct the graphs for plotting and sanity checking.
@@ -361,6 +411,101 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
     return reconstructions
 
+def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs_=(0,1,2)):
+    """
+    :param b_n: batched dict
+    :param title:
+    :param print_distances:
+    :param print_graph_gts:
+    :param idxs:
+    :return: None
+    """
+
+    rev_token_dict = {v: k for k, v in token_dict.items()}
+    rev_pos_dict = {v: k for k, v in pos_dict.items()}
+
+    src_tokens = b_n['src_tokens']
+    task_targets = b_n['prev_output_tokens']
+    positions = b_n['positions']
+
+    if len(idxs_) == 0:
+        idxs = list(range(src_tokens.shape[0]))
+    else:
+        idxs = [b for b in idxs_ if b < src_tokens.shape[0]]
+
+    max_num_chars = 0
+    def update_max(b_, tensor, dict_, max_num_chars_):
+        for i in range(tensor.shape[1]):
+            for j in range(tensor.shape[2]):
+                token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
+                if dict_:
+                    token_str = dict_.get(token_id, str(token_id))
+                else:
+                    token_str = str(token_id)
+                if len(token_str) > max_num_chars_:
+                    max_num_chars_ = len(token_str)
+        return max_num_chars_
+
+    for b in idxs:
+        max_num_chars = update_max(b, src_tokens, rev_token_dict, max_num_chars)
+        if task_targets is not None:
+            max_num_chars = update_max(b, task_targets, None, max_num_chars)
+        max_num_chars =update_max(b, positions, pos_dict, max_num_chars)
+
+    def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   ')):
+        s = ''
+        print(tensor.shape)
+        for j in range(tensor.shape[2]):
+            s += ' ' * (max_num_chars + 1) * offset1
+            for i in range(tensor.shape[1]):
+                token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
+                if dict_:
+                    token_str = dict_.get(token_id, str(token_id))
+                else:
+                    token_str = str(token_id)
+                if token_id == pad:
+                    token_str = ' '
+                s += token_str.ljust(max_num_chars + 1)
+            if j < tensor.shape[2] - 1:
+                s += '\n' + ' ' * offset2
+            else:
+                s += '\n'
+        return s
+
+
+    if title:
+        print(f'{title}')
+
+    pad = token_dict.get('<pad>', -1)
+    pos_pad = pos_dict.get('pad', -1)
+    for b in idxs:
+        # print so all tokens line up
+        s = f'\nBATCH INDEX: {b}\nPos:   '
+        s += pprint_tensor(b, positions, None, pos_pad)
+        s += 'Src:   '
+        s += pprint_tensor(b, src_tokens, rev_token_dict, pad)
+        if task_targets is not None:
+            target_start_idx = b_n['task_start_indices'][b]
+            s += 'Tgt:   '
+            s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
+        s += 'Idx:   '
+        a = np.expand_dims(np.expand_dims(np.arange(b_n['src_lengths'][b]), 1), 0)
+        s += pprint_tensor(0, a, None, pad=-1)
+        print(s)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'matrix.h',
                                     'graph_tokenizer.h', 'tasks.h', 'scratch_pads.h', 'instance.h', 'generator.cpp'),
                          cpp_path='',
@@ -410,6 +555,36 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
         import generator
 
     setattr(generator, "get_args_parser", get_args_parser)
+
+
+    def get_graph(args, graph_type=None, batch_size=None, task_sample_dist=None):
+        if not isinstance(args, dict):
+            args = vars(args)
+        if graph_type is None:
+            graph_type = args['graph_type']
+        if batch_size is not None:
+            args['batch_size'] = batch_size
+        if task_sample_dist is not None:
+            args['task_sample_dist'] = task_sample_dist
+        else:
+            if args.get('task_sample_dist', None) is None:
+                args['task_sample_dist'] = []
+        if graph_type == 'erdos_renyi':
+            b_n = generator.erdos_renyi_n(**args)
+        elif graph_type == 'euclidian':
+            b_n = generator.euclidian_n(**args)
+        elif graph_type == 'random_tree':
+            b_n = generator.random_tree_n(**args)
+        elif graph_type == 'path_star':
+            b_n = generator.path_star_n(**args)
+        elif graph_type == 'balanced':
+            b_n = generator.balanced_n(**args)
+        else:
+            raise ValueError(f"Unknown graph type: {graph_type}")
+        return b_n
+
+    setattr(generator, "get_graph", get_graph)
+    setattr(generator, "pprint_batched_dict", pprint_batched_dict)
     setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
 
     def help_str():  # displays docstrings from cpp files with print(generator.help_str())
@@ -417,7 +592,6 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
         return pydoc.render_doc(generator, "\nDocstring for %s:")
 
     setattr(generator, "help_str", help_str)
-
 
     return generator
 

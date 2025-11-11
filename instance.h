@@ -115,7 +115,7 @@ public:
              const int max_path_length, const int min_path_length, int start, int end,
              const optional<vector<float> > &task_sample_dist, // shortest path
              const bool sort_adjacency_lists, const bool use_unique_depth_markers, // DFS/BFS scratchpad
-             optional<vector<int> > &given_query, int max_query_size, const int min_query_size, const bool is_center,
+             optional<vector<int> > &given_query, int max_query_size, const int min_query_size,
             // center
             // tokenization parameters
              const bool is_causal,
@@ -167,7 +167,8 @@ public:
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
                 // scratch_pad = make_unique<DFSScratchPad>(start, end, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
             }
-        } else if (task_type == "center") {
+        } else if (task_type == "center" || task_type == "centroid") {
+            auto is_center = (task_type == "center" ? true : false);
             task = make_unique<CenterTask>(gen, graph_tokenizer->distances_ptr, given_query, max_query_size,
                                            min_query_size, is_center);
             // scratch_pad in future?

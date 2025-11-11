@@ -14,7 +14,7 @@ void test_erdos_renyi_n( // basic one
     const string &task_type = "shortest_path",
     const int max_path_length = 10, const int min_path_length = 3,
     const bool sort_adjacency_lists = false, const bool use_unique_depth_markers = true,
-    int max_query_size = -1, const int min_query_size = 2, const bool is_center = false,
+    int max_query_size = -1, const int min_query_size = 2
     const bool is_causal = false, const bool is_direct_ranking = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 25, int max_vocab = 100,
     const int batch_size = 20,
@@ -38,7 +38,7 @@ void test_erdos_renyi_n( // basic one
         task_type,
         max_path_length, min_path_length,
         sort_adjacency_lists, use_unique_depth_markers,
-        max_query_size, min_query_size, is_center,
+        max_query_size, min_query_size,
         is_causal, is_direct_ranking, shuffle_edges,
         shuffle_nodes, min_vocab, max_vocab,
         batch_size, 512, 100,

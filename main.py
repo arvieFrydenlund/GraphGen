@@ -17,6 +17,17 @@ import generator
 Testing generation functions and pybind compile. 
 """
 
+def _graph_print(args, token_dict, pos_dict, concat_edges=True, scratchpad_type='BFS',
+                 align_prefix_front_pad=False, use_graph_structure=True):
+    args.concat_edges = concat_edges
+    args.scratchpad_type = scratchpad_type
+    args.align_prefix_front_pad = align_prefix_front_pad
+    args.use_graph_structure = use_graph_structure
+
+    b_n = generator.get_graph(args, batch_size=3)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict)
+
+
 def _t_single_graph():
     # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
     d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
@@ -266,9 +277,8 @@ if __name__ == '__main__':
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
-
-    # for arg in vars(args):
-    #    print(f'{arg}: {getattr(args, arg)}')
+    for arg in vars(args):
+        print(f'{arg}: {getattr(args, arg)}')
 
     # h = pydoc.render_doc(generator, "Help on %s")
     # print(generator.help_str() + '\n\n\n')
@@ -281,14 +291,17 @@ if __name__ == '__main__':
 
     print("Setting dictionary")
     generator.set_default_dictionary(args.max_vocab, 20)
-    d = generator.get_dictionary()
+    token_dict = generator.get_dictionary()
     # sort by value
-    d = dict(sorted(d.items(), key=lambda item: item[1]))
+    d = dict(sorted(token_dict.items(), key=lambda item: item[1]))
     s = 'Dictionary: '
     for k, v in d.items():
         s+= f'{k}: {v} '
     print(s)
     generator.set_default_pos_dictionary()
+    pos_dict = generator.get_pos_dictionary()
+
+    _graph_print(args, token_dict, pos_dict)
 
     #_t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

@@ -339,7 +339,7 @@ inline py::dict erdos_renyi_n(
     const string &task_type = "shortest_path",
     const int max_path_length = 10, const int min_path_length = 1,
     const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-    int max_query_size = -1, const int min_query_size = 2, const bool is_center = false,
+    int max_query_size = -1, const int min_query_size = 2,
     const bool is_causal = false, const bool is_direct_ranking = false, const bool shuffle_edges = false,
     const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
@@ -368,7 +368,9 @@ inline py::dict erdos_renyi_n(
 
     optional<vector<float>> task_sample_dist = nullopt;
     if (kwargs.contains("task_sample_dist")) {
-        task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
+        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
+            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
+        }
     }
     optional<vector<int>> given_query = nullopt;
 
@@ -390,14 +392,13 @@ inline py::dict erdos_renyi_n(
             attempts += a;
             continue;
         }
-
         // auto pack_t = time_before();
         auto instance = Instance<boost::undirectedS>(g_ptr, gen, dictionary,
             min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
             task_type, scratchpad_type,
             max_path_length, min_path_length, -1, -1, task_sample_dist,
             sort_adjacency_lists, use_unique_depth_markers,
-            given_query, max_query_size, min_query_size, is_center,
+            given_query, max_query_size, min_query_size,
             is_causal, is_direct_ranking, concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
             pos_dictionary, use_edges_invariance, use_node_invariance, use_graph_invariance, use_query_invariance,
             use_task_structure, use_graph_structure
@@ -531,35 +532,8 @@ PYBIND11_MODULE(generator, m) {
 
     // batched graph generation
     m.def("erdos_renyi_n", &erdos_renyi_n,
-          "Generate a batch of Erdos Renyi graphs\nParameters:\n\t"
-          "min_num_nodes: min number of nodes. We strongly recommend using shuffle_nodes and a vocab range map.\n\t"
-          "max_num_nodes: min number of nodes.  If -1 use min only.\n\t"
-          "p: probability of edge creation.  If -1 then 1/num_nodes.\n\t"
-          "c_min: min number of sampled edges to form a single connected component\n\t"
-          "c_max: max number of sampled edges to form a single connected component\n\t"
-          "task_type: type of task to sample.\n\t"
-          "max_path_length: max length of path to sample\n\t"
-          "min_path_length: min length of path to sample\n\t"
-          "max_query_size: max number of query nodes to sample \n\t"
-          "min_query_size: min number of query nodes to sample\n\t"
-          "is_causal: if true then return causally masked ground_truths\n\t"
-          "shuffle_edges: if true then shuffle edges\n\t"
-          "shuffle_nodes: if true then shuffle nodes\n\t"
-          "min_vocab: min vocab size to map nodes into i.e. to exclude special tokens\n\t"
-          "max_vocab: max vocab size to map nodes into.\n"
-          "Returns a dict with the following keys (N is the max_vocab):\n\t"
-          "edge_list: numpy [B, E, 2] of edges\n\t"
-          "edge_list_lengths: numpy [B] of edge list lengths\n\t"
-          "original_distances: numpy [B, N, N] of original distances (boost calc)\n\t"
-          "distances: numpy [B, N, N] of distances (my calc, for sanity checking)\n\t"
-          "ground_truths: numpy [B, E, N] of ground truths\n\t"
-          "paths: numpy [B, L] of paths\n\t"
-          "path_lengths: numpy [B] of path lengths\n\t"
-          "node_map: numpy [B, N] of node map\n\t"
-          "hashes: numpy [B, N] of uint64_t hash of distances\n\t"
-          "num_attempts: int of number of attempts to generate the graph\n\t"
-          "vocab_min_size: int of min vocab size\n\t"
-          "vocab_max_size: int of max vocab size\n\t",
+          "Generate a batch of Erdos Renyi graphs\nGraph specific parameters:\n\t"
+          "p: probability of edge creation.  If -1 then 1/num_nodes.\n\t",
 
           py::arg("min_num_nodes"),
           py::arg("max_num_nodes"),
@@ -571,9 +545,9 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_path_length") = 1,
           py::arg("sort_adjacency_lists") = true,
           py::arg("use_unique_depth_markers") = true,
+          // optional 'task_sample_dist' can be passed by kwarg
           py::arg("max_query_size") = -1,
           py::arg("min_query_size") = 2,
-          py::arg("is_center") = false,
           py::arg("is_causal") = false,
           py::arg("is_direct_ranking") = false,
           py::arg("shuffle_edges") = false,
