@@ -530,6 +530,7 @@ public:
 
         auto new_max_tokenized_inputs_len = max_tokenized_inputs_len;
         if (align_prefix_front_pad and is_flat_model) {  // only align if flat model since non-flat separate prefixes
+            // align up to prefix size and then targets after
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
         auto src_tokens = py::array_t<int, py::array::c_style>(
@@ -598,7 +599,7 @@ public:
         for (size_t i = 0; i < instances.size(); i++) {
             auto offset = 0;
             if (align_prefix_front_pad and is_flat_model) {
-                offset = new_max_tokenized_inputs_len - instances[i].tokenized_inputs.shape()[0];
+                offset = max_prefix_size - instances[i].task_start_idx;
             }
             for (size_t j = 0; j < instances[i].tokenized_inputs.shape()[0]; j++) {
                 for (size_t k = 0; k < instances[i].tokenized_inputs.shape()[1]; k++) {
@@ -620,20 +621,20 @@ public:
             // all others
             num_nodes_ar(i) = instances[i].N;
             num_edges_ar(i) = instances[i].E;
-            query_start_indices_ar(i) = instances[i].query_start_idx;
+            query_start_indices_ar(i) = instances[i].query_start_idx + offset;
             query_lengths_ar(i) = instances[i].query_length;
-            graph_start_indices_ar(i) = instances[i].graph_start_idx;
+            graph_start_indices_ar(i) = instances[i].graph_start_idx + offset;
             graph_lengths_ar(i) = instances[i].graph_length;
-            graph_edge_start_indices_ar(i) = instances[i].graph_start_idx;
+            graph_edge_start_indices_ar(i) = instances[i].graph_start_idx + offset;
             graph_edge_lengths_ar(i) = instances[i].graph_length;
-            graph_node_start_indices_ar(i) = instances[i].graph_nodes_start_idx;
+            graph_node_start_indices_ar(i) = instances[i].graph_nodes_start_idx + offset;
             graph_node_lengths_ar(i) = instances[i].graph_nodes_length;
-            thinking_tokens_start_idx_ar(i) = instances[i].thinking_tokens_start_idx;
+            thinking_tokens_start_idx_ar(i) = instances[i].thinking_tokens_start_idx + offset;
             thinking_tokens_length_ar(i) = instances[i].thinking_tokens_length;
-            task_start_indices_ar(i) = instances[i].task_start_idx;
-            scratch_pad_start_indices_ar(i) = instances[i].scratch_pad_start_idx;
+            task_start_indices_ar(i) = instances[i].task_start_idx + offset;
+            scratch_pad_start_indices_ar(i) = instances[i].scratch_pad_start_idx + offset;
             scratch_pad_lengths_ar(i) = instances[i].scratch_pad_length;
-            true_task_start_indices_ar(i) = instances[i].true_task_start_idx;
+            true_task_start_indices_ar(i) = instances[i].true_task_start_idx + offset;
             true_task_lengths_ar(i) = instances[i].true_task_length;
         }
 

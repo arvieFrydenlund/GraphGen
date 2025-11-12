@@ -119,7 +119,8 @@ def get_args_parser():
     parser.add_argument('--dont_concat_edges', action='store_false', dest='concat_edges')
     parser.add_argument('--duplicate_edges', action='store_true', default=False,
                         help='Whether to allow duplicate edges when generating the graph tokenization.'
-                             'Only makes sense for undirected graphs.')
+                             'This repeats the edge list twice, thus bypassing the causal constraint.'
+                             'Only makes sense for undirected graphs since we also swap (u, v) to (v, u).')
     parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=True,
                         help='Whether to include node tokens in the graph tokenization, after the edges, '
                              'i.e. edge list and then node list.')
@@ -411,7 +412,7 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
     return reconstructions
 
-def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs_=(0,1,2)):
+def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2)):
     """
     :param b_n: batched dict
     :param title:
@@ -422,16 +423,20 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     """
 
     rev_token_dict = {v: k for k, v in token_dict.items()}
-    rev_pos_dict = {v: k for k, v in pos_dict.items()}
-
+    # rev_pos_dict = {v: k for k, v in pos_dict.items()}  # just print the idxs because they are readable
     src_tokens = b_n['src_tokens']
     task_targets = b_n['prev_output_tokens']
     positions = b_n['positions']
 
-    if len(idxs_) == 0:
-        idxs = list(range(src_tokens.shape[0]))
+    if isinstance(idxs, int):
+        if idxs > 0:
+            idxs_ = list(range(idxs))
+        else:
+            idxs_ = list(range(src_tokens.shape[0]))
+    elif len(idxs) == 0:
+        idxs_ = list(range(src_tokens.shape[0]))
     else:
-        idxs = [b for b in idxs_ if b < src_tokens.shape[0]]
+        idxs_ = [b for b in idxs if b < src_tokens.shape[0]]
 
     max_num_chars = 0
     def update_max(b_, tensor, dict_, max_num_chars_):
@@ -446,7 +451,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
                     max_num_chars_ = len(token_str)
         return max_num_chars_
 
-    for b in idxs:
+    for b in idxs_:
         max_num_chars = update_max(b, src_tokens, rev_token_dict, max_num_chars)
         if task_targets is not None:
             max_num_chars = update_max(b, task_targets, None, max_num_chars)
@@ -454,8 +459,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
     def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   ')):
         s = ''
-        print(tensor.shape)
-        for j in range(tensor.shape[2]):
+        max_j_dim = tensor.shape[2]
+        m = (tensor == pad).all(axis=1)
+        for j in range(max_j_dim):
+            if m[b_, j]:
+                max_j_dim = j
+                break
+        for j in range(max_j_dim):
             s += ' ' * (max_num_chars + 1) * offset1
             for i in range(tensor.shape[1]):
                 token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
@@ -466,7 +476,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
                 if token_id == pad:
                     token_str = ' '
                 s += token_str.ljust(max_num_chars + 1)
-            if j < tensor.shape[2] - 1:
+            if j < max_j_dim - 1:
                 s += '\n' + ' ' * offset2
             else:
                 s += '\n'
@@ -478,30 +488,27 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
     pad = token_dict.get('<pad>', -1)
     pos_pad = pos_dict.get('pad', -1)
-    for b in idxs:
+    for b in idxs_:
         # print so all tokens line up
-        s = f'\nBATCH INDEX: {b}\nPos:   '
+        s = f'BATCH INDEX: {b}\nPos:   '
+        target_start_idx = 0
+        if task_targets is not None:
+            target_start_idx = b_n['task_start_indices'][b]
         s += pprint_tensor(b, positions, None, pos_pad)
         s += 'Src:   '
         s += pprint_tensor(b, src_tokens, rev_token_dict, pad)
         if task_targets is not None:
-            target_start_idx = b_n['task_start_indices'][b]
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
         s += 'Idx:   '
         a = np.expand_dims(np.expand_dims(np.arange(b_n['src_lengths'][b]), 1), 0)
-        s += pprint_tensor(0, a, None, pad=-1)
+        s += pprint_tensor(0, a, None, pad=-1, offset1=target_start_idx)
         print(s)
 
 
-
-
-
-
-
-
-
-
+    if b_n['align_prefix_front_pad']:
+        print('Showing that align_prefix_front_pad works')
+        print(src_tokens[:3, :, 0])
 
 
 

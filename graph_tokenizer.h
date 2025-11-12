@@ -77,12 +77,8 @@ public:
             num_tokens *= 2;
             // make copy of edge list with reversed edges
             std::copy(edge_list.begin(), edge_list.end(), std::back_inserter<vector<pair<int, int> > >(new_edge_list));
-            for (size_t i = 0; i < edge_list.size(); i++) {
-                new_edge_list.push_back(make_pair(
-                        node_shuffle_map.at(edge_list[i].second),
-                        node_shuffle_map.at(edge_list[i].first)
-                    )
-                );
+            for (size_t i = 0; i < edge_list.size(); i++) {  // TODO option to flip being separate from duplicate
+                new_edge_list.push_back(make_pair(edge_list[i].second,edge_list[i].first));
             }
         } else {
             new_edge_list = this->edge_list;

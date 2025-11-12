@@ -17,15 +17,15 @@ import generator
 Testing generation functions and pybind compile. 
 """
 
-def _graph_print(args, token_dict, pos_dict, concat_edges=True, scratchpad_type='BFS',
-                 align_prefix_front_pad=False, use_graph_structure=True):
+def _graph_print(args, token_dict, pos_dict, concat_edges=True, scratchpad_type='none',
+                 align_prefix_front_pad=True, use_graph_structure=True, batch_size=3):
     args.concat_edges = concat_edges
     args.scratchpad_type = scratchpad_type
     args.align_prefix_front_pad = align_prefix_front_pad
     args.use_graph_structure = use_graph_structure
 
-    b_n = generator.get_graph(args, batch_size=3)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict)
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1)
 
 
 def _t_single_graph():
@@ -105,24 +105,6 @@ def _t_batched_graphs_flat_model():
                                 is_flat_model=True, concat_edges=True, query_at_end=True)
     batch_pprint(d_n, title='Flat model with concat edges and query at end')
 
-
-def get_batch(args, batch_size=20):
-    if batch_size is not None:
-        args.batch_size = batch_size
-
-    if args.graph_type == 'erdos_renyi':
-        d_n = generator.erdos_renyi_n(**vars(args))
-    elif args.graph_type == 'euclidean':
-        d_n = generator.euclidean_n(**vars(args))
-    elif args.graph_type == 'random_tree':
-        d_n = generator.random_tree_n(**vars(args))
-    elif args.graph_type == 'path_star':
-        d_n = generator.path_star_n(**vars(args))
-    elif args.graph_type == 'balanced':
-        d_n = generator.balanced_n(**vars(args))
-    else:
-        raise NotImplementedError
-    return d_n
 
 def _t_reconstruct(args, d, batch_size=20, plot=True):
 
