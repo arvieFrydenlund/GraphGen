@@ -54,7 +54,7 @@ int main() {
   set_seed(42);
   cout << "Seed: " << get_seed() << endl;
 
-  set_default_dictionary(100, 10);  // 10 extra tokens D0-D9
+  set_default_dictionary(50, 10);  // 10 extra tokens D0-D9
   set_default_pos_dictionary();
 
   auto t1 = time_before();

@@ -609,7 +609,6 @@ public:
                     positions_ar(i, j + offset, k) = instances[i].tokenized_positions(j, k);
                 }
             }
-            src_lengths_ar(i) = instances[i].tokenized_inputs.shape()[0];
             if (instances[i].task) {
                 for (size_t j = 0; j < instances[i].tokenized_targets.shape()[0]; j++) {
                     for (size_t k = 0; k < instances[i].tokenized_targets.shape()[1]; k++) {
@@ -621,6 +620,7 @@ public:
             // all others
             num_nodes_ar(i) = instances[i].N;
             num_edges_ar(i) = instances[i].E;
+            src_lengths_ar(i) = instances[i].tokenized_inputs.shape()[0] + offset;
             query_start_indices_ar(i) = instances[i].query_start_idx + offset;
             query_lengths_ar(i) = instances[i].query_length;
             graph_start_indices_ar(i) = instances[i].graph_start_idx + offset;

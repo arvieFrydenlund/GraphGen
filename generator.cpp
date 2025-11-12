@@ -142,6 +142,9 @@ inline bool task_type_check(const std::string &task_type) {
  *  ***********************************************/
 
 static map<std::string, int> dictionary; // token to idx map
+static int dictionary_num_special = 0;  // special tokens are the first N tokens in the dictionary
+static int dictionary_max_vocab = 0;  //then the rest are vocab tokens up to max_vocab
+static string dictionary_extra_after_symbol = "D";  // then rest are special extras of indeterminate number of D1, D2, ...
 
 inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) {
     if (verbose) {
@@ -155,9 +158,28 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
         }
         dictionary[key] = value;
     }
+    // get counts, assume specials are not int values and extras are symbol + int
+    int num_node_vocab = 0;
+    for (const auto &item : dictionary) {
+        const auto &key = item.first;
+        const auto &value = item.second;
+        // if is an int add to num_node_vocab
+        try {
+            stoi(key);
+            num_node_vocab++;
+        } catch (std::invalid_argument &) {
+            // not an int
+            // if starts with extra symbol do not count
+            if (key.rfind(dictionary_extra_after_symbol) == 0) {
+                continue;
+            }
+            dictionary_num_special ++;
+        }
+    }
+    dictionary_max_vocab = dictionary_num_special + num_node_vocab;
 }
 
-inline void set_default_dictionary(const int max_vocab = 100, const int extra_after=0) {
+inline void set_default_dictionary(const int max_num_nodes = 50, const int extra_after=0) {
     /* Sets a default dictionary
     * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
     * '|': 4, '!': 5, '=': 6, '.': 7,
@@ -188,26 +210,30 @@ inline void set_default_dictionary(const int max_vocab = 100, const int extra_af
         {"{", 19},
         {"}", 20},
         {"$", 21},
-        {"D", 22},
+        {dictionary_extra_after_symbol, 22},  // D
     };
 
-    if (max_vocab > 0) {
-        auto num_special = static_cast<int>(dictionary.size());
-        assert(max_vocab >=  num_special);
-        for (int i = num_special; i < max_vocab; i++) {
-            dictionary[std::to_string(i - num_special)] = i;
+    dictionary_num_special = static_cast<int>(dictionary.size());
+    if (max_num_nodes > 0) {
+        dictionary_max_vocab = dictionary_num_special + max_num_nodes;
+        for (int i = 0; i < max_num_nodes; i++) {
+            dictionary[std::to_string(i - dictionary_num_special)] = i;
         }
     }
     if (extra_after > 0) {
         auto current_size = static_cast<int>(dictionary.size());
         for (int i = 0; i < extra_after; i++) {
-            dictionary["D" + std::to_string(i)] = current_size + i;
+            dictionary[dictionary_extra_after_symbol + std::to_string(i)] = current_size + i;
         }
     }
 }
 
 map<std::string, int> get_dictionary() {
     return dictionary;
+}
+
+pair<int, int> get_dictionary_vocab_limits() {
+    return {dictionary_num_special, dictionary_max_vocab};
 }
 
 /* ************************************************
@@ -297,13 +323,16 @@ void check_args(const int c_min, const int c_max,
     }
 }
 
-pair<int, int> check_and_set_vocab_limits(int min_num_nodes, int &max_num_nodes,
-                                         const int min_vocab, int &max_vocab) {
+vector<int> check_and_set_vocab_limits(int min_num_nodes, int &max_num_nodes,
+                                         int min_vocab, int &max_vocab) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
     }
-    if (max_vocab == -1) {
+    if (min_vocab == -1 and max_vocab == -1){
+        min_vocab = dictionary_num_special;
+        max_vocab = dictionary_max_vocab;
+    }else if (max_vocab == -1) {
         max_vocab = max_num_nodes;
     }
     if (max_vocab - min_vocab < max_num_nodes) {
@@ -311,7 +340,7 @@ pair<int, int> check_and_set_vocab_limits(int min_num_nodes, int &max_num_nodes,
                  to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
         throw std::invalid_argument(s);
     }
-    return {min_num_nodes, max_num_nodes};
+    return {min_num_nodes, max_num_nodes, min_vocab, max_vocab};
 }
 
 inline int sample_num_nodes(const int min_num_nodes, const int max_num_nodes) {
@@ -340,8 +369,9 @@ inline py::dict erdos_renyi_n(
     const int max_path_length = 10, const int min_path_length = 1,
     const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
     int max_query_size = -1, const int min_query_size = 2,
-    const bool is_causal = false, const bool is_direct_ranking = false, const bool shuffle_edges = false,
-    const bool shuffle_nodes = false, const int min_vocab = 0, int max_vocab = -1,
+    const bool is_causal = false, const bool is_direct_ranking = false,
+    const bool shuffle_edges = false, const bool shuffle_nodes = false,
+    int min_vocab = -1, int max_vocab = -1,
     const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
     const bool concat_edges = true,
     const bool duplicate_edges = false,
@@ -363,9 +393,7 @@ inline py::dict erdos_renyi_n(
     if (p > 1.0) { throw std::invalid_argument("Invalid arguments: p > 1.0"); }
 
     auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
-    min_num_nodes = m.first;
-    max_num_nodes = m.second;
-
+    min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
     optional<vector<float>> task_sample_dist = nullopt;
     if (kwargs.contains("task_sample_dist")) {
         if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
@@ -483,7 +511,7 @@ PYBIND11_MODULE(generator, m) {
           "Sets the dictionary/vocabulary of token to token_idx.\n"
           "Parameters:\n\t"
           "None\n",
-          py::arg("max_vocab") = 100,
+          py::arg("max_num_nodes") = 50,
           py::arg("extra_after") = 0);
 
     m.def("get_dictionary", &get_dictionary,
@@ -492,6 +520,9 @@ PYBIND11_MODULE(generator, m) {
           "None\n"
           "Returns:\n\t"
           "dictionary: of str -> int\n");
+
+    m.def("get_dictionary_vocab_limits", &get_dictionary_vocab_limits,
+          "1) num special symbols, 2) max vocab size");
 
     m.def("set_pos_dictionary", &set_pos_dictionary,
       "Sets the pos dictionary.\n"

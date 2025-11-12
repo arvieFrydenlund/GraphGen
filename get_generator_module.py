@@ -106,10 +106,12 @@ def get_args_parser():
                         help='Whether to shuffle node ids when generating the graph tokenization.'
                              'This randomly maps nodes across the whole spectrum of available vocab ids.')
     parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
-    parser.add_argument('--min_vocab', type=int, default=22,
-                        help='Minimum vocab id to use when shuffling nodes.')
-    parser.add_argument('--max_vocab', type=int, default=100,
-                        help='Maximum vocab id to use when shuffling nodes.')
+    parser.add_argument('--min_vocab', type=int, default=-1,
+                        help='Minimum vocab id to use when shuffling nodes.'
+                             '-1 and -1 max_vocab means uses set dictionary values')
+    parser.add_argument('--max_vocab', type=int, default=-1,
+                        help='Maximum vocab id to use when shuffling nodes.'
+                             '-1 with a set minimum, will use the number of nodes.')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--max_edges', type=int, default=512)
     parser.add_argument('--max_attempts', type=int, default=1000)
@@ -121,7 +123,7 @@ def get_args_parser():
                         help='Whether to allow duplicate edges when generating the graph tokenization.'
                              'This repeats the edge list twice, thus bypassing the causal constraint.'
                              'Only makes sense for undirected graphs since we also swap (u, v) to (v, u).')
-    parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=True,
+    parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=False,
                         help='Whether to include node tokens in the graph tokenization, after the edges, '
                              'i.e. edge list and then node list.')
 
@@ -502,7 +504,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
         s += 'Idx:   '
         a = np.expand_dims(np.expand_dims(np.arange(b_n['src_lengths'][b]), 1), 0)
-        s += pprint_tensor(0, a, None, pad=-1, offset1=target_start_idx)
+        s += pprint_tensor(0, a, None, pad=-1,)
         print(s)
 
 
