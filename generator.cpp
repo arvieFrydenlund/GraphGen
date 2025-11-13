@@ -162,7 +162,6 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
     int num_node_vocab = 0;
     for (const auto &item : dictionary) {
         const auto &key = item.first;
-        const auto &value = item.second;
         // if is an int add to num_node_vocab
         try {
             stoi(key);
@@ -216,7 +215,7 @@ inline void set_default_dictionary(const int max_num_nodes = 50, const int extra
     dictionary_num_special = static_cast<int>(dictionary.size());
     if (max_num_nodes > 0) {
         dictionary_max_vocab = dictionary_num_special + max_num_nodes;
-        for (int i = 0; i < max_num_nodes; i++) {
+        for (int i = dictionary_num_special; i < max_num_nodes + dictionary_num_special; i++) {
             dictionary[std::to_string(i - dictionary_num_special)] = i;
         }
     }
@@ -394,6 +393,7 @@ inline py::dict erdos_renyi_n(
 
     auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
     min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
+
     optional<vector<float>> task_sample_dist = nullopt;
     if (kwargs.contains("task_sample_dist")) {
         if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
