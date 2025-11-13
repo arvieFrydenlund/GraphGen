@@ -158,14 +158,13 @@ public:
             auto short_path = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,
                                                             max_path_length, min_path_length,
                                                             start, end, task_sample_dist, use_query_invariance);
-            start = short_path->path.front(); // get task-specific info before casting to base class
-            end = short_path->path.back();
+            auto path = short_path->path;
             task = std::move(short_path);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
-                scratch_pad = make_unique<BFSScratchPad>(start, end, g_ptr, sort_adjacency_lists,
+                scratch_pad = make_unique<BFSScratchPad>(path, g_ptr, sort_adjacency_lists,
                                                          use_unique_depth_markers);
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
-                // scratch_pad = make_unique<DFSScratchPad>(start, end, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
+                // scratch_pad = make_unique<DFSScratchPad>(path, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
             }
         } else if (task_type == "center" || task_type == "centroid") {
             auto is_center = (task_type == "center" ? true : false);

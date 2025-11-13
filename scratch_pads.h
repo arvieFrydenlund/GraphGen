@@ -32,11 +32,7 @@ public:
 
 };
 
-/*
- * MINOR ISSUE:  todo
- * when there are multiple valid paths, we randomly choose one path, and randomly choose one BFS order
- * However to be content with khops we should make it that the path chosen int he khops one.
- */
+
 class BFSScratchPad : public ScratchPad {
 public:
     vector<map<int, vector<int> > > levels;
@@ -46,19 +42,25 @@ public:
     *  Then  I can random shuffle the adjacency lists within each pair
     *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
     */
+    vector<int> path;
+
     bool sort_adjacency_lists = false;
     bool use_unique_depth_markers = true;
 
 
     template<typename D>
-    BFSScratchPad(const int start, const int end,
+    BFSScratchPad(vector<int> &path,
                   const unique_ptr<Graph<D> > &g_ptr,
                   const bool sort_adjacency_lists = false,
                   const bool use_unique_depth_markers = true
     ) {
         // constructor, fill in levels
+        this->path = path;
         this->sort_adjacency_lists = sort_adjacency_lists;
         this->use_unique_depth_markers = use_unique_depth_markers;
+
+        const int start = path.front(); // get task-specific info before casting to base class
+        const int end = path.back();
 
         bool is_finished = false; // don't stop at finding target but do entire level with target in it
         map<int, bool> visited;
@@ -128,9 +130,19 @@ public:
         // so only shuffle neighbour order here, if sort, sort instead of shuffle
 
         // map all nodes, and either shuffle or sort adjacency lists
+
+        // when there are multiple valid paths, we randomly choose one path, and randomly choose one BFS order
+        // However to be content with khops we should make it that the path chosen int he khops one.
+        // Solution:  just make sure path sorts to end
         vector<map<int, vector<int> > > new_levels; // copy to modify
         int num_tokens = 1;  // start of scratchpad
         int max_targets = 1;
+
+        // print length of path and length of levels
+        cout << "BFS ScratchPad: path length = " << path.size() << ", levels = " << levels.size() << endl;
+
+        // length of levels should be 1 less than path (since target is not included)
+
         for (size_t i = 0; i < levels.size(); i++) {
             map<int, vector<int> > new_level;
             num_tokens += 1; // depth marker
@@ -149,6 +161,9 @@ public:
                 } else {
                     std::shuffle(mapped_nbrs.begin(), mapped_nbrs.end(), gen);
                 }
+                // force path node to be last in its adjacency list
+
+
                 new_level[node_shuffle_map.at(p.first)] = mapped_nbrs;
             }
             new_levels.push_back(new_level);
