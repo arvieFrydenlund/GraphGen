@@ -179,15 +179,9 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false) 
 }
 
 inline void set_default_dictionary(const int max_num_nodes = 50, const int extra_after=0) {
-    /* Sets a default dictionary
-    * {'<s>': 0, '<pad>': 1, '</s>': 2, '<unk>': 3,
-    * '|': 4, '!': 5, '=': 6, '.': 7,
-    * 't1': 8, 't2': 9, 't3': 10, 't4': 11, 't5': 12,
-    * '/': 13, '?': 14, '@': 15, '#': 16,
-    * 's1': 17, 's2': 18, 's3': 19, 's4': 20, 's5': 21,
-    */
+    // Sets a default dictionary
     dictionary.clear();
-    dictionary = {
+    dictionary = {  // should really make this as a list to index for safety, but this is easier to reference
         {"<s>", 0},
         {"<pad>", 1},
         {"</s>", 2},
@@ -212,7 +206,16 @@ inline void set_default_dictionary(const int max_num_nodes = 50, const int extra
         {"$", 21},
         {dictionary_extra_after_symbol, 22},  // D
     };
-
+    // safety check,  make sure the max value is the same as size of dictionary
+    auto max_idx = 0;
+    for (const auto &item : dictionary) {
+        if (item.second > max_idx) {
+            max_idx = item.second;
+        }
+    }
+    if (max_idx + 1 != static_cast<int>(dictionary.size())) {
+        throw std::invalid_argument("Default dictionary indices are not contiguous");
+    }
     dictionary_num_special = static_cast<int>(dictionary.size());
     if (max_num_nodes > 0) {
         dictionary_max_vocab = dictionary_num_special + max_num_nodes;

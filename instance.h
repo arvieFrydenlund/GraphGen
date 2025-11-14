@@ -174,7 +174,11 @@ public:
                 short_path->set_path(bfs_scratch_pad->path, graph_tokenizer->distances_ptr);
                 scratch_pad = std::move(bfs_scratch_pad);
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
-                // scratch_pad = make_unique<DFSScratchPad>(path, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
+                auto dfs_scratch_pad = make_unique<DFSScratchPad>(short_path->start, short_path->end, g_ptr,
+                                                                  node_shuffle_map, sort_adjacency_lists,
+                                                                  use_unique_depth_markers);
+                short_path->set_path(dfs_scratch_pad->path, graph_tokenizer->distances_ptr);
+                scratch_pad = std::move(dfs_scratch_pad);
             }
             task = std::move(short_path);
         } else if (task_type == "center" || task_type == "centroid") {
