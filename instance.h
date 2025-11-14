@@ -532,7 +532,7 @@ public:
                     max_tokenized_targets_labels = static_cast<int>(instances[i].tokenized_targets.shape()[1]);
                 }
             }
-            instances[i].pprint();
+            // instances[i].pprint();
         }
 
         // set up numpy arrays
