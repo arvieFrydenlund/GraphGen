@@ -42,49 +42,69 @@ public:
     *  Then  I can random shuffle the adjacency lists within each pair
     *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
     */
-    vector<int> path;
 
     bool sort_adjacency_lists = false;
     bool use_unique_depth_markers = true;
-
+    vector<int> path;
 
     template<typename D>
-    BFSScratchPad(vector<int> &path,
+    BFSScratchPad(int start, int end,
                   const unique_ptr<Graph<D> > &g_ptr,
+                  const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
                   const bool sort_adjacency_lists = false,
                   const bool use_unique_depth_markers = true
     ) {
-        // constructor, fill in levels
-        this->path = path;
+
         this->sort_adjacency_lists = sort_adjacency_lists;
         this->use_unique_depth_markers = use_unique_depth_markers;
 
-        const int start = path.front(); // get task-specific info before casting to base class
-        const int end = path.back();
+        auto reverse_node_shuffle_map = vector<int>(node_shuffle_map.size(), -1);
+        if (sort_adjacency_lists) {
+            for (size_t i = 0; i < node_shuffle_map.size(); i++) {
+                reverse_node_shuffle_map[node_shuffle_map[i]] = static_cast<int>(i);
+            }
+        }
 
-        bool is_finished = false; // don't stop at finding target but do entire level with target in it
-        map<int, bool> visited;
+        auto visited = map<int, bool>();
         visited[start] = true;
-        queue<int> q;
+        auto q = queue<int>();
         q.push(start);
+        bool not_found = true;
 
-        while (!q.empty()) {
-            map<int, vector<int> > current_level_nodes;
-            vector<int> next_level_nodes;
-            while (!q.empty()) {
-                // process the current level
+        while (not_found) {
+            if (q.empty()) {
+                throw std::invalid_argument("BFS ScratchPad: could not find end node from start node");
+            }
+            auto current_level_nodes = map<int, vector<int> >();
+            auto next_level_nodes = vector<int>();
+            while (!q.empty()) {  // process the current level
                 vector<int> cur_neighbors;
                 auto cur = q.front();
                 q.pop();
                 // get all adjacency nodes not in visited
-                auto neighbors = boost::adjacent_vertices(cur, *g_ptr);
-                for (auto nbr = neighbors.first; nbr != neighbors.second; ++nbr) {
-                    if (static_cast<int>(*nbr) == end) {
-                        is_finished = true;
+                auto neighbors_boost = boost::adjacent_vertices(cur, *g_ptr);
+                auto neighbors = vector<int>();  // convert to vector
+                for (auto nbr = neighbors_boost.first; nbr != neighbors_boost.second; ++nbr) {
+                    neighbors.push_back(*nbr);
+                }
+                if (sort_adjacency_lists){ // otherwise they are shuffled randomly on account of the map
+                    // map them to shuffled ids and sort, then map back, so silly  :(
+                    vector<int> mapped_neighbors(neighbors.size());
+                    for (size_t i = 0; i < neighbors.size(); i++) {
+                        mapped_neighbors[i] = node_shuffle_map[neighbors[i]];
                     }
+                    sort(mapped_neighbors.begin(), mapped_neighbors.end());
+                    for (size_t i = 0; i < mapped_neighbors.size(); i++) {
+                        neighbors[i] = reverse_node_shuffle_map[mapped_neighbors[i]];
+                    }
+                }
+                for (auto nbr = neighbors.begin(); nbr != neighbors.end(); ++nbr) {
                     if (visited.find(*nbr) == visited.end()) {
                         cur_neighbors.push_back(*nbr);
                         visited[*nbr] = true;
+                        if (*nbr == end) {
+                            not_found = false;
+                        }
                     }
                 }
                 //if (cur_neighbors.size() == 0) { // put this here if you want to prevent empty neighbor lists
@@ -95,20 +115,27 @@ public:
                     next_level_nodes.push_back(n);
                 }
             }
-            if (!current_level_nodes.empty()) {
-                levels.push_back(current_level_nodes);
+            levels.push_back(current_level_nodes);  // this should always be non empty
+            for (auto n: next_level_nodes) {
+                q.push(n);
             }
-            if (!is_finished) {
-                if (!next_level_nodes.empty()) {
-                    for (auto n: next_level_nodes) {
-                        q.push(n);
-                        if (n == end) {
-                            is_finished = true;
-                        }
-                    }
+        }
+
+        // reconstruct path, backwards to be consistent with khops
+        path.push_back(end);
+        // for each level backwards
+        for (int i = static_cast<int>(levels.size()) - 1; i >= 0; i--) {
+            // find which node in level i has end as neighbor
+            for (const auto &pair: levels[i]) {
+                auto node = pair.first;
+                auto nbrs = pair.second;
+                if (std::find(nbrs.begin(), nbrs.end(), path.back()) != nbrs.end()) {
+                    path.push_back(node);
+                    break;
                 }
             }
         }
+        std::reverse(path.begin(), path.end());
     }
 
     void tokenize(
@@ -126,25 +153,9 @@ public:
         // real tokenization is D0 20 [6 7 10 ] D1 6 [8 9 18 ] 7 [3 15 ] 10 [1 4 ] if using unique depth markers
         // else, D 20 [6 7 10 ] D 6 [8 9 18 ] 7 [3 15 ] 10 [1 4 ]
 
-        // note that order of neighbours [v1, v2] creates the order for the next level
-        // so only shuffle neighbour order here, if sort, sort instead of shuffle
-
-        // map all nodes, and either shuffle or sort adjacency lists
-
-        // when there are multiple valid paths, we randomly choose one path, and randomly choose one BFS order
-        // However to be content with khops we should make it that the path chosen int he khops one.
-        // Solution:  just make sure path sorts to end
-        vector<map<int, vector<int> > > new_levels; // copy to modify
         int num_tokens = 1;  // start of scratchpad
         int max_targets = 1;
-
-        // print length of path and length of levels
-        cout << "BFS ScratchPad: path length = " << path.size() << ", levels = " << levels.size() << endl;
-
-        // length of levels should be 1 less than path (since target is not included)
-
         for (size_t i = 0; i < levels.size(); i++) {
-            map<int, vector<int> > new_level;
             num_tokens += 1; // depth marker
             for (auto &p: levels[i]) {
                 auto nbrs = p.second;
@@ -152,21 +163,7 @@ public:
                 if (nbrs.size() > static_cast<size_t>(max_targets)) {
                     max_targets = static_cast<int>(nbrs.size());
                 }
-                vector<int> mapped_nbrs;
-                for (size_t j = 0; j < nbrs.size(); j++) {
-                    mapped_nbrs.push_back(node_shuffle_map.at(nbrs[j]));
-                }
-                if (sort_adjacency_lists) {
-                    sort(mapped_nbrs.begin(), mapped_nbrs.end());
-                } else {
-                    std::shuffle(mapped_nbrs.begin(), mapped_nbrs.end(), gen);
-                }
-                // force path node to be last in its adjacency list
-
-
-                new_level[node_shuffle_map.at(p.first)] = mapped_nbrs;
             }
-            new_levels.push_back(new_level);
         }
 
         tokenized_inputs = Matrix<int>(num_tokens, 1);
@@ -178,14 +175,8 @@ public:
 
         // Get the initial adjacency list order
         // start node as only item in new_levels[0]
-        auto prior_adj_orders = vector<int>{new_levels[0].begin()->first};  // start node
-        for (size_t i = 0; i < new_levels.size(); i++) {
-            // process level i
-            // other example
-            // D0 14 [13 17 ] D1 13 [10 ] 17 [8 11 20 ] D2 10 [9 ] 8 [] 11 [7 ] 20 [12 18 ] D3 9 [0 ] 7 [] 12 [5 ] 18 [1 ] D4 0 [19 ] 5 [2 ] 1 [3 4 15 ]
-            // prior_adj_orders = [14], then [13, 17], then [10, 8, 11, 20], or
-            // and [8, 11, 20] can be shuffled any way
-
+        auto prior_adj_orders = vector<int>{levels[0].begin()->first};  // start node
+        for (size_t i = 0; i < levels.size(); i++) {
             string marker = "D";
             if (use_unique_depth_markers) {
                 marker = "D" + to_string(i);;
@@ -194,22 +185,21 @@ public:
             tokenized_targets(cur, 0) = dictionary.at(marker);
             cur += 1;
 
-
             auto next_adj_orders = vector<int>{};
             for (size_t j = 0; j < prior_adj_orders.size(); j++) {  // process each node in level
                 auto node = prior_adj_orders[j];
-                auto nbrs = new_levels[i][node];
-                // write in node and its adjacency list
-                tokenized_inputs(cur, 0) = node;
-                tokenized_targets(cur, 0) = node;
-                cur++;
+                auto nbrs = levels[i][node];
+                // write in node
+                tokenized_inputs(cur, 0) = node_shuffle_map[node];
+                tokenized_targets(cur, 0) = node_shuffle_map[node];
+                cur++;  // and node's adjacency list
                 tokenized_inputs(cur, 0) = dictionary.at("[");
                 tokenized_targets(cur, 0) = dictionary.at("[");
                 cur++;
                 for (size_t k = 0; k < nbrs.size(); k++, cur++) {
-                    tokenized_inputs(cur, 0) = nbrs[k];
+                    tokenized_inputs(cur, 0) = node_shuffle_map[nbrs[k]];
                     for (size_t t = k; t < nbrs.size(); t++) {
-                        tokenized_targets(cur, t - k) = nbrs[t];
+                        tokenized_targets(cur, t - k) = node_shuffle_map[nbrs[t]];
                     }
                     next_adj_orders.push_back(nbrs[k]);
                 }
@@ -219,7 +209,6 @@ public:
             }
             prior_adj_orders = next_adj_orders;
         }
-
     }
 
 };

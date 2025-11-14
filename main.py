@@ -21,7 +21,7 @@ Testing generation functions and pybind compile.
 def _graph_print(args, token_dict, pos_dict, concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='BFS', use_unique_depth_markers=True,
-                 align_prefix_front_pad=True, use_graph_invariance=True, use_graph_structure=True, batch_size=3):
+                 align_prefix_front_pad=True, use_graph_invariance=True, use_graph_structure=True, batch_size=100):
     args.concat_edges = concat_edges
     args.duplicate_edges = duplicate_edges
     args.include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization

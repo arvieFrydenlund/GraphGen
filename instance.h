@@ -137,6 +137,7 @@ public:
         make_node_shuffle_map(gen, min_vocab, max_vocab, shuffle_nodes);
         make_edge_shuffle_map(gen, shuffle_edges);
 
+
         auto edge_list = get_edge_list(g_ptr, edge_shuffle_map);
         graph_tokenizer = make_unique<GraphTokenizer>(edge_list, concat_edges, duplicate_edges,
                                                       include_nodes_in_graph_tokenization,
@@ -155,17 +156,27 @@ public:
         }
 
         if (task_type == "shortest_path") {
+            // the ShortestPathTask and BFSScratchPad are badly coupled
+            // this is because we use the ShortestPathTask to sample a start and end point
+            // however the BFSScratchPad needs to be able to construct the path since otherwise
+            // the scratch pad could be inconsistent with the task path in the case when multiple shortest paths exist
+            // thus we need to use the one first discovered by BFS.  Same goes for the DFS scratch pad.
+
+            auto should_sample_path = scratchpad_type == "none" && scratchpad_type == "NONE";
             auto short_path = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,
                                                             max_path_length, min_path_length,
-                                                            start, end, task_sample_dist, use_query_invariance);
-            auto path = short_path->path;
-            task = std::move(short_path);
+                                                            start, end, task_sample_dist, use_query_invariance,
+                                                            should_sample_path);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
-                scratch_pad = make_unique<BFSScratchPad>(path, g_ptr, sort_adjacency_lists,
-                                                         use_unique_depth_markers);
+                auto bfs_scratch_pad = make_unique<BFSScratchPad>(short_path->start, short_path->end, g_ptr,
+                                                                  node_shuffle_map, sort_adjacency_lists,
+                                                                  use_unique_depth_markers);
+                short_path->set_path(bfs_scratch_pad->path, graph_tokenizer->distances_ptr);
+                scratch_pad = std::move(bfs_scratch_pad);
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
                 // scratch_pad = make_unique<DFSScratchPad>(path, g_ptr, sort_adjacency_lists, use_unique_depth_markers);
             }
+            task = std::move(short_path);
         } else if (task_type == "center" || task_type == "centroid") {
             auto is_center = (task_type == "center" ? true : false);
             task = make_unique<CenterTask>(gen, graph_tokenizer->distances_ptr, given_query, max_query_size,

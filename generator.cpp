@@ -186,6 +186,7 @@ inline void set_default_dictionary(const int max_num_nodes = 50, const int extra
     * '/': 13, '?': 14, '@': 15, '#': 16,
     * 's1': 17, 's2': 18, 's3': 19, 's4': 20, 's5': 21,
     */
+    dictionary.clear();
     dictionary = {
         {"<s>", 0},
         {"<pad>", 1},
@@ -197,9 +198,9 @@ inline void set_default_dictionary(const int max_num_nodes = 50, const int extra
         {".", 7},  // task end
         {"t1", 8}, // potentially mark task type for muliti-task learning
         {"t2", 9},
-        {"t1", 10},
-        {"t2", 11},
-        {"t3", 12},
+        {"t3", 10},
+        {"t4", 11},
+        {"t5", 12},
         {"/", 13}, // query start
         {"?", 14}, // query end
         {"@", 15},
@@ -216,6 +217,7 @@ inline void set_default_dictionary(const int max_num_nodes = 50, const int extra
     if (max_num_nodes > 0) {
         dictionary_max_vocab = dictionary_num_special + max_num_nodes;
         for (int i = dictionary_num_special; i < max_num_nodes + dictionary_num_special; i++) {
+            cout << "Adding to dictionary: " << std::to_string(i - dictionary_num_special) << " -> " << i << endl;
             dictionary[std::to_string(i - dictionary_num_special)] = i;
         }
     }

@@ -79,6 +79,7 @@ public:
 
 class ShortestPathTask : public Task {
 public:
+    int start, end = -1;
     vector<int> path;
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
     int max_num_labels = 1;
@@ -87,7 +88,7 @@ public:
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
                      const optional<vector<float>> &task_sample_dist = nullopt,
-                     const bool use_query_invariance = false) {
+                     const bool use_query_invariance = false, const bool sample_path = true) {
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
@@ -162,32 +163,36 @@ public:
                 }
             }
         }
-        // reconstruct path
-        path.push_back(start_end.first);
-        int cur = start_end.first;
-        while (cur != start_end.second) {
-            // for all neighbors of cur, find the one with the shortest distance to end
-            vector<pair<int, int> > neighbors;
-            for (int i = 0; i < static_cast<int>(distances_ptr->size()); i++) {
-                if ((*distances_ptr)[cur][i] == 1 && // hardcoded, should pass in graph and get edges
-                    (*distances_ptr)[i][start_end.second] < (*distances_ptr)[cur][start_end.second]) {
-                    neighbors.push_back(make_pair(i, (*distances_ptr)[i][start_end.second]));
+        this->start = start_end.first;
+        this->end = start_end.second;
+        if (sample_path) {
+            // reconstruct path
+            path.push_back(start_end.first);
+            int cur = start_end.first;
+            while (cur != start_end.second) {
+                // for all neighbors of cur, find the one with the shortest distance to end
+                vector<pair<int, int> > neighbors;
+                for (int i = 0; i < static_cast<int>(distances_ptr->size()); i++) {
+                    if ((*distances_ptr)[cur][i] == 1 && // hardcoded, should pass in graph and get edges
+                        (*distances_ptr)[i][start_end.second] < (*distances_ptr)[cur][start_end.second]) {
+                        neighbors.push_back(make_pair(i, (*distances_ptr)[i][start_end.second]));
+                    }
                 }
+                // shuffle neighbors and then sort by distance to end, dumb way to do this
+                if (neighbors.size() == 0) {
+                    assert(neighbors.size() > 0);
+                    throw std::invalid_argument("No neighbors found.  This should never happen.");
+                }
+                std::shuffle(neighbors.begin(), neighbors.end(), gen);
+                std::sort(neighbors.begin(), neighbors.end(), [](const pair<int, int> &a, const pair<int, int> &b) {
+                    return a.second < b.second;
+                });
+                // pick the first neighbor
+                cur = neighbors[0].first;
+                path.push_back(cur);
             }
-            // shuffle neighbors and then sort by distance to end, dumb way to do this
-            if (neighbors.size() == 0) {
-                assert(neighbors.size() > 0);
-                throw std::invalid_argument("No neighbors found.  This should never happen.");
-            }
-            std::shuffle(neighbors.begin(), neighbors.end(), gen);
-            std::sort(neighbors.begin(), neighbors.end(), [](const pair<int, int> &a, const pair<int, int> &b) {
-                return a.second < b.second;
-            });
-            // pick the first neighbor
-            cur = neighbors[0].first;
-            path.push_back(cur);
+            label_smooth_path(distances_ptr);  // get the smoothing values while we have distances
         }
-        label_smooth_path(distances_ptr);  // get the smoothing values while we have distances
     }
 
     void label_smooth_path(const unique_ptr<vector<vector<int> > > &distances_ptr) {
@@ -212,6 +217,12 @@ public:
                 max_num_labels = static_cast<int>(label_smoothed_path[i].size());
             }
         }
+    }
+
+    void set_path(vector<int> &path, const unique_ptr<vector<vector<int> > > &distances_ptr){
+        // some scratchpads may generate their own paths, and we need to respect that
+        this->path = vector<int>(path.begin(), path.end());
+        label_smooth_path(distances_ptr);
     }
 
     void tokenize(
