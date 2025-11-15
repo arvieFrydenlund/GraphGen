@@ -13,7 +13,7 @@
 #include "matrix.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
-
+#include "dictionaries.h"
 
 using namespace std;
 
@@ -215,8 +215,11 @@ public:
 };
 
 class DFSScratchPad : public ScratchPad {
+    /*
+     * Note that DFS does not guarenttee getting a shortest path, only a path
+     * Be careful with use_unique_depth_markers because of this, since you may need a lot of extra markers
+     */
 public:
-
 
     bool sort_adjacency_lists = false;
     bool use_unique_depth_markers = true;
@@ -225,9 +228,8 @@ public:
     vector<tuple<int, int, int, vector<int> > > dfs_steps; // (current_node, parent_node, depth, neighbors)
 
     template<typename D>
-    void _dfs_helper(const unique_ptr<Graph<D> > &g_ptr, map<int, bool> &visted, int cur_node, int cur_level, int end,
-                     const vector<int> &node_shuffle_map, const vector<int> &reverse_node_shuffle_map,
-                     const bool sort_adjacency_lists = false) {
+    bool _dfs_helper(const unique_ptr<Graph<D> > &g_ptr, map<int, bool> &visted, int cur_node, int end, int cur_level,
+                     const vector<int> &node_shuffle_map, const vector<int> &reverse_node_shuffle_map) {
         visted[cur_node] = true;
         // get all adjacency nodes not in visited
         auto neighbors_boost = boost::adjacent_vertices(cur_node, *g_ptr);
@@ -235,7 +237,7 @@ public:
         for (auto nbr = neighbors_boost.first; nbr != neighbors_boost.second; ++nbr) {
             neighbors.push_back(*nbr);
         }
-        if (sort_adjacency_lists) { // otherwise they are shuffled randomly on account of the map
+        if (this->sort_adjacency_lists) { // otherwise they are shuffled randomly on account of the map
             // map them to shuffled ids and sort, then map back, so silly  :(
             vector<int> mapped_neighbors(neighbors.size());
             for (size_t i = 0; i < neighbors.size(); i++) {
@@ -246,7 +248,6 @@ public:
                 neighbors[i] = reverse_node_shuffle_map[mapped_neighbors[i]];
             }
         }
-
 
         auto unseen_neighbors = vector<int>();
         for (auto n: neighbors) {
@@ -262,12 +263,15 @@ public:
             }
             dfs_steps.push_back(make_tuple(nbr, cur_node, cur_level, others));
             if (nbr == end) {
-                return;
+                return true;
             }
-            _dfs_helper(g_ptr, visted, nbr, cur_level + 1,
-                        node_shuffle_map, sort_adjacency_lists);
-
+            auto is_found = _dfs_helper(g_ptr, visted, nbr, end, cur_level + 1,
+                                        node_shuffle_map, reverse_node_shuffle_map);
+            if (is_found) {
+                return true;
+            }
         }
+        return false;
     }
 
     template<typename D>
@@ -289,10 +293,9 @@ public:
         }
 
         auto visited = map<int, bool>();
-        _dfs_helper(g_ptr, visited, start, 0, end, node_shuffle_map,
-                    reverse_node_shuffle_map, sort_adjacency_lists);
+        _dfs_helper(g_ptr, visited, start, end, 0, node_shuffle_map, reverse_node_shuffle_map);
 
-        // reconstruct path, backwards to be consistent with khops
+        // reconstruct path, backwards to be consistent with khops -- could just do this in the helper, whatever
         path.push_back(end);
         for (int i = static_cast<int>(dfs_steps.size()) - 1; i >= 0; i--) {
             auto step = dfs_steps[i];
@@ -313,18 +316,19 @@ public:
     ) {
         // tokenize the BFS levels into a single sequence
         // where targets can be multiple tokens due to label smoothing over order, ex.
-
+        if (this->use_unique_depth_markers) {
+            if (!is_valid_extra_dictionary_symbol(path.size())) {
+                throw std::invalid_argument(
+                        "DFS ScratchPad: use_unique_depth_markers is true but there are not enough unique depth markers in the dictionary for the max depth of the DFS path");
+            }
+        }
 
         int num_tokens = 1;  // start of scratchpad
         int max_targets = 1;
         for (size_t i = 0; i < dfs_steps.size(); i++) {
-            num_tokens += 1; // depth marker
             auto step = dfs_steps[i];
-            // auto cur = get<0>(step);
-            // auto parent = get<1>(step);
-            // auto depth = get<2>(step);
             auto nbrs = get<3>(step);
-            num_tokens += 3; // marker node, neighbor
+            num_tokens += 3; // marker, node, and neighbor
             if (nbrs.size() > static_cast<size_t>(max_targets)) {
                 max_targets = static_cast<int>(nbrs.size());
             }
@@ -353,7 +357,7 @@ public:
             cur += 1;
             tokenized_inputs(cur, 0) = node_shuffle_map[parent];
             tokenized_targets(cur, 0) = node_shuffle_map[parent];
-            cur+= 1;
+            cur += 1;
             tokenized_inputs(cur, 0) = node_shuffle_map[cur_node];
             for (size_t t = 0; t < nbrs.size(); t++) {
                 tokenized_targets(cur, t) = node_shuffle_map[nbrs[t]];

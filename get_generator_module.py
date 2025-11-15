@@ -515,7 +515,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
 
 
-def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'matrix.h',
+def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',
                                     'graph_tokenizer.h', 'tasks.h', 'scratch_pads.h', 'instance.h', 'generator.cpp'),
                          cpp_path='',
                          boost_path='/usr/include/boost/graph/',):

@@ -23,7 +23,7 @@ void test_erdos_renyi_n( // basic one
     const bool include_nodes_in_graph_tokenization = true,
     const bool query_at_end = false,
     const int num_thinking_tokens = 0,
-    const string scratchpad_type = "bfs",
+    const string scratchpad_type = "dfs",
     const bool is_flat_model = true,
     const bool align_prefix_front_pad = false,
     const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance

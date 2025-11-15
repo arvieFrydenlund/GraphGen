@@ -219,10 +219,17 @@ public:
         }
     }
 
-    void set_path(vector<int> &path, const unique_ptr<vector<vector<int> > > &distances_ptr){
+    void set_path(vector<int> &path, const unique_ptr<vector<vector<int> > > &distances_ptr, const bool use_label_smoothing=true){
         // some scratchpads may generate their own paths, and we need to respect that
         this->path = vector<int>(path.begin(), path.end());
-        label_smooth_path(distances_ptr);
+        if (use_label_smoothing) {
+            label_smooth_path(distances_ptr);
+        } else {  // no label smoothing, just single labels
+            label_smoothed_path = vector<vector<int> >(path.size(), vector<int>());
+            for (size_t i = 0; i < path.size(); i++) {
+                label_smoothed_path[i].push_back(path[i]);
+            }
+        }
     }
 
     void tokenize(

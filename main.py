@@ -20,7 +20,7 @@ Testing generation functions and pybind compile.
 
 def _graph_print(args, token_dict, pos_dict, concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
-                 scratchpad_type='BFS', use_unique_depth_markers=True,
+                 scratchpad_type='DFS', use_unique_depth_markers=True,
                  align_prefix_front_pad=True, use_graph_invariance=True, use_graph_structure=True, batch_size=3):
     args.concat_edges = concat_edges
     args.duplicate_edges = duplicate_edges
@@ -279,7 +279,7 @@ if __name__ == '__main__':
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(args.max_num_nodes + 10, 20)
+    generator.set_default_dictionary(args.max_num_nodes + 10, 20, 'D')
     token_dict = generator.get_dictionary()
     # sort by value
     d = dict(sorted(token_dict.items(), key=lambda item: item[1]))

@@ -7,12 +7,7 @@
 
 #include <iostream>
 #include <random>
-#include <Python.h>
 #include <chrono>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-
 
 using namespace std;
 
