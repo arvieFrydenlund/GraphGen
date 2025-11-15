@@ -29,7 +29,7 @@ using namespace py::literals;
  *  ***********************************************/
 
 inline unsigned int seed_ = std::random_device{}();
-static thread_local auto gen = std::mt19937(seed_); // so each thread in the dataloader is different
+static thread_local auto gen = std::mt19937(seed_); // thread_local so each thread in the dataloader is different
 
 inline unsigned int get_seed() {
     return seed_;
