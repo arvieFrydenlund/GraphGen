@@ -368,4 +368,7 @@ public:
 
 };
 
+// TODO bredth-first ordering (full graph) as a distance (u, v, dist_id), this fully encodes distance matrix as SP
+// always can evaluate task given SP, then SP generation and task generation.  First says if SP resolves task (if SP can be generated)
+
 #endif //SCRATCH_PADS_H
