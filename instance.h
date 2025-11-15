@@ -194,6 +194,9 @@ public:
             scratch_pad->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
         }
         this->g_ptr = std::move(g_ptr); // take ownership of the graph pointer
+        if (positions_ptr.has_value()) {
+            this->positions_ptr = std::move(positions_ptr.value());
+        }
     }
 
     void tokenize(
