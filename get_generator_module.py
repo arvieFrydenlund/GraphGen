@@ -427,7 +427,11 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     rev_token_dict = {v: k for k, v in token_dict.items()}
     # rev_pos_dict = {v: k for k, v in pos_dict.items()}  # just print the idxs because they are readable
     src_tokens = b_n['src_tokens']
+    graph_edge_gather_indices = b_n['graph_edge_gather_indices']
+    graph_node_gather_indices = b_n['graph_node_gather_indices']
     task_targets = b_n['prev_output_tokens']
+    true_task_gather_indices = b_n['true_task_gather_indices']
+    scratch_pad_gather_indices = b_n['scratch_pad_gather_indices']
     positions = b_n['positions']
 
     if isinstance(idxs, int):
@@ -502,6 +506,16 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         if task_targets is not None:
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
+            s += f'TgtIdx:'
+            s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
+            if scratch_pad_gather_indices is not None:
+                s += f'SP Idx:'
+                s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
+        s += f'EdgIdx:'
+        s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=b_n['graph_edge_start_indices'][b])
+        if graph_node_gather_indices is not None:
+            s += f'NodIdx:'
+            s += pprint_tensor(b, np.expand_dims(graph_node_gather_indices, -1), None, pad=-1, offset1=b_n['graph_node_start_indices'][b])
         s += 'Idx:   '
         a = np.expand_dims(np.expand_dims(np.arange(b_n['src_lengths'][b]), 1), 0)
         s += pprint_tensor(0, a, None, pad=-1,)
@@ -509,7 +523,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
 
     if b_n['align_prefix_front_pad']:
-        print('Showing that align_prefix_front_pad works')
+        print('Showing that align_prefix_front_pad works as targets are aligned to the right (either at scratchpad = 16 or task = 6):')
         print(src_tokens[:3, :, 0])
 
 

@@ -209,7 +209,7 @@ public:
             int num_thinking_tokens,
             bool is_flat_model) {
         // set lengths
-        int num_tokens = 2; // +2 for start and end tokens
+        int num_tokens = 2; // +2 for start and end sequence tokens
         if (task) {
             query_length = static_cast<int>(task->tokenized_query_inputs.shape()[0]);
             num_tokens += query_length;
@@ -510,13 +510,18 @@ public:
         int max_tokenized_inputs_len = 0;
         int max_tokenized_targets_len = 0;
         int max_tokenized_targets_labels = 0;
-        auto max_prefix_size = 0;
+        int max_tokenized_true_targets_len = 0;
+        int max_tokenized_scratchpad_len = 0;
+        int max_prefix_size = 0;
+        int max_num_nodes = 0;
+        int max_num_edges = 0;
+
         auto concat_edges = instances[0].graph_tokenizer->concat_edges;
         auto use_graph_structure = instances[0].graph_tokenizer->use_graph_structure;
         auto include_nodes_in_graph_tokenization = instances[0].graph_tokenizer->include_nodes_in_graph_tokenization;
 
         for (size_t i = 0; i < instances.size(); i++) {
-            // inputs, targets and positions, and component start_indices and lengths
+            // create inputs, targets and positions, and component start_indices and lengths
             instances[i].tokenize(
                     dictionary,
                     pos_dictionary,
@@ -538,6 +543,20 @@ public:
                 if (static_cast<int>(instances[i].tokenized_targets.shape()[1]) > max_tokenized_targets_labels) {
                     max_tokenized_targets_labels = static_cast<int>(instances[i].tokenized_targets.shape()[1]);
                 }
+                if (static_cast<int>(instances[i].true_task_length) > max_tokenized_true_targets_len) {
+                    max_tokenized_true_targets_len = static_cast<int>(instances[i].true_task_length);
+                }
+                if (instances[i].scratch_pad) {
+                    if (static_cast<int>(instances[i].scratch_pad_length) > max_tokenized_scratchpad_len) {
+                        max_tokenized_scratchpad_len = static_cast<int>(instances[i].scratch_pad_length);
+                    }
+                }
+            }
+            if (instances[i].N > max_num_nodes) {
+                max_num_nodes = instances[i].N;
+            }
+            if (instances[i].E > max_num_edges) {
+                max_num_edges = instances[i].E;
             }
             // instances[i].pprint();
         }
@@ -587,6 +606,17 @@ public:
         py::array_t<int, py::array::c_style> true_task_start_indices(batch_size);
         py::array_t<int, py::array::c_style> true_task_lengths(batch_size);
 
+        // gather_ids, these select hidden-states for computing loss(es)
+        // these are just start_index + range(length) with padding, but we might as well precompute them here
+        auto true_task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_true_targets_len});
+        true_task_gather_indices[py::make_tuple(py::ellipsis())] = 0; // initialize to 0 since it needs to be a valid index
+        auto scratch_pad_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_scratchpad_len});
+        scratch_pad_gather_indices[py::make_tuple(py::ellipsis())] = 0;
+        auto graph_edge_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_num_edges});
+        graph_edge_gather_indices[py::make_tuple(py::ellipsis())] = 0;
+        auto graph_node_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_num_nodes});
+        graph_node_gather_indices[py::make_tuple(py::ellipsis())] = 0;
+
         // write into numpy arrays
         auto src_tokens_ar = src_tokens.mutable_unchecked();
         auto src_lengths_ar = src_lengths.mutable_unchecked();
@@ -613,6 +643,11 @@ public:
         auto true_task_start_indices_ar = true_task_start_indices.mutable_unchecked();
         auto true_task_lengths_ar = true_task_lengths.mutable_unchecked();
 
+        auto true_task_gather_indices_ar = true_task_gather_indices.mutable_unchecked();
+        auto scratch_pad_gather_indices_ar = scratch_pad_gather_indices.mutable_unchecked();
+        auto graph_edge_gather_indices_ar = graph_edge_gather_indices.mutable_unchecked();
+        auto graph_node_gather_indices_ar = graph_node_gather_indices.mutable_unchecked();
+
         for (size_t i = 0; i < instances.size(); i++) {
             auto offset = 0;
             if (align_prefix_front_pad and is_flat_model) {
@@ -633,7 +668,28 @@ public:
                     }
                 }
                 task_lengths_ar(i) = instances[i].task_length;
+                for (size_t j = 0; j < instances[i].true_task_length; j++) {
+                    true_task_gather_indices_ar(i, j) = instances[i].true_task_start_idx + offset + j;
+                }
+                if (instances[i].scratch_pad) {
+                    for (size_t j = 0; j < instances[i].scratch_pad_length; j++) {
+                        scratch_pad_gather_indices_ar(i, j) = instances[i].scratch_pad_start_idx + offset + j;
+                    }
+                }
             }
+            for (size_t j = 0; j < instances[i].graph_tokenizer->edge_list.size(); j++) {
+                if(concat_edges) {
+                    graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
+                } else { // need every third token since we just want the edge marker positions
+                    graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3);
+                }
+            }
+            if (include_nodes_in_graph_tokenization) {
+                for (size_t j = 0; j < instances[i].graph_tokenizer->node_list.size(); j++) {
+                    graph_node_gather_indices_ar(i, j) = instances[i].graph_nodes_start_idx + offset + j;
+                }
+            }
+
             // all others
             num_nodes_ar(i) = instances[i].N;
             num_edges_ar(i) = instances[i].E;
@@ -657,40 +713,60 @@ public:
 
         d["num_nodes"] = num_nodes;
         d["num_edges"] = num_edges;
-
         d["src_tokens"] = src_tokens;
         d["src_lengths"] = src_lengths;
         d["positions"] = positions;
-
         // has task
         if (instances[0].task) {
             d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
+            d["query_start_indices"] = query_start_indices;
+            d["query_lengths"] = query_lengths;
         } else {
             d["prev_output_tokens"] = py::none();
+            d["query_start_indices"] = py::none();
+            d["query_lengths"] = py::none();
         }
-
-        d["query_start_indices"] = query_start_indices;
-        d["query_lengths"] = query_lengths;
         d["graph_start_indices"] = graph_start_indices;
         d["graph_lengths"] = graph_lengths;
         d["graph_edge_start_indices"] = graph_edge_start_indices;
         d["graph_edge_lengths"] = graph_edge_lengths;
+        d["graph_edge_gather_indices"] = graph_edge_gather_indices;
         if (include_nodes_in_graph_tokenization) {
             d["graph_node_start_indices"] = graph_node_start_indices;
             d["graph_node_lengths"] = graph_node_lengths;
+            d["graph_node_gather_indices"] = graph_node_gather_indices;
         } else {
             d["graph_node_start_indices"] = py::none();
             d["graph_node_lengths"] = py::none();
+            d["graph_node_gather_indices"] = py::none();
         }
         d["thinking_tokens_start_idx"] = thinking_tokens_start_idx;
         d["thinking_tokens_length"] = thinking_tokens_length;
 
-        d["task_start_indices"] = task_start_indices;
-        d["task_lengths"] = task_lengths;
-        d["scratch_pad_start_indices"] = scratch_pad_start_indices;
-        d["scratch_pad_lengths"] = scratch_pad_lengths;
-        d["true_task_start_indices"] = true_task_start_indices;
-        d["true_task_lengths"] = true_task_lengths;
+        if (instances[0].task) {
+            d["task_start_indices"] = task_start_indices;
+            d["task_lengths"] = task_lengths;
+            if (instances[0].scratch_pad) {
+                d["scratch_pad_start_indices"] = scratch_pad_start_indices;
+                d["scratch_pad_lengths"] = scratch_pad_lengths;
+                d["scratch_pad_gather_indices"] = scratch_pad_gather_indices;
+            } else {
+                d["scratch_pad_start_indices"] = py::none();
+                d["scratch_pad_lengths"] = py::none();
+                d["scratch_pad_gather_indices"] = py::none();
+            }
+            d["true_task_start_indices"] = true_task_start_indices;
+            d["true_task_lengths"] = true_task_lengths;
+            d["true_task_gather_indices"] = true_task_gather_indices;
+        } else {
+            d["task_start_indices"] = py::none();
+            d["task_lengths"] = py::none();
+            d["scratch_pad_start_indices"] = py::none();
+            d["scratch_pad_lengths"] = py::none();
+            d["true_task_start_indices"] = py::none();
+            d["true_task_lengths"] = py::none();
+            d["true_task_gather_indices"] = py::none();
+        }
 
         //auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
         //d["distances"] = bd;
@@ -701,6 +777,8 @@ public:
         //batched_ground_truths, batched_node_shuffle_map, max_vocab);
         //d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
         //d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+
+        // if euclidean batch the node positions
 
         // arguments
         d["graph_type"] = graph_type;

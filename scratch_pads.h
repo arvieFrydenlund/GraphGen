@@ -317,7 +317,7 @@ public:
         // tokenize the BFS levels into a single sequence
         // where targets can be multiple tokens due to label smoothing over order, ex.
         if (this->use_unique_depth_markers) {
-            if (!is_valid_extra_dictionary_symbol(path.size())) {
+            if (!is_valid_extra_dictionary_symbol(static_cast<int>(path.size()))) {
                 throw std::invalid_argument(
                         "DFS ScratchPad: use_unique_depth_markers is true but there are not enough unique depth markers in the dictionary for the max depth of the DFS path");
             }
@@ -370,5 +370,6 @@ public:
 
 // TODO bredth-first ordering (full graph) as a distance (u, v, dist_id), this fully encodes distance matrix as SP
 // always can evaluate task given SP, then SP generation and task generation.  First says if SP resolves task (if SP can be generated)
+// this is tree-traversal with (breadth-first) level-ordering, and to do this we need to output N full tree traversals so N^2 nodes
 
 #endif //SCRATCH_PADS_H

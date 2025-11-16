@@ -718,7 +718,6 @@ PYBIND11_MODULE(generator, m) {
           "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
           py::arg("distances"), py::arg("queries"), py::arg("paths"), py::arg("path_lengths"));
 
-
     m.def("balanced_graph_size_check", &balanced_graph_size_check,
           "Check that the balanced graph size is valid.  Will fail assert otherwise.",
           py::arg("num_nodes"), py::arg("lookahead"), py::arg("min_noise_reserve") = 0);

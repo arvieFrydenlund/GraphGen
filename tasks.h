@@ -279,7 +279,7 @@ public:
     }
 
     template<typename T>
-    static int varify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path) {
+    static int verify_path(py::array_t<T, py::array::c_style> &distances, vector<int> &path) {
         // -1 if not a valid path, 0 if valid path but not a shortest path, 1 if valid path but is a shortest path
         auto start = path[0];
         auto end = path[path.size() - 1];
@@ -289,14 +289,14 @@ public:
         }
         // validate path
         auto cur = start;
-        for (int i = 1; i < path.size(); i++) {
+        for (int i = 1; i < static_cast<int>(path.size()); i++) {
             auto next = path[i];
             if (distances.at(cur, next) != 1) { // hardcoded for distance of 1
                 return -1;
             }
             cur = next;
         }
-        if (path.size() > shortest_distance) {
+        if (static_cast<int>(path.size()) > shortest_distance) {
             return 0;
         }
         return 1;
