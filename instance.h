@@ -680,8 +680,8 @@ public:
             for (size_t j = 0; j < instances[i].graph_tokenizer->edge_list.size(); j++) {
                 if(concat_edges) {
                     graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
-                } else { // need every third token since we just want the edge marker positions
-                    graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3);
+                } else { // need every third token since we just want the edge marker positions (which needs shift by 2)
+                    graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3) + 2;
                 }
             }
             if (include_nodes_in_graph_tokenization) {

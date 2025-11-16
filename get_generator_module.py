@@ -463,7 +463,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
             max_num_chars = update_max(b, task_targets, None, max_num_chars)
         max_num_chars =update_max(b, positions, pos_dict, max_num_chars)
 
-    def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   ')):
+    def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   '), skip=0):
         s = ''
         max_j_dim = tensor.shape[2]
         m = (tensor == pad).all(axis=1)
@@ -482,6 +482,8 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
                 if token_id == pad:
                     token_str = ' '
                 s += token_str.ljust(max_num_chars + 1)
+                if skip > 0:
+                    s += ' '.ljust(max_num_chars + 1) * skip
             if j < max_j_dim - 1:
                 s += '\n' + ' ' * offset2
             else:
@@ -512,7 +514,11 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
                 s += f'SP Idx:'
                 s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
         s += f'EdgIdx:'
-        s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=b_n['graph_edge_start_indices'][b])
+        edge_offset = b_n['graph_edge_start_indices'][b]
+        if not b_n['concat_edges']:
+            edge_offset += 2
+        s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=edge_offset,
+                           skip = 0 if b_n['concat_edges'] else 2)
         if graph_node_gather_indices is not None:
             s += f'NodIdx:'
             s += pprint_tensor(b, np.expand_dims(graph_node_gather_indices, -1), None, pad=-1, offset1=b_n['graph_node_start_indices'][b])
