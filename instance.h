@@ -139,7 +139,8 @@ public:
 
 
         auto edge_list = get_edge_list(g_ptr, edge_shuffle_map);
-        graph_tokenizer = make_unique<GraphTokenizer>(edge_list, concat_edges, duplicate_edges,
+        graph_tokenizer = make_unique<GraphTokenizer>(edge_list, is_causal, is_direct_ranking,
+                                                      concat_edges, duplicate_edges,
                                                       include_nodes_in_graph_tokenization,
                                                       use_edges_invariance, use_node_invariance,
                                                       use_graph_invariance, use_graph_structure);
@@ -149,10 +150,10 @@ public:
         // since these need the original distance matrix in the original node order
         if (include_nodes_in_graph_tokenization) {
             graph_tokenizer->get_distances(g_ptr);
-            graph_tokenizer->get_node_ground_truths(is_direct_ranking);
+            graph_tokenizer->get_node_ground_truths();
         } else {
             // this also gets the distances due to legacy code
-            graph_tokenizer->get_edge_ground_truths(g_ptr, is_causal);
+            graph_tokenizer->get_edge_ground_truths(g_ptr);
         }
 
         if (task_type == "shortest_path") {
@@ -668,11 +669,11 @@ public:
                     }
                 }
                 task_lengths_ar(i) = instances[i].task_length;
-                for (size_t j = 0; j < instances[i].true_task_length; j++) {
+                for (int j = 0; j < instances[i].true_task_length + 1; j++) {  // +1 for end of seq token
                     true_task_gather_indices_ar(i, j) = instances[i].true_task_start_idx + offset + j;
                 }
                 if (instances[i].scratch_pad) {
-                    for (size_t j = 0; j < instances[i].scratch_pad_length; j++) {
+                    for (int j = 0; j < instances[i].scratch_pad_length; j++) {
                         scratch_pad_gather_indices_ar(i, j) = instances[i].scratch_pad_start_idx + offset + j;
                     }
                 }
@@ -768,17 +769,21 @@ public:
             d["true_task_gather_indices"] = py::none();
         }
 
-        //auto bd = batch_distances<int>(batched_distances, batched_node_shuffle_map, max_vocab);
-        //d["distances"] = bd;
+        // distances and ground truths batching
 
-        //d["hashes"] = hash_distance_matrix<int>(bd);
+        auto bd = batch_distances<int>();  // do node shuffling inside
+        d["distances"] = bd;  // (B, max_vocab, max_vocab), where max_vocab is just up to node range (not extra symbols)
+        d["hashes"] = hash_distance_matrix<int>(bd);
 
-        //auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>(
-        //batched_ground_truths, batched_node_shuffle_map, max_vocab);
-        //d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
-        //d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+        auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
+        if (instances[0].graph_tokenizer->is_direct_ranking) {
+            d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
+        }else{
+            d["ground_truths_gather_indices"] = py::none();
+        }
+        d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
 
-        // if euclidean batch the node positions
+        // if euclidean batch the node positions  TODO
 
         // arguments
         d["graph_type"] = graph_type;
@@ -792,116 +797,67 @@ public:
     }
 
     template<typename T>
-    py::array_t<T, py::array::c_style> batch_distances(const list<unique_ptr<vector<vector<T> > > > &batched_distances,
-                                                       const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-                                                       const int new_N, T cuttoff = 100000, T max_value = -1,
-                                                       T pad = -1) {
-        py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_distances.size()), new_N, new_N});
+    py::array_t<T, py::array::c_style> batch_distances(T cuttoff = 100000, T max_value = -1, T pad = -1) {
+        auto batch_size = static_cast<int>(instances.size());
+        py::array_t<T, py::array::c_style> arr({static_cast<int>(batch_size), this->max_vocab, this->max_vocab });
         arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
         auto ra = arr.mutable_unchecked();
 
-        auto it1 = batched_distances.begin();
-        auto it2 = batched_node_shuffle_map.begin();
-        int b = 0;
-        for (; it1 != batched_distances.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
-                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
-                    auto mapped_j = (**it2)[j];
-                    auto mapped_k = (**it2)[k];
-                    if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
+        for (int b = 0; b < batch_size; b++) {
+            const auto &distances_ptr = instances[b].graph_tokenizer->distances_ptr;
+            auto &node_shuffle_map = instances[b].node_shuffle_map;
+            for (int j = 0; j < static_cast<int>(distances_ptr->size()); j++) {
+                for (int k = 0; k < static_cast<int>((*distances_ptr)[j].size()); k++) {
+                    auto mapped_j = node_shuffle_map[j];
+                    auto mapped_k = node_shuffle_map[k];
+                    if (cuttoff > 0 && (*distances_ptr)[j][k] >= cuttoff) {
                         ra(b, mapped_j, mapped_k) = max_value;
                     } else {
-                        ra(b, mapped_j, mapped_k) = (**it1)[j][k];
+                        ra(b, mapped_j, mapped_k) = (*distances_ptr)[j][k];
                     }
                 }
             }
-            b += 1;
         }
         return arr;
     }
-
-
-    template<typename T>
-    py::array_t<T, py::array::c_style> batch_ground_truths(
-            const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
-            const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-            const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
-        // indices are nodes, values are distances
-        auto max_E = 0;
-        for (auto &m: batched_ground_truths) {
-            if (static_cast<int>((*m).size()) > max_E) {
-                max_E = (*m).size();
-            }
-        }
-
-        py::array_t<T, py::array::c_style> arr({static_cast<int>(batched_ground_truths.size()), max_E, new_N});
-        arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
-        auto ra = arr.mutable_unchecked();
-        auto it1 = batched_ground_truths.begin();
-        auto it2 = batched_node_shuffle_map.begin();
-        int cur = 0;
-        for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2) {
-            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
-                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
-                    if (cuttoff > 0 && (**it1)[j][k] >= cuttoff) {
-                        ra(cur, j, (**it2)[k]) = max_value;
-                    } else {
-                        ra(cur, j, (**it2)[k]) = (**it1)[j][k];
-                    }
-                }
-            }
-            cur += 1;
-        }
-        return arr;
-    }
-
 
     template<typename T>
     pair<py::array_t<T, py::array::c_style>, py::array_t<T, py::array::c_style> > batch_ground_truth_gather_indices(
-            const list<unique_ptr<vector<vector<T> > > > &batched_ground_truths,
-            const list<unique_ptr<vector<int> > > &batched_node_shuffle_map,
-            const int new_N, T cuttoff = 100000, T max_value = -1, T pad = -1) {
+            T cuttoff = 100000, T max_value = -1, T pad = -1) {
         // indices are nodes, values are distances
-        auto max_E = 0;
-        for (auto &m: batched_ground_truths) {
-            if (static_cast<int>((*m).size()) > max_E) {
-                max_E = (*m).size();
+        // note that if the node shuffle map as a big range this will be very empty, so we cut it down to num nodes
+
+        int max_d1 = 0;  // either edges or nodes
+        int max_d2 = 0;  // nodes
+        auto batch_size = static_cast<int>(instances.size());
+        for (int b = 0; b < batch_size; b++) {
+            const auto &graph_ground_truths_ptr = instances[b].graph_tokenizer->graph_ground_truths_ptr;
+            if (static_cast<int>(graph_ground_truths_ptr->size()) > max_d1) {
+                max_d1 = static_cast<int>(graph_ground_truths_ptr->size());
             }
-        }
-        auto max_k = 0; // number of non -1 entries in ground truths
-        for (auto b = batched_ground_truths.begin(); b != batched_ground_truths.end(); ++b) {
-            for (int j = 0; j < static_cast<int>((**b).size()); j++) {
-                int count = 0;
-                for (int k = 0; k < static_cast<int>((**b)[j].size()); k++) {
-                    if ((**b)[j][k] >= 0 && ((cuttoff <= 0) || ((**b)[j][k] < cuttoff))) {
-                        count += 1;
-                    }
-                }
-                if (count > max_k) {
-                    max_k = count;
-                }
+            auto num_nodes = instances[b].N;
+            if (num_nodes > max_d2) {
+                max_d2 = num_nodes;
             }
         }
 
-        py::array_t<T, py::array::c_style> arr_indices({static_cast<int>(batched_ground_truths.size()), max_E, max_k});
-        py::array_t<T, py::array::c_style> arr_distances({
-                                                                 static_cast<int>(batched_ground_truths.size()), max_E,
-                                                                 max_k
-                                                         });
+        py::array_t<T, py::array::c_style> arr_indices({static_cast<int>(batch_size), max_d1, max_d2});
+        py::array_t<T, py::array::c_style> arr_distances({static_cast<int>(batch_size), max_d1, max_d2});
         arr_indices[py::make_tuple(py::ellipsis())] = 0;; // initialize array
         arr_distances[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
         auto ra_i = arr_indices.mutable_unchecked();
         auto ra_d = arr_distances.mutable_unchecked();
-        auto it1 = batched_ground_truths.begin();
-        auto it2 = batched_node_shuffle_map.begin();
-        int cur = 0;
-        for (; it1 != batched_ground_truths.end() && it2 != batched_node_shuffle_map.end(); ++it1, ++it2, cur++) {
-            for (int j = 0; j < static_cast<int>((**it1).size()); j++) {
+
+        for (int b = 0; b < batch_size; b++) {
+            const auto &graph_ground_truths_ptr = instances[b].graph_tokenizer->graph_ground_truths_ptr;
+            auto node_shuffle_map = instances[b].node_shuffle_map;
+
+            for (int j = 0; j < static_cast<int>(graph_ground_truths_ptr->size()); j++) {
                 auto cur_gt = 0;
-                for (int k = 0; k < static_cast<int>((**it1)[j].size()); k++) {
-                    if (((**it1)[j][k] >= 0) && ((cuttoff <= 0) || ((**it1)[j][k] < cuttoff))) {
-                        ra_i(cur, j, cur_gt) = (**it2)[k];
-                        ra_d(cur, j, cur_gt) = (**it1)[j][k];
+                for (int k = 0; k < static_cast<int>((*graph_ground_truths_ptr)[j].size()); k++) {
+                    if (((*graph_ground_truths_ptr)[j][k] >= 0) && ((cuttoff <= 0) || ((*graph_ground_truths_ptr)[j][k] < cuttoff))) {
+                        ra_i(b, j, cur_gt) = node_shuffle_map[k];
+                        ra_d(b, j, cur_gt) = (*graph_ground_truths_ptr)[j][k];
                         cur_gt += 1;
                     }
                 }

@@ -24,8 +24,9 @@ public:
     // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
     vector<pair<int, int> > edge_list; // already shuffled
     unique_ptr<vector<vector<int> > > distances_ptr;
-    unique_ptr<vector<vector<int> > > edge_ground_truths_ptr; // -1 for unreachable
-    unique_ptr<vector<vector<int> > > node_ground_truths_ptr; // -1 for unreachable
+    unique_ptr<vector<vector<int> > > graph_ground_truths_ptr; // -1 for unreachable, either [E * N] or [N * N]
+    bool is_causal = false;
+    bool is_direct_ranking = false;
     bool concat_edges = true;
     bool duplicate_edges = false;
     bool include_nodes_in_graph_tokenization;
@@ -35,6 +36,7 @@ public:
     bool use_graph_structure;
 
     GraphTokenizer(vector<pair<int, int> > edge_list,
+                   const bool is_causal = false, const bool is_direct_ranking = false,
                    const bool concat_edges = true, const bool duplicate_edges = false,
                    const bool include_nodes_in_graph_tokenization = false,
                    const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
@@ -42,6 +44,8 @@ public:
                    const bool use_graph_invariance = false,  // divide positions by task structure
                    const bool use_graph_structure = false) {  // 2d positions by graph structure
         this->edge_list = edge_list;
+        this->is_causal = is_causal;
+        this->is_direct_ranking = is_direct_ranking;
         this->concat_edges = concat_edges;
         this->duplicate_edges = duplicate_edges; // needs to be false for directed graphs
         this->include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization;
@@ -188,23 +192,17 @@ public:
     }
 
     template<class D>
-    void get_edge_ground_truths(unique_ptr<Graph<D> > &g_ptr,
-                                const bool is_causal) {
+    void get_edge_ground_truths(unique_ptr<Graph<D> > &g_ptr) {
         /*
          * Just the distance matrix but in edge_list order  [E X N], this is possibly causally constrained
          * Note these only work for the projected ranking loss so N is in vocab order
          */
-        if (is_causal) {
+        if (this->is_causal) {
             // this will calculate the distances as well
             if (distances_ptr) {
                 throw runtime_error("Causal ground truths should not be calculated with precomputed distances");
             }
-            floyd_warshall_frydenlund(g_ptr, distances_ptr, edge_ground_truths_ptr, edge_list, false);
-
-            // convert both to node shuffle map order TODO
-            // auto N = distances_ptr->size();
-            unique_ptr<vector<vector<int> > > distances_ptr;
-            unique_ptr<vector<vector<int> > > ground_truths_ptr;
+            floyd_warshall_frydenlund(g_ptr, distances_ptr, graph_ground_truths_ptr, edge_list, false);
         } else {
             if (!distances_ptr) {
                 get_distances<D>(g_ptr); // already node_shuffle_map, so edges will be too
@@ -212,16 +210,16 @@ public:
             auto N = num_vertices(*g_ptr);
             auto E = edge_list.size();
             // Makes a [E, N] matrix of ground truths where each row is the distance from the edge.first to all other nodes
-            edge_ground_truths_ptr = make_unique<vector<vector<int> > >(E, vector<int>(N, -1));
+            graph_ground_truths_ptr = make_unique<vector<vector<int> > >(E, vector<int>(N, -1));
             for (int t = 0; t < static_cast<int>(E); t++) {
-                for (int i = 0; i < static_cast<int>(N); i++) {
-                    (*edge_ground_truths_ptr)[t][i] = (*distances_ptr)[edge_list[t].first][i];
+                for (int i = 0; i < static_cast<int>(N); i++) {  // permute first dim by edge order, other stays in vocab order
+                    (*graph_ground_truths_ptr)[t][i] = (*distances_ptr)[edge_list[t].first][i];
                 }
             }
         }
     }
 
-    void get_node_ground_truths(const bool is_direct_ranking) {
+    void get_node_ground_truths() {
         /*
          * Just the distance matrix but in node_list order in the first dimension.
          *
@@ -244,13 +242,13 @@ public:
          *  [d(y,w), d(y,u), d(y,y), d(y,v), d(y,x)] ]
          */
         auto N = node_list.size();
-        node_ground_truths_ptr = make_unique<vector<vector<int> > >(N, vector<int>(N, -1));
+        graph_ground_truths_ptr = make_unique<vector<vector<int> > >(N, vector<int>(N, -1));
         for (int i = 0; i < static_cast<int>(N); i++) {
             for (int j = 0; j < static_cast<int>(N); j++) {
-                if (is_direct_ranking) {
-                    (*node_ground_truths_ptr)[i][j] = (*distances_ptr)[node_list[i]][node_list[j]];
-                } else {
-                    (*node_ground_truths_ptr)[i][j] = (*distances_ptr)[node_list[i]][j];
+                if (this->is_direct_ranking) {  // permute both dims by tokenization order
+                    (*graph_ground_truths_ptr)[i][j] = (*distances_ptr)[node_list[i]][node_list[j]];
+                } else {  // only permute first dim by tokenization order, other stays in vocab order
+                    (*graph_ground_truths_ptr)[i][j] = (*distances_ptr)[node_list[i]][j];
                 }
             }
         }

@@ -532,7 +532,11 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         print('Showing that align_prefix_front_pad works as targets are aligned to the right (either at scratchpad = 16 or task = 6):')
         print(src_tokens[:3, :, 0])
 
-
+    # print out the shape of distance matrix, and ground_truths_gather_distances
+    distances = b_n["distances"]
+    print(f'Distances shape: {distances.shape}')
+    ground_truths_gather_distances = b_n["ground_truths_gather_distances"]
+    print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
 
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',
