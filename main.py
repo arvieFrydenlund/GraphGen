@@ -1,6 +1,7 @@
 import time
 import pydoc
 import numpy as np
+import copy
 
 # np.finfo(np.dtype("float32"))  # gets rid of warnings, hope they aint important
 # np.finfo(np.dtype("float64"))
@@ -34,7 +35,7 @@ def _graph_print(args, token_dict, pos_dict, concat_edges=False, duplicate_edges
     args.use_graph_structure = use_graph_structure
 
     b_n = generator.get_graph(args, batch_size=batch_size)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 
 def _t_single_graph():
@@ -131,20 +132,6 @@ def _t_reconstruct(args, d, batch_size=20, plot=True):
         if plot:
             r.plot()
 
-
-def pretty_distance_print(d, min_node=0, max_node=500):
-    """
-    d in a n * n matrix, we add a column and a row for the range ids, then cut off at the min and max num nodes
-    """
-    d_out = d.copy()
-    d_out = d_out[min_node:max_node + 1, min_node:max_node + 1]
-
-    n = d_out.shape[0]
-    a1 = np.arange(min_node, max_node + 1)[:n]
-    d_out = np.concatenate([d_out, a1[None, :]], axis=0)
-    a2 = np.arange(min_node, max_node + 2)[:n + 1]
-    d_out = np.concatenate([d_out, a2[:, None]], axis=1)
-    print(d_out)
 
 
 def _t_verify_paths(args, d, batch_size=20):
@@ -274,12 +261,13 @@ if __name__ == '__main__':
     print('\n\nStarting Testing')
 
     print(f'Random seed is {generator.get_seed()}')
+
     generator.set_seed(42)
     # generator.set_seed(3172477368)
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(args.max_num_nodes + 10, 20, 'D')
+    generator.set_default_dictionary(args.max_num_nodes, 20, 'D')
     token_dict = generator.get_dictionary()
     # sort by value
     d = dict(sorted(token_dict.items(), key=lambda item: item[1]))
@@ -290,7 +278,7 @@ if __name__ == '__main__':
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
-    _graph_print(args, token_dict, pos_dict)
+    _graph_print(args, token_dict, pos_dict, batch_size=3)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

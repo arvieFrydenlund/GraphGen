@@ -53,13 +53,16 @@ int main() {
 
   set_seed(42);
   cout << "Seed: " << get_seed() << endl;
+  int max_num_nodes = 25;
 
-  set_default_dictionary(50, 10);  // 10 extra tokens D0-D9
+  set_default_dictionary(max_num_nodes, 20);  // 10 extra tokens D0-D9
   set_default_pos_dictionary();
 
   auto t1 = time_before();
-  test_erdos_renyi_n(15, 25);
+  test_erdos_renyi_n(15, max_num_nodes);
   time_after(t1, "Final");
+
+  cout << "Done!" << endl;
 
   return 0;
 };

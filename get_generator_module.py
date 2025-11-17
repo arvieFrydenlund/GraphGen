@@ -414,7 +414,42 @@ def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, id
 
     return reconstructions
 
-def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2)):
+def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_ids=True):
+    """
+    d in a n * n matrix, we add a column and a row for the range ids, then cut off at the min and max num nodes
+    """
+    if distances.ndim == 3:
+        if isinstance(idxs, int):
+            if idxs > 0:
+                idxs_ = list(range(idxs))
+            else:
+                idxs_ = list(range(distances.shape[0]))
+        elif len(idxs) == 0:
+            idxs_ = list(range(distances.shape[0]))
+        else:
+            idxs_ = [b for b in idxs if b < distances.shape[0]]
+    else:
+        distances = np.expand_dims(distances, 0)
+        idxs_ = [0]
+
+    for b in idxs_:
+        print(f'BATCH INDEX: {b}\n')
+        d_out = distances[b, ...].copy()
+        d_out = d_out[min_node:max_node + 1, min_node:max_node + 1]
+        n = d_out.shape[0]
+        if use_node_ids:
+            a1 = np.arange(min_node, max_node + 1)[:n]
+            a2 = np.arange(min_node, max_node + 2)[:n + 1]
+        else:
+            a1 = np.arange(n)
+            a2 = np.arange(n + 1)
+        a2[-1] = -1
+        d_out = np.concatenate([d_out, a1[None, :]], axis=0)
+        d_out = np.concatenate([d_out, a2[:, None]], axis=1)
+        print(d_out)
+
+def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
+                        print_dist=False):
     """
     :param b_n: batched dict
     :param title:
@@ -527,6 +562,8 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         s += pprint_tensor(0, a, None, pad=-1,)
         print(s)
 
+        if print_dist:
+            pprint_distance(b_n["distances"], min_node=b_n["min_vocab"], max_node=b_n["max_vocab"], idxs=[b], use_node_ids=False)
 
     if b_n['align_prefix_front_pad']:
         print('Showing that align_prefix_front_pad works as targets are aligned to the right (either at scratchpad = 16 or task = 6):')
@@ -617,6 +654,7 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
         return b_n
 
     setattr(generator, "get_graph", get_graph)
+    setattr(generator, "pprint_distance", pprint_distance)
     setattr(generator, "pprint_batched_dict", pprint_batched_dict)
     setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
 

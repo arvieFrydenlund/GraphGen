@@ -163,7 +163,7 @@ public:
             // the scratch pad could be inconsistent with the task path in the case when multiple shortest paths exist
             // thus we need to use the one first discovered by BFS.  Same goes for the DFS scratch pad.
 
-            auto should_sample_path = scratchpad_type == "none" && scratchpad_type == "NONE";
+            auto should_sample_path = scratchpad_type == "none" or scratchpad_type == "None";
             auto short_path = make_unique<ShortestPathTask>(gen, graph_tokenizer->distances_ptr,
                                                             max_path_length, min_path_length,
                                                             start, end, task_sample_dist, use_query_invariance,
@@ -609,7 +609,7 @@ public:
 
         // gather_ids, these select hidden-states for computing loss(es)
         // these are just start_index + range(length) with padding, but we might as well precompute them here
-        auto true_task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_true_targets_len});
+        auto true_task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_true_targets_len + 1});
         true_task_gather_indices[py::make_tuple(py::ellipsis())] = 0; // initialize to 0 since it needs to be a valid index
         auto scratch_pad_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_scratchpad_len});
         scratch_pad_gather_indices[py::make_tuple(py::ellipsis())] = 0;
@@ -792,6 +792,8 @@ public:
         d["concat_edges"] = concat_edges;
         d["query_at_end"] = query_at_end;
         d["align_prefix_front_pad"] = align_prefix_front_pad;
+        d["min_vocab"] = min_vocab;
+        d["max_vocab"] = max_vocab;
 
         return d;
     }

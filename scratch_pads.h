@@ -23,13 +23,14 @@ public:
     Matrix<int> tokenized_targets;
     // Matrix<int> tokenized_pos;  these can not exist since they are really part of the task
 
+    virtual ~ScratchPad() = default;  // Polymorphic base classes should declare virtual destructors
+
     virtual void tokenize(const map<std::string, int> &dictionary,
                           const vector<int> &node_shuffle_map,
                           const map<std::string, int> pos_dictionary,
                           std::mt19937 &gen) {
         throw std::invalid_argument("Not implemented yet");
     };
-
 
 };
 
