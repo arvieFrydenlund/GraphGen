@@ -657,8 +657,8 @@ PYBIND11_MODULE(generator, m) {
           "Parameters:\n\t"
           "dictionary: of str -> int\n\t",
           py::arg("dictionary"), py::arg("verbose") = false,
-          py::arg("max_num_nodes") = 50,
-          py::arg("extra_after") = 0,
+          py::arg("max_num_nodes") = -1,
+          py::arg("extra_after") = -1,
           py::arg("extra_after_symbol") = "D");
 
     m.def("set_default_dictionary", &set_default_dictionary,

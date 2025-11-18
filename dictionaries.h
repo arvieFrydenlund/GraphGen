@@ -62,10 +62,14 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false,
     dictionary_max_vocab = dictionary_num_special + num_node_vocab;
 
     if (max_num_nodes > 0 && num_node_vocab != max_num_nodes) {
-        throw std::invalid_argument("Dictionary vocab size does not match max_num_nodes");
+        const string err_msg = "Dictionary vocab size (" + std::to_string(num_node_vocab) +
+                               ") does not match max_num_nodes (" + std::to_string(max_num_nodes) + ")";
+        throw std::invalid_argument(err_msg);
     }
     if (extra_after > 0 && dictionary_num_extra != extra_after) {
-        throw std::invalid_argument("Dictionary extra tokens do not match extra_after");
+        const string err_msg = "Dictionary extra tokens (" + std::to_string(dictionary_num_extra) +
+                               ") do not match extra_after (" + std::to_string(extra_after) + ")";
+        throw std::invalid_argument(err_msg);
     }
 }
 

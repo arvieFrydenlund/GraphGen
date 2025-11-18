@@ -34,6 +34,8 @@ static const py::bool_ py_true(true);
 template<typename D>
 class Instance {
 public:
+    bool use_task_structure;
+
     int N;
     int E;
     unique_ptr<Graph<D> > g_ptr;
@@ -132,6 +134,9 @@ public:
              const bool use_graph_structure, // 2d positions by graph structure
              optional<unique_ptr<vector<vector<float> > > > positions_ptr = nullopt
     ) {
+
+        this->use_task_structure = use_task_structure;
+
         N = num_vertices(*g_ptr);
         E = num_edges(*g_ptr);
         make_node_shuffle_map(gen, min_vocab, max_vocab, shuffle_nodes);
@@ -716,7 +721,12 @@ public:
         d["num_edges"] = num_edges;
         d["src_tokens"] = src_tokens;
         d["src_lengths"] = src_lengths;
-        d["positions"] = positions;
+
+        if( instances[0].use_task_structure ) {
+            d["positions"] = positions;
+        } else{
+            d["positions"] = py::none();  // just delete the made positions and model will use range per norm
+        }
         // has task
         if (instances[0].task) {
             d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
