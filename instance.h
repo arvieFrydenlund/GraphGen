@@ -614,6 +614,8 @@ public:
 
         // gather_ids, these select hidden-states for computing loss(es)
         // these are just start_index + range(length) with padding, but we might as well precompute them here
+        auto task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_targets_len});
+        task_gather_indices[py::make_tuple(py::ellipsis())] = 0; // initialize to 0 since it needs to be a valid index
         auto true_task_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_true_targets_len + 1});
         true_task_gather_indices[py::make_tuple(py::ellipsis())] = 0; // initialize to 0 since it needs to be a valid index
         auto scratch_pad_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_tokenized_scratchpad_len});
@@ -649,6 +651,7 @@ public:
         auto true_task_start_indices_ar = true_task_start_indices.mutable_unchecked();
         auto true_task_lengths_ar = true_task_lengths.mutable_unchecked();
 
+        auto task_gather_indices_ar = task_gather_indices.mutable_unchecked();
         auto true_task_gather_indices_ar = true_task_gather_indices.mutable_unchecked();
         auto scratch_pad_gather_indices_ar = scratch_pad_gather_indices.mutable_unchecked();
         auto graph_edge_gather_indices_ar = graph_edge_gather_indices.mutable_unchecked();
@@ -669,6 +672,7 @@ public:
             }
             if (instances[i].task) {
                 for (size_t j = 0; j < instances[i].tokenized_targets.shape()[0]; j++) {
+                    task_gather_indices_ar(i, j) = instances[i].task_start_idx + offset + j;
                     for (size_t k = 0; k < instances[i].tokenized_targets.shape()[1]; k++) {
                         task_targets_ar(i, j, k) = instances[i].tokenized_targets(j, k);
                     }
@@ -757,6 +761,8 @@ public:
         if (instances[0].task) {
             d["task_start_indices"] = task_start_indices;
             d["task_lengths"] = task_lengths;
+            d["task_task_gather_indices"] = task_gather_indices;
+
             if (instances[0].scratch_pad) {
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
@@ -772,6 +778,7 @@ public:
         } else {
             d["task_start_indices"] = py::none();
             d["task_lengths"] = py::none();
+            d["task_task_gather_indices"] = py::none();
             d["scratch_pad_start_indices"] = py::none();
             d["scratch_pad_lengths"] = py::none();
             d["true_task_start_indices"] = py::none();
