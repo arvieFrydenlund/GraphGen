@@ -22,7 +22,9 @@ Testing generation functions and pybind compile.
 def _graph_print(args, token_dict, pos_dict, concat_edges=False, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='DFS', use_unique_depth_markers=True,
-                 align_prefix_front_pad=True, use_graph_invariance=True, use_graph_structure=True, batch_size=3):
+                 align_prefix_front_pad=True, use_graph_invariance=True, use_task_structure=True,
+                 use_graph_structure=True,
+                 batch_size=3):
     args.concat_edges = concat_edges
     args.duplicate_edges = duplicate_edges
     args.include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization
@@ -32,6 +34,7 @@ def _graph_print(args, token_dict, pos_dict, concat_edges=False, duplicate_edges
     args.use_unique_depth_markers = use_unique_depth_markers
     args.align_prefix_front_pad = align_prefix_front_pad
     args.use_graph_invariance = use_graph_invariance
+    args.use_task_structure = use_task_structure
     args.use_graph_structure = use_graph_structure
 
     b_n = generator.get_graph(args, batch_size=batch_size)

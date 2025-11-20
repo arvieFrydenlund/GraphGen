@@ -496,7 +496,8 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         max_num_chars = update_max(b, src_tokens, rev_token_dict, max_num_chars)
         if task_targets is not None:
             max_num_chars = update_max(b, task_targets, None, max_num_chars)
-        max_num_chars =update_max(b, positions, pos_dict, max_num_chars)
+        if positions is not None:
+            max_num_chars =update_max(b, positions, pos_dict, max_num_chars)
 
     def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   '), skip=0):
         s = ''
@@ -533,11 +534,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     pos_pad = pos_dict.get('pad', -1)
     for b in idxs_:
         # print so all tokens line up
-        s = f'BATCH INDEX: {b}\nPos:   '
+        s = f'BATCH INDEX: {b}\n'
         target_start_idx = 0
         if task_targets is not None:
             target_start_idx = b_n['task_start_indices'][b]
-        s += pprint_tensor(b, positions, None, pos_pad)
+        if positions is not None:
+            s += 'Pos:   '
+            s += pprint_tensor(b, positions, None, pos_pad)
         s += 'Src:   '
         s += pprint_tensor(b, src_tokens, rev_token_dict, pad)
         if task_targets is not None:
