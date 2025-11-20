@@ -761,7 +761,7 @@ public:
         if (instances[0].task) {
             d["task_start_indices"] = task_start_indices;
             d["task_lengths"] = task_lengths;
-            d["task_task_gather_indices"] = task_gather_indices;
+            d["task_gather_indices"] = task_gather_indices;
 
             if (instances[0].scratch_pad) {
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;

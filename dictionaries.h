@@ -52,7 +52,7 @@ inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false,
         } catch (std::invalid_argument &) {
             // not an int
             // if starts with extra symbol do not count
-            if (key.rfind(dictionary_extra_after_symbol) == 0) {
+            if (key.rfind(dictionary_extra_after_symbol) == 0 and key.size() > dictionary_extra_after_symbol.size()) {
                 dictionary_num_extra ++;
             } else{ // else is special
                 dictionary_num_special ++;
