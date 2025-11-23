@@ -43,6 +43,12 @@ Idx:   0     1     2     3     4     5     6     7     8     9     10    11    1
 
 #### C++ code
 
+
+######  TODO graph processing helpers
+
+Make functions which take in an arbitrary edge list and get tokenization, this is for when the graph structure is known ahead of time.
+This will be useful for real world datasets where the graphs are pre-defined.
+
 #### Python code
 
 ## Build

@@ -187,7 +187,16 @@ public:
                 scratch_pad = std::move(dfs_scratch_pad);
             }
             task = std::move(short_path);
-        } else if (task_type == "center" || task_type == "centroid") {
+        } else if (task_type == "bfs" || task_type == "BFS"){  // the scratchpad generation as the main task
+            task = make_unique<BFSTask>(gen, g_ptr, node_shuffle_map,
+                                        graph_tokenizer->distances_ptr,
+                                        max_path_length, min_path_length,
+                                        start, end, task_sample_dist, use_query_invariance,
+                                        sort_adjacency_lists, use_unique_depth_markers);
+        } else if (task_type == "dfs" || task_type == "DFS"){
+            throw std::invalid_argument("DFS task not implemented yet");
+
+        }else if (task_type == "center" || task_type == "centroid") {
             auto is_center = (task_type == "center" ? true : false);
             task = make_unique<CenterTask>(gen, graph_tokenizer->distances_ptr, given_query, max_query_size,
                                            min_query_size, is_center);

@@ -12,6 +12,7 @@
 #include "matrix.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "scratch_pads.h"
 
 #include <Python.h>
 #include <chrono>
@@ -86,6 +87,64 @@ public:
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
     int max_num_labels = 1;
 
+    static pair<int, int> sample_start_end(std::mt19937 &gen,
+                                    const unique_ptr<vector<vector<int> > > &distances_ptr,
+                                    const int max_path_length, const int min_path_length,
+                                    std::discrete_distribution<int> &d1, int start = -1) {
+
+        pair<int, int> start_end;
+        int attempts = 0;
+        // could avoid while loop by making set of sets of paths and sampling that but may not as fast?
+        while (true) {
+            // sample a path of length between min_path_length and max_path_length
+            auto sampled_path_length = d1(gen) + min_path_length;
+            // get all paths of that length
+            auto set_of_paths = vector<pair<int, int> >();
+            if (start != -1) {  // known start
+                for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
+                    // + 1 because distance is path length - 1
+                    if ((*distances_ptr)[start][j] + 1 == sampled_path_length) {
+                        set_of_paths.push_back(make_pair(start, j));
+                    }
+                }
+            } else {
+                for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
+                    for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
+                        // + 1 because distance is path length - 1
+                        if ((*distances_ptr)[i][j] + 1 == sampled_path_length) {
+                            set_of_paths.push_back(make_pair(i, j));
+                        }
+                    }
+                }
+            }
+            if (!set_of_paths.empty()) { // sample a path from the set
+                uniform_int_distribution<int> d2(0, static_cast<int>(set_of_paths.size()) - 1);
+                start_end = set_of_paths[d2(gen)];
+                break;
+            }
+            attempts += 1;
+            if (attempts > 10) {
+                // pick a random path after too many attempts
+                while (true) {
+                    uniform_int_distribution<int> d3(0, (*distances_ptr).size() - 1);
+                    auto i = d3(gen);
+                    auto j = d3(gen);
+                    if ((*distances_ptr)[i][j] < inf && (*distances_ptr)[i][j] > 0) {
+                        start_end = make_pair(i, j);
+                        break;
+                    }
+                    attempts += 1;
+                    if (attempts > 1000) {
+                        throw std::invalid_argument(
+                                "Could not find a path in 1000 attempts.  This should never happen.");
+                    }
+                }
+                break;
+            }
+        }
+        return start_end;
+    }
+
     ShortestPathTask(std::mt19937 &gen,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
@@ -114,56 +173,7 @@ public:
         if (start != -1 && end != -1) {
             start_end = make_pair(start, end);
         } else {
-            int attempts = 0;
-            // could avoid while loop by making set of sets of paths and sampling that but may not as fast?
-            while (true) {
-                // sample a path of length between min_path_length and max_path_length
-                auto sampled_path_length = d1(gen) + min_path_length;
-                // get all paths of that length
-                auto set_of_paths = vector<pair<int, int> >();
-                if (start != -1 && end == -1) {
-                    // known start
-                    for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
-                        // +1 because distance is path length - 1
-                        if ((*distances_ptr)[start][j] + 1 == sampled_path_length) {
-                            set_of_paths.push_back(make_pair(start, j));
-                        }
-                    }
-                } else {
-                    for (int i = 0; i < static_cast<int>((*distances_ptr).size()); i++) {
-                        for (int j = 0; j < static_cast<int>((*distances_ptr)[i].size()); j++) {
-                            if ((*distances_ptr)[i][j] + 1 == sampled_path_length) {
-                                set_of_paths.push_back(make_pair(i, j));
-                            }
-                        }
-                    }
-                }
-                if (set_of_paths.size() > 0) {
-                    // sample a path from the set
-                    uniform_int_distribution<int> d2(0, set_of_paths.size() - 1);
-                    start_end = set_of_paths[d2(gen)];
-                    break;
-                }
-                attempts += 1;
-                if (attempts > 10) {
-                    // pick a random path after too many attempts
-                    while (true) {
-                        uniform_int_distribution<int> d3(0, (*distances_ptr).size() - 1);
-                        auto i = d3(gen);
-                        auto j = d3(gen);
-                        if ((*distances_ptr)[i][j] < inf && (*distances_ptr)[i][j] > 0) {
-                            start_end = make_pair(i, j);
-                            break;
-                        }
-                        attempts += 1;
-                        if (attempts > 1000) {
-                            throw std::invalid_argument(
-                                    "Could not find a path in 1000 attempts.  This should never happen.");
-                        }
-                    }
-                    break;
-                }
-            }
+            start_end = sample_start_end(gen, distances_ptr, max_path_length, min_path_length, d1, start);
         }
         this->start = start_end.first;
         this->end = start_end.second;
@@ -351,6 +361,80 @@ public:
 };
 
 
+class BFSTask : public Task {
+public:
+    int start, end = -1;
+    vector<int> path;
+    unique_ptr<BFSScratchPad> scratchpad;
+
+    template<typename D>
+    BFSTask(std::mt19937 &gen,
+            const unique_ptr<Graph<D> > &g_ptr,
+            const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
+                     const unique_ptr<vector<vector<int> > > &distances_ptr,
+                     const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
+                     const optional<vector<float>> &task_sample_dist = nullopt,
+                     const bool use_query_invariance = false,
+            const bool sort_adjacency_lists = false,
+            const bool use_unique_depth_markers = true) {
+
+        // define d1
+        std::discrete_distribution<int> d1;
+        if (!task_sample_dist.has_value()) {
+            // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
+            vector<float> uweights(max_path_length - min_path_length + 1, 1.0); // uniform distribution
+            d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
+        } else {
+            d1 = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end());
+        }
+
+        auto start_end = ShortestPathTask::sample_start_end(gen, distances_ptr, max_path_length, min_path_length, d1, start);
+
+        this->start = start_end.first;
+        this->end = start_end.second;
+
+        auto scratchpad = BFSScratchPad(this->start, this->end, g_ptr,
+                                node_shuffle_map, sort_adjacency_lists, use_unique_depth_markers);
+        this->scratchpad = make_unique<BFSScratchPad>(scratchpad );
+    }
+
+
+    void tokenize(
+            const map<std::string, int> &dictionary,
+            const vector<int> &node_shuffle_map,
+            const map<std::string, int> pos_dictionary,
+            std::mt19937 &gen) {
+
+        scratchpad->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
+        // copy over tokenized values
+        Matrix<int> tokenized_task_inputs(scratchpad->tokenized_inputs);  // input part
+        Matrix<int> tokenized_task_targets(scratchpad->tokenized_targets);  // defines multi-label targets
+        this->tokenized_task_inputs = tokenized_task_inputs;
+        this->tokenized_task_targets = tokenized_task_targets;
+
+        // Matrix<int> tokenized_query_inputs;
+        // Matrix<int> tokenized_query_pos;
+
+
+        auto query_start_marker = dictionary.at("/");
+        auto query_end_marker = dictionary.at("?");
+
+        auto query_size = 4; // q_start, start_node, end_node, q_end
+        auto task_size = static_cast<int>(path.size()) + 2; // t_start, path nodes, t_end
+
+
+        tokenized_query_inputs.resize(query_size);
+
+        // query tokenization
+        tokenized_query_inputs(0) = query_start_marker;
+        tokenized_query_inputs(1) = node_shuffle_map.at(path[0]); // start
+        tokenized_query_inputs(2) = node_shuffle_map.at(path[path.size() - 1]); // end node
+        tokenized_query_inputs(3) = query_end_marker;
+        set_tokenized_pos(query_size, task_size, pos_dictionary);
+    }
+};
+
+
 class CenterTask : public Task {
 public:
     vector<int> new_query;
@@ -465,7 +549,6 @@ public:
 
         set_tokenized_pos(query_size, task_size, pos_dictionary);
     }
-
 
 };
 

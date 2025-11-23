@@ -26,6 +26,9 @@ public:
         }
     }  // Constructor for 2D matrix
 
+    // copy constructor
+    Matrix(const Matrix<T> &other) : rows_(other.rows_), cols_(other.cols_), data_(other.data_) {}
+
     void resize(size_t size, optional<T> init = nullopt) {
         rows_ = size;
         cols_ = 1;
