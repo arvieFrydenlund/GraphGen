@@ -19,18 +19,22 @@ Testing generation functions and pybind compile.
 """
 
 
-def _graph_print(args, token_dict, pos_dict, concat_edges=False, duplicate_edges=False,
+def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=False, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
-                 scratchpad_type='DFS', use_unique_depth_markers=True,
+                 scratchpad_type='none', use_unique_depth_markers=True,
+                 scratchpad_as_prefix=False, no_graph=False,
                  align_prefix_front_pad=True, use_graph_invariance=True, use_task_structure=True,
                  use_graph_structure=True,
                  batch_size=3):
+    args.task_type = task_type
     args.concat_edges = concat_edges
     args.duplicate_edges = duplicate_edges
     args.include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization
     args.query_at_end = query_at_end
     args.num_thinking_tokens = num_thinking_tokens
     args.scratchpad_type = scratchpad_type
+    args.scratchpad_as_prefix = scratchpad_as_prefix
+    args.no_graph = no_graph
     args.use_unique_depth_markers = use_unique_depth_markers
     args.align_prefix_front_pad = align_prefix_front_pad
     args.use_graph_invariance = use_graph_invariance

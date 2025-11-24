@@ -362,6 +362,9 @@ public:
 
 
 class BFSTask : public Task {
+    /*
+     * The task is to generate the scratchpad-only
+     */
 public:
     int start, end = -1;
     vector<int> path;
@@ -396,6 +399,8 @@ public:
         auto scratchpad = BFSScratchPad(this->start, this->end, g_ptr,
                                 node_shuffle_map, sort_adjacency_lists, use_unique_depth_markers);
         this->scratchpad = make_unique<BFSScratchPad>(scratchpad );
+        auto path(this->scratchpad->path);
+        this->path = path;
     }
 
 
@@ -412,17 +417,11 @@ public:
         this->tokenized_task_inputs = tokenized_task_inputs;
         this->tokenized_task_targets = tokenized_task_targets;
 
-        // Matrix<int> tokenized_query_inputs;
-        // Matrix<int> tokenized_query_pos;
-
-
         auto query_start_marker = dictionary.at("/");
         auto query_end_marker = dictionary.at("?");
 
         auto query_size = 4; // q_start, start_node, end_node, q_end
         auto task_size = static_cast<int>(path.size()) + 2; // t_start, path nodes, t_end
-
-
         tokenized_query_inputs.resize(query_size);
 
         // query tokenization

@@ -547,16 +547,22 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
             s += f'TgtIdx:'
+
+            task_start_indices_name = 'true_task_start_indices'
+            if b_n["scratchpad_as_prefix"]: # sanity check that the task indicies do not include scratchpad now
+                task_start_indices_name = 'task_start_indices'
+
             s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
             if scratch_pad_gather_indices is not None:
                 s += f'SP Idx:'
                 s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
-        s += f'EdgIdx:'
-        edge_offset = b_n['graph_edge_start_indices'][b]
-        if not b_n['concat_edges']:
-            edge_offset += 2
-        s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=edge_offset,
-                           skip = 0 if b_n['concat_edges'] else 2)
+        if graph_edge_gather_indices is not None:
+            s += f'EdgIdx:'
+            edge_offset = b_n['graph_edge_start_indices'][b]
+            if not b_n['concat_edges']:
+                edge_offset += 2
+            s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=edge_offset,
+                               skip = 0 if b_n['concat_edges'] else 2)
         if graph_node_gather_indices is not None:
             s += f'NodIdx:'
             s += pprint_tensor(b, np.expand_dims(graph_node_gather_indices, -1), None, pad=-1, offset1=b_n['graph_node_start_indices'][b])
@@ -565,7 +571,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         s += pprint_tensor(0, a, None, pad=-1,)
         print(s)
 
-        if print_dist:
+        if print_dist and b_n["distances"] is not None:
             pprint_distance(b_n["distances"], min_node=b_n["min_vocab"], max_node=b_n["max_vocab"], idxs=[b], use_node_ids=False)
 
     if b_n['align_prefix_front_pad']:
@@ -573,10 +579,11 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         print(src_tokens[:3, :, 0])
 
     # print out the shape of distance matrix, and ground_truths_gather_distances
-    distances = b_n["distances"]
-    print(f'Distances shape: {distances.shape}')
-    ground_truths_gather_distances = b_n["ground_truths_gather_distances"]
-    print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
+    if b_n["distances"] is not None:
+        distances = b_n["distances"]
+        print(f'Distances shape: {distances.shape}')
+        ground_truths_gather_distances = b_n["ground_truths_gather_distances"]
+        print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
 
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',
