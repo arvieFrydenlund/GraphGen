@@ -50,7 +50,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
     args.task_type = 'shortest_path'
     args.scratchpad_type='bfs'
     b_n = generator.get_graph(args, batch_size=batch_size)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+    # generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
     # construct inputs to verify_bfs_gens
     distances = b_n['distances']
@@ -66,18 +66,14 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         scratchpad_length = b_n['scratch_pad_lengths'][b] - 1 # exclude start of scatchpad
         gens[b, :scratchpad_length] = b_n['src_tokens'][b,
                                         scratchpad_start:scratchpad_start + scratchpad_length, 0]
-
-        if b > batch_size // 2:
+        if b >= batch_size // 2:
             # add some errors
             r = np.random.randint(0, scratchpad_length)
             gens[b, r] = gens[b, r] + 1  # wrong node id
 
-    print(queries)
-    print(gens)
-
     out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
-    print('BFS verify output:')
-    print(out)
+    print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+
 
 
 
