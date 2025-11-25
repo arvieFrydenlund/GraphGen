@@ -126,13 +126,17 @@ inline py::array_t<bool, py::array::c_style> is_invalid_example(
     return arr;
 }
 
-inline bool task_type_check(const std::string &task_type) {
-    // Check if the task type is valid
-    static const std::set<std::string> valid_task_types = {
-            "shortest_path", "path", "center", "centroid", "none", "None",
-    };
-    return valid_task_types.find(task_type) != valid_task_types.end();
-}
+
+/* ************************************************************************
+ *  Dictionary for mapping vocabulary to ids and mapping positions to ids
+ *  ***********************************************************************/
+
+map<std::string, int> dictionary = {};  // token to idx map
+int dictionary_num_special = 0;  // special tokens are the first N tokens in the dictionary
+int dictionary_num_extra = 0;  //extra tokens
+int dictionary_max_vocab = 0;  //then the rest are vocab tokens up to max_vocab
+string dictionary_extra_after_symbol = "D";  // then rest are special extras of indeterminate number of D1, D2, ...
+map<std::string, int> pos_dictionary = {}; // token to idx map
 
 
 /* ************************************************
@@ -660,12 +664,6 @@ PYBIND11_MODULE(generator, m) {
           "numpy [N] True if the graph is in the validation or test sets, False otherwise\n",
           py::arg("hashes"));
 
-    m.def("task_type_check", &task_type_check,
-          "Checks if the task type is valid.\n"
-          "Parameters:\n\t"
-          "task_type: str",
-          py::arg("task_type"));
-
     // dictionary/vocabulary
     m.def("set_dictionary", &set_dictionary,
           "Sets the dictionary/vocabulary of token to token_idx.\n"
@@ -732,6 +730,31 @@ PYBIND11_MODULE(generator, m) {
           "Returns:\n\t"
           "is_valid [batch_size], int, -1 if not valid, 0 if valid but not shortest, 1 if valid and shortest.\n",
           py::arg("distances"), py::arg("queries"), py::arg("paths"), py::arg("path_lengths"));
+
+    m.def("verify_bfs_gen", &BFSScratchPad::verify_bfs_gen<int>,
+          "Verifies that any predicted paths are valid given the distance matrices.\n"
+          "Parameters:\n\t"
+          "distances: [vocab_size, vocab_size]\n\t"
+          "gen: [max_path_length]\n\t"
+          "Returns:\n\t"
+          "is_valid bool, int,"
+          " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
+          py::arg("distance"),  py::arg("start"),  py::arg("end"), py::arg("gen"),
+          py::arg("check_special_tokens") = true);
+
+    m.def("verify_bfs_gens", &BFSScratchPad::verify_bfs_gens<int>,
+          "Batch version. "
+          "Verifies that any predicted paths are valid given the distance matrices.\n"
+          "Parameters:\n\t"
+          "distances: [batch_size, vocab_size, vocab_size]\n\t"
+          "queries: [batch_size, 2] of start, end\n\t"
+          "gens: [batch_size, max_path_length]\n\t"
+          "path_lengths: [batch_size]\n\t"
+          "Returns:\n\t"
+          "is_valid [batch_size], int, "
+          " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
+          py::arg("distances"), py::arg("queries"), py::arg("gens"), py::arg("path_lengths"),
+          py::arg("check_special_tokens") = true);
 
     m.def("balanced_graph_size_check", &balanced_graph_size_check,
           "Check that the balanced graph size is valid.  Will fail assert otherwise.",

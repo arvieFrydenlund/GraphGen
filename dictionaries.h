@@ -21,11 +21,11 @@ using namespace py::literals;
  *  Dictionary for mapping vocabulary to ids
  *  ***********************************************/
 
-static map<std::string, int> dictionary; // token to idx map
-static int dictionary_num_special = 0;  // special tokens are the first N tokens in the dictionary
-static int dictionary_num_extra = 0;  //extra tokens
-static int dictionary_max_vocab = 0;  //then the rest are vocab tokens up to max_vocab
-static string dictionary_extra_after_symbol = "D";  // then rest are special extras of indeterminate number of D1, D2, ...
+extern map<std::string, int> dictionary; // token to idx map
+extern int dictionary_num_special;  // special tokens are the first N tokens in the dictionary
+extern int dictionary_num_extra;  //extra tokens
+extern int dictionary_max_vocab;  //then the rest are vocab tokens up to max_vocab
+extern string dictionary_extra_after_symbol;  // then rest are special extras of indeterminate number of D1, D2, ...
 
 inline void set_dictionary(py::dict &py_dictionary, const bool verbose = false,
                            const int max_num_nodes = -1, const int extra_after=-1, const string extra_after_symbol="D") {
@@ -137,6 +137,10 @@ inline pair<int, int> get_dictionary_vocab_limits() {
     return {dictionary_num_special, dictionary_max_vocab};
 }
 
+inline string get_dictionary_extra_after_symbol() {
+    return dictionary_extra_after_symbol;
+}
+
 inline bool is_valid_extra_dictionary_symbol(const int cur_extra){
     return cur_extra < dictionary_num_extra;
 }
@@ -148,7 +152,7 @@ inline bool is_valid_extra_dictionary_symbol(const string &extra){
  *  Dictionary for mapping positions to ids
  *  ***********************************************/
 
-static map<std::string, int> pos_dictionary; // token to idx map
+extern map<std::string, int> pos_dictionary; // token to idx map
 
 inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = false) {
     if (verbose) {

@@ -213,6 +213,119 @@ public:
         }
     }
 
+    static bool depth_check(const int id, const int cut_depth, const map<int, std::string> reverse_dict){
+        const auto &pred = reverse_dict.at(id);
+        const auto &extra_after_symbol = get_dictionary_extra_after_symbol();
+        if (pred == extra_after_symbol || pred == extra_after_symbol + std::to_string(cut_depth)){
+            return true;
+        }
+        return false;
+    }
+
+    template<typename T>
+    static int verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
+                              const int start, const int end, const vector<int> &gen,
+                              const bool check_special_tokens = true) {
+        /*
+         * -1 if special tokens are wrong, 0 if not a valid BFS gen, 1 if valid BFS gen
+         *
+         * D0    7     [     24    20    ]     D1    24    [     16    ]     20    [     5     ]
+         * D2    16    [     ]     5     [     1     15    ]     D3    1     [     14    ]     15    [     6     ]
+         * D4    14    [     12    ]     6     [     18    ]     D5    12    [     23    ]     18    [     3     ]
+         * D6    23    [     10    ]     3     [     ]     D7    10    [     2     ]     D8    2     [     11    ]
+         * D9    11    [     17    8     ]     D10   17    [     9     22    ]     8     [     ]
+         */
+
+        map<int, std::string> reverse_dict;
+        int adjacency_start_idx = -1;
+        int adjacency_end_idx = -1;
+        if (check_special_tokens){
+            auto dict = get_dictionary();
+            for (const auto &item : dict) {
+                reverse_dict[item.second] = item.first;
+            }
+            adjacency_start_idx = dict.at("[");
+            adjacency_end_idx =  dict.at("]");
+        }
+
+        auto cur_depth = 0;
+        auto cur_q = queue<int>();
+        cur_q.push(start);
+        auto next_q = queue<int>();
+        bool found = false;
+
+        int cur = 0;
+        while (cur < gen.size() and !found and !(cur_q.empty() and next_q.empty())) {
+            if (check_special_tokens and !depth_check(gen[cur], cur_depth, reverse_dict)) {
+                return -4;  // depth is incorrect
+            }
+            cur++;
+            while (cur < gen.size() and !found and !cur_q.empty()) {
+                auto cur_node = cur_q.front();
+                cur_q.pop();
+                if (cur < gen.size() and gen[cur] != cur_node) {
+                    return -2;  // adjacency head is incorrect
+                }
+                cur++;
+                if (cur < gen.size() and check_special_tokens and gen[cur] != adjacency_start_idx) {
+                    return -3;  // adjacenct start is incorrect
+                }
+                cur++;
+                while (cur < gen.size() and gen[cur] != adjacency_end_idx) {
+                    auto nbr = gen[cur];
+                    if (cur_node >= distances.shape(0) || nbr >= distances.shape(1) ||
+                        distances.at(cur_node, nbr) != 1) {
+                        return -1;  // distance is not adjacent
+                    }
+                    next_q.push(nbr);
+                    if (nbr == end) {
+                        found = true;
+                    }
+                    cur++;
+                }
+                if (cur < gen.size() and check_special_tokens and gen[cur] != adjacency_end_idx) {
+                    return -3;  // adjacency end is incorrect
+                }
+                cur++;
+            }
+            cur_depth++;
+            std::swap(cur_q, next_q);
+        }
+        return static_cast<int>(found);  // 0 not found, 1 found
+    }
+
+    template<typename T>
+    static py::array_t<int, py::array::c_style> verify_bfs_gens(py::array_t<T, py::array::c_style> &distances,
+                                                                py::array_t<T, py::array::c_style> &queries,
+                                                                py::array_t<T, py::array::c_style> &gens,
+                                                                py::array_t<T, py::array::c_style> &lengths,
+                                                                const bool check_special_tokens = true) {
+        auto batch_size = gens.shape(0);
+        auto out = py::array_t<int, py::array::c_style>(static_cast<int>(batch_size));
+        out[py::make_tuple(py::ellipsis())] = -5; // initialize array
+        auto ra = out.mutable_unchecked();
+        for (auto b = 0; b < batch_size; b++) {
+            auto start = queries.at(b, 0); //paths.at(b, 0);
+            auto end = queries.at(b, 1); //paths.at(b, lengths.at(b) - 1);
+            auto gen = vector<int>();
+            for (int i = 0; i < lengths.at(b); i++) {
+                gen.push_back(gens.at(b, i));
+            }
+            // get distance slice
+            auto distances_slice = py::array_t<T, py::array::c_style>({distances.shape(1), distances.shape(2)});
+            auto rd = distances_slice.mutable_unchecked();
+            auto bd = distances.unchecked();
+            for (int i = 0; i < distances.shape(1); i++) {
+                for (int j = 0; j < distances.shape(2); j++) {
+                    rd(i, j) = bd(b, i, j);
+                }
+            }
+            auto res = verify_bfs_gen(distances_slice, start, end, gen, check_special_tokens);
+            ra(b) = res;
+        }
+        return out;
+    }
+
 };
 
 class DFSScratchPad : public ScratchPad {

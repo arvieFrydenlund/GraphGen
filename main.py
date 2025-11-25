@@ -45,6 +45,43 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20):
+    args.batch_size = batch_size
+    args.task_type = 'shortest_path'
+    args.scratchpad_type='bfs'
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+    # construct inputs to verify_bfs_gens
+    distances = b_n['distances']
+    queries = np.zeros((batch_size, 2), dtype=np.int32)
+    lengths = b_n['scratch_pad_lengths']  # add noise?
+    gens = np.zeros((batch_size, lengths.max()), dtype=np.int32)
+    for b in range(batch_size):
+        query_start = b_n['query_start_indices'][b] + 1
+        queries[b, 0] = b_n['src_tokens'][b, query_start, 0]
+        queries[b, 1] = b_n['src_tokens'][b, query_start + 1, 0]
+
+        scratchpad_start = b_n['scratch_pad_start_indices'][b] + 1
+        scratchpad_length = b_n['scratch_pad_lengths'][b] - 1 # exclude start of scatchpad
+        gens[b, :scratchpad_length] = b_n['src_tokens'][b,
+                                        scratchpad_start:scratchpad_start + scratchpad_length, 0]
+
+        if b > batch_size // 2:
+            # add some errors
+            r = np.random.randint(0, scratchpad_length)
+            gens[b, r] = gens[b, r] + 1  # wrong node id
+
+    print(queries)
+    print(gens)
+
+    out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
+    print('BFS verify output:')
+    print(out)
+
+
+
+
 def _t_single_graph():
     # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
     d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
@@ -285,7 +322,9 @@ if __name__ == '__main__':
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
-    _graph_print(args, token_dict, pos_dict, batch_size=3)
+    # _graph_print(args, token_dict, pos_dict, batch_size=3)
+
+    _t_scratchpad_validation(args, token_dict, pos_dict)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
