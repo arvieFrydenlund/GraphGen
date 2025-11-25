@@ -45,7 +45,7 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 
-def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20):
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=40):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type='bfs'
