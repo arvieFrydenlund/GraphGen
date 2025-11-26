@@ -221,6 +221,29 @@ public:
         }
     }
 
+    Instance(std::mt19937 &gen,
+             const map<std::string, int> &dictionary,
+             const int min_vocab, int max_vocab,
+            // task parameters
+             const string &task_type, const string scratchpad_type,
+             const bool scratchpad_as_prefix){
+        /*
+         * For non-graph instances
+         */
+
+        this->scratchpad_as_prefix = scratchpad_as_prefix;
+        no_graph = true;
+        use_task_structure = false;
+
+        N = -1;
+        E = -1;
+        g_ptr = nullptr;
+        graph_tokenizer = nullptr;
+        positions_ptr = nullptr;
+
+
+    }
+
     void tokenize(
             /*
              * Creates the input sequence, the target sequence, and the positional embeddings
@@ -827,25 +850,38 @@ public:
 
         // distances and ground truths batching
 
-        auto bd = batch_distances<int>();  // do node shuffling inside
-        d["distances"] = bd;  // (B, max_vocab, max_vocab), where max_vocab is just up to node range (not extra symbols)
-        d["hashes"] = hash_distance_matrix<int>(bd);
+        if (instances[0].graph_tokenizer) {
+            auto bd = batch_distances<int>();  // do node shuffling inside
+            d["distances"] = bd;  // (B, max_vocab, max_vocab), where max_vocab is just up to node range (not extra symbols)
+            d["hashes"] = hash_distance_matrix<int>(bd);
 
-        auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
-        if (instances[0].graph_tokenizer->is_direct_ranking) {
-            d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
-        }else{
-            d["ground_truths_gather_indices"] = py::none();
-        }
-        d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+            auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
+            if (instances[0].graph_tokenizer->is_direct_ranking) {
+                d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
+            } else {
+                d["ground_truths_gather_indices"] = py::none();
+            }
+            d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
 
-        if (instances[0].no_graph) {
+            if (instances[0].no_graph) {
+                d["graph_edge_start_indices"] = py::none();
+                d["graph_edge_lengths"] = py::none();
+                d["graph_edge_gather_indices"] = py::none();
+                d["graph_node_start_indices"] = py::none();
+                d["graph_node_lengths"] = py::none();
+                d["graph_node_gather_indices"] = py::none();
+                d["ground_truths_gather_indices"] = py::none();
+            }
+        } else {
+            d["hashes"] = py::none();  // TODO has by tokenization
+
             d["graph_edge_start_indices"] = py::none();
             d["graph_edge_lengths"] = py::none();
             d["graph_edge_gather_indices"] = py::none();
             d["graph_node_start_indices"] = py::none();
             d["graph_node_lengths"] = py::none();
             d["graph_node_gather_indices"] = py::none();
+            d["distances"] = py::none();
             d["ground_truths_gather_indices"] = py::none();
         }
 

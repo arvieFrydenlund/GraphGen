@@ -551,4 +551,17 @@ public:
 
 };
 
+
+class KHopsTask : public Task {
+public:
+    int sampled_k;
+    int max_tokens;
+    bool is_generative;
+
+    KHopsTask() {
+    }
+
+
+};
+
 #endif //GRAPHGEN_TASKS_H
