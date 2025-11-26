@@ -846,7 +846,6 @@ public:
             d["graph_node_start_indices"] = py::none();
             d["graph_node_lengths"] = py::none();
             d["graph_node_gather_indices"] = py::none();
-            d["distances"] = py::none();
             d["ground_truths_gather_indices"] = py::none();
         }
 
