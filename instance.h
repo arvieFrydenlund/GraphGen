@@ -226,13 +226,14 @@ public:
              const int min_vocab, int max_vocab,
             // task parameters
              const string &task_type, const string scratchpad_type,
+             const vector<int> &segment_lengths, const bool right_side_connect,  // khops gen
              const bool scratchpad_as_prefix){
         /*
          * For non-graph instances
          */
 
         this->scratchpad_as_prefix = scratchpad_as_prefix;
-        no_graph = true;
+        no_graph = true;  // override no_graph since this is a non-graph task
         use_task_structure = false;
 
         N = -1;
@@ -241,7 +242,13 @@ public:
         graph_tokenizer = nullptr;
         positions_ptr = nullptr;
 
+        if (task_type == "khops_gen"){
+            task = make_unique<KHopsGenTask>(gen, min_vocab, max_vocab, segment_lengths, right_side_connect);
+        }
 
+        if (task) {
+            task->tokenize(dictionary, node_shuffle_map, pos_dictionary, gen);
+        }
     }
 
     void tokenize(
@@ -559,6 +566,7 @@ public:
 
         instances = vector<Instance<D> >();
     }
+
 
     void add(Instance<D> &instance) {
         instances.push_back(std::move(instance));

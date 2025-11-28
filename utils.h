@@ -121,7 +121,7 @@ public:
         return min_max;
     }
 
-    void uniform_random_partition(int Q, int N, vector<int> &segment_lengths, std::mt19937 &gen, const bool shuffle=true){
+    vector<int> uniform_random_partition(int Q, int N, std::mt19937 &gen, const bool shuffle=true){
         /*
         file:///h/arvie/Downloads/Partitioning_paper1.pdf
         @article{loceyrandom,
@@ -130,7 +130,7 @@ public:
         }
          */
         clear_if_needed();
-        segment_lengths.clear();
+        auto segment_lengths = vector<int>();
         int _min = min_max(Q, N);
         int _max = Q - N + 1;
         int total = partition_QN(Q, N);
@@ -160,14 +160,15 @@ public:
         if (shuffle){
             std::shuffle(segment_lengths.begin(), segment_lengths.end(), gen);
         }
+        return segment_lengths;
     }
 
-    void non_uniform_random_partition(int Q, int N, vector<int> &segment_lengths, std::mt19937 &gen, const bool shuffle=true) {
+    vector<int>  non_uniform_random_partition(int Q, int N, std::mt19937 &gen, const bool shuffle=true) {
         /*
          * A faster non-uniform version
          */
         clear_if_needed();
-        segment_lengths = vector<int>(N, 1);
+        auto segment_lengths = vector<int>(N, 1);
         int remaining_length = Q - N;
         for (int i = 0; i < N - 1; i++) {
             if (remaining_length <= 0) {
@@ -184,6 +185,7 @@ public:
         } else {
             std::sort(segment_lengths.begin(), segment_lengths.end());
         }
+        return segment_lengths;
     }
 
 };

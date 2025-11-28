@@ -150,8 +150,7 @@ void set_int_partition_cache_size(const int suggested_cache_size=1000000000, con
 }
 
 py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, const bool shuffle=true){
-    vector<int> segment_lengths;
-    sample_int_partition.uniform_random_partition(Q, N, segment_lengths, gen, shuffle);
+    auto segment_lengths = sample_int_partition.uniform_random_partition(Q, N, gen, shuffle);
     py::array_t<int, py::array::c_style> arr(static_cast<int>(segment_lengths.size()));
     auto ra = arr.mutable_unchecked();
     for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++){
@@ -626,6 +625,49 @@ inline py::dict balanced_n(
                                                    use_graph_invariance, use_query_invariance,
                                                    use_task_structure, use_graph_structure
         );
+        batched_instances.add(instance);
+    }
+    return batched_instances.package_for_model(dictionary, pos_dictionary);
+}
+
+
+inline py::dict khops_gen_n(const int min_k, const int max_k,
+                            const int min_prefix_length, const int max_prefix_length,
+                            const bool right_side_connect=true, const string &partition_method="uniform",
+                            int min_vocab = -1, int max_vocab = -1,
+                            const int batch_size = 256,
+                            const int num_thinking_tokens = 0,
+                            const string &scratchpad_type="none",
+                            const bool scratchpad_as_prefix = false,
+                            const bool is_flat_model = true,
+                            const bool align_prefix_front_pad = false,
+                            const py::kwargs &kwargs = py::kwargs()){
+
+    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
+    auto m = check_and_set_vocab_limits(1, 1, min_vocab, max_vocab);
+    min_vocab = m[2], max_vocab = m[3];
+
+    auto batched_instances = BatchedInstances<boost::directedS>(  // pretend its directed
+            "khops_gen", "khops_gen",
+            min_vocab, max_vocab,
+            false, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+
+    for (int b = 0; b < batch_size; b++){
+        int k = uniform_int_distribution<int>(min_k, max_k)(gen) + 1;
+        int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
+        vector<int> segment_lengths;
+        if (partition_method == "uniform"){
+            segment_lengths = sample_int_partition.uniform_random_partition(prefix_length - k, k, gen, true);
+            if (segment_lengths.size() != k){
+                segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
+            }
+        } else {
+            segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
+        }
+        auto instance = Instance<boost::directedS>(gen, dictionary, min_vocab, min_vocab,
+                                                   "khops_gen", scratchpad_type,
+                                                   segment_lengths, right_side_connect,
+                                                   scratchpad_as_prefix);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
