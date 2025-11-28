@@ -25,13 +25,13 @@ class SampleIntPartition(object):
         self.suggested_cache_size = suggested_cache_size
         self.max_cache_size = suggested_cache_size * max_cache_size
 
-    def print(self):
+    def __str__(self):
         s = ''
         if len(self.QK_cache):
             s += f"QK cache size: {len(self.QK_cache)},\t"
         s += f"QN cache size: {len(self.QN_cache)},\t"
         s += f"QNK cache size: {len(self.QNK_cache)}"
-        print(s)
+        return s
 
     def qk_cache(self, Q, K, result):
         self.QK_cache[(Q, K)] = result
@@ -208,15 +208,11 @@ class KHopsGen(object):
 
     def get_segment(self, cur_value, segment_len, is_last=False):
         """
-        return a list of segement_size elements from vocabulary where cur_value is the last or second last element
+        return a list of segment_size elements from vocabulary where cur_value is the last or second last element
         and no other element is equal to cur_value
-        :param cur_value:
-        :param segment_size:
-        :param vocabulary:
         :return:
         """
         cur_vocab = self.vocabulary.copy() * 1./(len(self.vocabulary) - 1)
-
         cur_vocab[cur_value - self.min_value] = 0.  # get id of cur_value in vocabulary
         segment = np.random.choice(np.arange(self.min_value, self.max_value + 1),
                                    size=segment_len, replace=True, p=cur_vocab)
@@ -246,7 +242,25 @@ class KHopsGen(object):
             prefix = segments
         return prefix, ground_truths, k, prefix_length
 
-
+    def verify(self, prefix, ground_truths):
+        """
+        Verify that the prefix corresponds to the ground_truths for k hops
+        """
+        reconstruct = []
+        cur_value = prefix[-1]
+        reconstruct.append(cur_value)
+        cur_idx = len(prefix) - 2
+        while cur_idx >= 0:
+            if prefix[cur_idx] == cur_value:
+                if self.right_side_connect:
+                    cur_value = prefix[cur_idx + 1]
+                else:
+                    cur_value = prefix[cur_idx - 1]
+                    cur_idx -= 1 # skip one more since cur_value is before
+                reconstruct.append(cur_value)
+            cur_idx -= 1
+        reconstruct = reconstruct[::-1]
+        return reconstruct == ground_truths
 
 
 def _t_khops_gen(seed=42):
@@ -262,23 +276,24 @@ def _t_khops_gen(seed=42):
 
     segments = pf.uniform_random_partition(247, 15)
     print(segments, sum(segments), len(segments))
-    pf.print()
+    print(pf)
 
     segments = pf.uniform_random_partition(300, 10)
     print(segments, sum(segments), len(segments))
-    pf.print()
+    print(pf)
 
 
     segments = pf.uniform_random_partition(250, 11)
     print(segments, sum(segments), len(segments))
-    pf.print()
+    print(pf)
 
-    khops = KHopsGen(min_k=5, max_k=7, min_value=0, max_value=10, min_prefix_length=22, max_prefix_length=50,
-                     right_side_connect=True, partition_method='uniform', partition_func=pf, seed=seed)
+    khops = KHopsGen(min_k=5, max_k=7, min_value=0, max_value=10, min_prefix_length=22, max_prefix_length=300,
+                     right_side_connect=False, partition_method='uniform', partition_func=pf, seed=seed)
 
-    for i in range(100):
-         prefix, ground_truths, k, prefix_length = khops.generate(flat=False)
-         print(prefix, ground_truths)
+    for i in range(1000):
+        prefix, ground_truths, k, prefix_length = khops.generate(flat=False)
+        print(prefix, ground_truths, khops.verify([item for sublist in prefix for item in sublist], ground_truths))
+        print(pf)
 
 if __name__ == '__main__':
     _t_khops_gen()
