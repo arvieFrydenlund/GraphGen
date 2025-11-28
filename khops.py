@@ -1,25 +1,37 @@
 import numpy as np
 
+"""
+Prototype code for generating k-hop prefixes for use in language modeling tasks.
+"""
 
 class SampleIntPartition(object):
-    def __init__(self, seed=None, max_cache_size=10000000):
+    def __init__(self, seed=None, suggested_cache_size=1000000000, max_cache_size=10):
         """
-        cashes for partition functions
+        cashes for partition functions.
+        suggested_cache clears on first call, max_cache clears when size exceeds max_cache_size * suggested_cache_size.
         :param seed:
         """
         self.QK_cache = {}
         self.QN_cache = {}
         self.QNK_cache = {}
+        self.qk_needs_emptying = False  #  self.QK_cache.clear()
+        self.qn_needs_emptying = False
+        self.qnk_needs_emptying = False
+
         if seed is None:
             self.rng = np.random.default_rng()
         self.rng = np.random.default_rng(seed)
 
-        self.max_cache_size = max_cache_size
+        self.suggested_cache_size = suggested_cache_size
+        self.max_cache_size = suggested_cache_size * max_cache_size
 
     def print(self):
-        print("QK cache size:", len(self.QK_cache))
-        print("QN cache size:", len(self.QN_cache))
-        print("QNK cache size:", len(self.QNK_cache))
+        s = ''
+        if len(self.QK_cache):
+            s += f"QK cache size: {len(self.QK_cache)},\t"
+        s += f"QN cache size: {len(self.QN_cache)},\t"
+        s += f"QNK cache size: {len(self.QNK_cache)}"
+        print(s)
 
     def qk_cache(self, Q, K, result):
         self.QK_cache[(Q, K)] = result
@@ -36,7 +48,7 @@ class SampleIntPartition(object):
         if len(self.QNK_cache) > self.max_cache_size:
             self.QNK_cache.clear()
 
-    def partition_QK(self, Q, K):
+    def _partition_QK(self, Q, K):
         """
         Counts the number of partitions of Q where no part exceeds K.
         """
@@ -50,7 +62,12 @@ class SampleIntPartition(object):
         self.qk_cache(Q, K, result)
         return result
 
-    def partition_QN(self, Q, N):
+    def partition_QK(self, Q, K):
+        if len(self.QK_cache) < self.suggested_cache_size:
+            return self._partition_QK(Q, K)
+        return self._partition_QK(Q, K)
+
+    def _partition_QN(self, Q, N):
         """
         Counts the number of partitions of Q into N parts.
         """
@@ -66,7 +83,12 @@ class SampleIntPartition(object):
         self.qn_cache(Q, N, result)
         return result
 
-    def partition_QNK(self, Q, N, K):
+    def partition_QN(self, Q, N):
+        if len(self.QN_cache) < self.suggested_cache_size:
+            return self._partition_QN(Q, N)
+        return self._partition_QN(Q, N)
+
+    def _partition_QNK(self, Q, N, K):
         """
         Counts the number of partitions of Q into N parts where no part exceeds K.
         """
@@ -79,6 +101,11 @@ class SampleIntPartition(object):
         result = sum(self.partition_QNK(Q - i * K, N - i, K - 1) for i in range(N))
         self.qnk_cache(Q, N, K, result)
         return result
+
+    def partition_QNK(self, Q, N, K):
+        if len(self.QNK_cache) < self.suggested_cache_size:
+            return self._partition_QNK(Q, N, K)
+        return self._partition_QNK(Q, N, K)
 
     def _min_max(self, n, s):
         min_max = int(np.floor(float(n) / float(s)))
@@ -141,88 +168,45 @@ class SampleIntPartition(object):
 
 
 class KHopsGen(object):
-    def __init__(self, k, min_value, max_value, min_prefix_length, max_prefix_length, dictionary=None,
-                 right_side_connect=True, partition_method='non-uniform', partition_func=SampleIntPartition()):
-        self.k = k
-        self.min_value = min_value
-        self.max_value = max_value
-        self.min_prefix_length = min_prefix_length
-        self.max_prefix_length = max_prefix_length
+    def __init__(self, min_k, max_k, min_value, max_value, min_prefix_length, max_prefix_length, dictionary=None,
+                 right_side_connect=True, partition_method='uniform', partition_func=None, seed=None):
+        self.min_k, self.max_k = min_k, max_k
+        self.min_value, self.max_value = min_value, max_value
+        self.min_prefix_length, self.max_prefix_length = min_prefix_length, max_prefix_length
 
-        assert max_prefix_length - min_prefix_length >= 3 * k, "prefix_length must be long enough to accommodate k hops"
+        assert max_prefix_length - min_prefix_length >= 3 * max_k,\
+            "prefix_length must be long enough to accommodate k hops"
 
+        self.vocabulary = np.ones([max_value - min_value + 1])  # use this to sample from
         self.dictionary = dictionary
 
         self.right_side_connect = right_side_connect
 
         self.partition_method = partition_method
         self.partition_func = partition_func
-
-
-
-
-    def get_segment_lengths_uniform(self):
-        """
-        file:///h/arvie/Downloads/Partitioning_paper1.pdf
-        https://arxiv.org/pdf/2205.04988
-        https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/partition.html
-        https://stackoverflow.com/questions/12434300/finding-the-number-of-integer-partitions-given-a-total-a-number-of-parts-and-a
-        :return:
-        """
-        prefix_length = np.random.randint(self.min_prefix_length, self.max_prefix_length + 1)
-        segment_lengths = []
-
-        Q = prefix_length
-        N = self.k + 1
-
-        print(Q, N)
-
-        _min = self._min_max(Q, N)
-        _max = Q - N + 1
-        total = self.partition_func.partition_QN(Q, N)
-        which = np.random.randint(1, total)  # change from random range
-
-        while Q:
-            for K in range(_min, _max + 1):
-                count = self.partition_func.partition_QNK(Q, N, K)
-                if count >= which:
-                    count = self.partition_func.partition_QNK(Q, N, K - 1)
-                    break
-            segment_lengths.append(K)
-            Q -= K
-            if Q <= 0:  # a change for safety, then check if len(segment_lengths) < k
-                break
-            N -= 1
-            which -= count
-            _min = self._min_max(Q, N)
-            _max = K
-
-        return segment_lengths, prefix_length
+        if self.partition_func is None:
+            self.partition_func = SampleIntPartition(seed=seed)
+        if seed is None:
+            self.rng = np.random.default_rng()
+        else:
+            self.rng = np.random.default_rng(seed)
 
     def get_segment_lengths(self):
         """
-        A non-uniform version where each segment has at least length 2
-        :return:
+        Notice that segments sum to prefix_length - k, since we will add one token to each segment later
+        :return: list[int] length of k, int, int
         """
-        prefix_length = np.random.randint(self.min_prefix_length, self.max_prefix_length + 1)
-        # each segment has at least length 2 but then otherwise it is randomly distributed
-        remaining_length = prefix_length - 2 * (self.k + 1)
-        segment_lengths = [2] * (self.k + 1)
-        for i in range(segment_lengths - 1):
-            if remaining_length <= 0:
-                break
-            r = np.random.randint(0, remaining_length + 1)
-            segment_lengths[i] += r
-            remaining_length -= r
-        segment_lengths[-1] += remaining_length
-        np.random.shuffle(segment_lengths)
-        return segment_lengths, prefix_length
+        k = self.rng.integers(self.min_k, self.max_k + 1)
+        prefix_length = self.rng.integers(self.min_prefix_length, self.max_prefix_length + 1)
+        if self.partition_method == 'uniform':
+            segment_lengths = self.partition_func.uniform_random_partition(prefix_length - k, k)
+            if len(segment_lengths) < k:  # safety that should never happen
+                segment_lengths = self.partition_func.non_uniform_random_partition(prefix_length - k, k)
+        else:
+            segment_lengths = self.partition_func.non_uniform_random_partition(prefix_length - k, k)
+        return segment_lengths, k, prefix_length
 
-
-    def get_k(self):
-        return self.k
-
-    def get_segment(self, cur_value, segment_size):
+    def get_segment(self, cur_value, segment_len, is_last=False):
         """
         return a list of segement_size elements from vocabulary where cur_value is the last or second last element
         and no other element is equal to cur_value
@@ -231,18 +215,36 @@ class KHopsGen(object):
         :param vocabulary:
         :return:
         """
-        cur_vocab = np.ones([segment_size]) * 1./(segment_size - 1)
+        cur_vocab = self.vocabulary.copy() * 1./(len(self.vocabulary) - 1)
+
         cur_vocab[cur_value - self.min_value] = 0.  # get id of cur_value in vocabulary
         segment = np.random.choice(np.arange(self.min_value, self.max_value + 1),
-                                   size=segment_size - 1, replace=True, p=cur_vocab)
+                                   size=segment_len, replace=True, p=cur_vocab)
         segment = segment.tolist()
-        if self.right_side_connect:  # then the new cur_value is at the last position
-            segment.insert(-1, cur_value)
-        else:  # the new cur_value is the second last position
+        if is_last or self.right_side_connect:  # then the new cur_value is at the last position
             segment.append(cur_value)
+        else:  # the new cur_value is the second last position
+            segment.insert(-1, cur_value)
         return segment
 
-
+    def generate(self, flat=True):
+        segment_lengths, k, prefix_length = self.get_segment_lengths()
+        segments = []
+        ground_truths = []
+        cur_value = self.rng.integers(self.min_value, self.max_value + 1)
+        for i in range(len(segment_lengths)):
+            ground_truths.append(cur_value)
+            segment = self.get_segment(cur_value, segment_lengths[i], is_last = (i == len(segment_lengths) - 1))
+            if self.right_side_connect:
+                cur_value = segment[-2]
+            else:
+                cur_value = segment[-1]
+            segments.append(segment)  # easier to verify but we can just extend, or better make vector of correct size
+        if flat:
+            prefix = [item for sublist in segments for item in sublist]  # flatten
+        else:
+            prefix = segments
+        return prefix, ground_truths, k, prefix_length
 
 
 
@@ -271,7 +273,12 @@ def _t_khops_gen(seed=42):
     print(segments, sum(segments), len(segments))
     pf.print()
 
+    khops = KHopsGen(min_k=5, max_k=7, min_value=0, max_value=10, min_prefix_length=22, max_prefix_length=50,
+                     right_side_connect=True, partition_method='uniform', partition_func=pf, seed=seed)
 
+    for i in range(100):
+         prefix, ground_truths, k, prefix_length = khops.generate(flat=False)
+         print(prefix, ground_truths)
 
 if __name__ == '__main__':
     _t_khops_gen()
