@@ -14,9 +14,6 @@ class SampleIntPartition(object):
         self.QK_cache = {}
         self.QN_cache = {}
         self.QNK_cache = {}
-        self.qk_needs_emptying = False  #  self.QK_cache.clear()
-        self.qn_needs_emptying = False
-        self.qnk_needs_emptying = False
 
         if seed is None:
             self.rng = np.random.default_rng()
@@ -58,7 +55,7 @@ class SampleIntPartition(object):
             return 1
         if Q < 0 or K == 0:
             return 0
-        result = self.partition_QN(Q - K, K) + self.partition_QN(Q, K - 1)
+        result = self.partition_QK(Q - K, K) + self.partition_QK(Q, K - 1)
         self.qk_cache(Q, K, result)
         return result
 
@@ -120,7 +117,7 @@ class SampleIntPartition(object):
         title={Random integer partitions with restricted numbers of parts},
         author={Locey, Kenneth J}
         }
-        :return:
+        :return: list[int] size of N and sum of Q
         """
         segment_lengths = []
         _min = self._min_max(Q, N)
@@ -147,13 +144,12 @@ class SampleIntPartition(object):
 
     def non_uniform_random_partition(self, Q, N, shuffle=True):
         """
-        A faster  non-uniform version
-        :return:
+        A faster non-uniform version
+        :return: list[int] size of N and sum of Q
         """
-        # each segment has at least length 1 but then otherwise it is randomly distributed
+        segment_lengths = [1] * N  # each segment has at least length 1 but otherwise it is randomly distributed
         remaining_length = Q - N
-        segment_lengths = [1] * N
-        for i in range(segment_lengths - 1):
+        for i in range(N - 1):
             if remaining_length <= 0:
                 break
             r = self.rng.integers(0, remaining_length + 1)
@@ -235,6 +231,7 @@ class KHopsGen(object):
                 cur_value = segment[-2]
             else:
                 cur_value = segment[-1]
+            segment = [self.dictionary(e) for e in segment]
             segments.append(segment)  # easier to verify but we can just extend, or better make vector of correct size
         if flat:
             prefix = [item for sublist in segments for item in sublist]  # flatten

@@ -74,6 +74,11 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
     out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
     print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
 
+def _t_int_partition(Q=200, N=9, num=10000):
+    print('Testing integer partitioning')
+    for _i in range(num):
+        partition = generator.uniform_random_int_partition(Q, N, shuffle=True)
+        print(f'Partition of {Q} into {N} parts: {partition}, sum: {sum(partition)}')
 
 
 
@@ -319,8 +324,8 @@ if __name__ == '__main__':
     pos_dict = generator.get_pos_dictionary()
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
-
-    _t_scratchpad_validation(args, token_dict, pos_dict)
+    # _t_scratchpad_validation(args, token_dict, pos_dict)
+    _t_int_partition()
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

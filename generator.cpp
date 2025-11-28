@@ -139,6 +139,29 @@ string dictionary_extra_after_symbol = "D";  // then rest are special extras of 
 map<std::string, int> pos_dictionary = {}; // token to idx map
 
 
+/* *********************************
+ *  Integer Partitioning (for khops)
+ *  ********************************/
+SampleIntPartition sample_int_partition{};
+
+void set_int_partition_cache_size(const int suggested_cache_size=1000000000, const int max_cache_size=10){
+    sample_int_partition.suggested_cache_size = suggested_cache_size;
+    sample_int_partition.max_cache_size = max_cache_size;
+}
+
+py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, const bool shuffle=true){
+    vector<int> segment_lengths;
+    sample_int_partition.uniform_random_partition(Q, N, segment_lengths, gen, shuffle);
+    py::array_t<int, py::array::c_style> arr(static_cast<int>(segment_lengths.size()));
+    auto ra = arr.mutable_unchecked();
+    for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++){
+        ra(i) = segment_lengths[i];
+    }
+    return arr;
+}
+
+
+
 /* ************************************************
  *  Batched graph generation
  *  ***********************************************/
@@ -755,6 +778,22 @@ PYBIND11_MODULE(generator, m) {
           " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
           py::arg("distances"), py::arg("queries"), py::arg("gens"), py::arg("path_lengths"),
           py::arg("check_special_tokens") = true);
+
+    m.def("set_int_partition_cache_size", &set_int_partition_cache_size,
+          "Sets the integer partition cache size used in balanced graph generation.\n"
+          "Parameters:\n\t"
+          "size: suggested_cache_size\n\t",
+          py::arg("suggested_cache_size"),
+          py::arg("max_cache_size"));
+
+    m.def("uniform_random_int_partition", &uniform_random_int_partition,
+          "Generates a uniform random integer partition of total into num_parts parts.\n"
+          "Parameters:\n\t"
+          "total: total integer to partition\n\t"
+          "num_parts: number of parts to partition into\n\t"
+          "Returns:\n\t"
+          "vector<int>: partitioned integers\n",
+          py::arg("Q"), py::arg("N"), py::arg("shuffle") = true);
 
     m.def("balanced_graph_size_check", &balanced_graph_size_check,
           "Check that the balanced graph size is valid.  Will fail assert otherwise.",

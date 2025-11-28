@@ -552,13 +552,106 @@ public:
 };
 
 
-class KHopsTask : public Task {
+class KHopsGenTask : public Task {
 public:
-    int sampled_k;
-    int max_tokens;
-    bool is_generative;
+    bool right_side_connect;
 
-    KHopsTask() {
+    vector<vector<int>> segments;
+    vector<int> ground_truths;
+
+    vector<int> get_segment(std::mt19937 &gen, const int min_value, const int max_value,
+                            const int cur_value, const int segment_len, const bool is_last){
+        auto segment = vector<int>(segment_len + 1); // +1 for ground truth
+        auto d = std::uniform_int_distribution<int>(min_value, max_value);  // no +1 since we will adjust
+        for (int i = 0; i < segment_len; i++) {
+            auto rnd_value = d(gen);
+            if (rnd_value >= cur_value) {
+                rnd_value += 1;   // can not sample the current value, easier than adjusting distribution
+            }
+            segment[i] = rnd_value;
+        }
+        if (is_last or right_side_connect) {  // then the new cur_value is at the last position
+            segment[segment.size() - 1] = cur_value;
+        } else {  // the new cur_value is the second last position
+            segment[segment.size() - 2] = cur_value;
+        }
+        return segment;
+
+    }
+
+    KHopsGenTask(std::mt19937 &gen, const int min_value, const int max_value,
+                 const vector<int> &segment_lengths, const bool right_side_connect=true){
+        use_query_invariance = false;
+
+        auto d = std::uniform_int_distribution<int>(min_value, max_value + 1);
+        auto cur_value = d(gen);
+        for (int i = 0; i < segment_lengths.size(); i++) {
+            ground_truths.push_back(cur_value);
+            auto segment = get_segment(gen, min_value, max_value, cur_value,
+                                       segment_lengths[i], i == segment_lengths.size() - 1);
+            if (right_side_connect){
+                cur_value = segment[segment.size() - 2];
+            } else {
+                cur_value = segment[segment.size() - 1];
+            }
+            segments.push_back(segment);
+        }
+    }
+
+    void tokenize(
+            const map<std::string, int> &dictionary,
+            const vector<int> &node_shuffle_map,  // not really nodes but whatever the vocab is
+            const map<std::string, int> pos_dictionary,
+            std::mt19937 &gen) {
+
+        auto pad = dictionary.at("<pad>");
+        auto query_start_marker = dictionary.at("/");
+        auto query_end_marker = dictionary.at("?");
+        auto task_start_marker = dictionary.at("=");
+        auto task_end_marker = dictionary.at(".");
+
+        int prefix_size = 2; // q_start, q_end
+        for (size_t i = 0; i < segments.size(); i++) {
+            prefix_size += static_cast<int>(segments[i].size());
+        }
+        auto task_size = 2 + static_cast<int>(ground_truths.size()); // t_start, ground truths, t_end
+
+        tokenized_query_inputs.resize(prefix_size);
+        tokenized_task_inputs.resize(task_size);
+        tokenized_task_targets.resize(task_size, 1, pad);
+
+        int cur_idx = 0;
+        for (size_t i = 0; i < segments.size(); i++) {
+            for (size_t j = 0; j < segments[i].size(); j++) {
+                tokenized_query_inputs(cur_idx) = node_shuffle_map[segments[i][j]];
+                cur_idx += 1;
+            }
+        }
+        cur_idx -= 1; // go back one for last token after this
+        tokenized_query_inputs(cur_idx) = query_start_marker;
+        cur_idx += 1;
+        auto last_token = segments[segments.size() - 1][segments[segments.size() - 1].size() - 1];
+        tokenized_query_inputs(cur_idx) = node_shuffle_map[last_token];
+        cur_idx += 1;
+        tokenized_query_inputs(cur_idx) = query_end_marker;
+
+        // task tokenization
+        tokenized_task_inputs(0) = task_start_marker;
+        tokenized_task_targets(0, 0) = task_start_marker;
+        for (size_t i = 0; i < ground_truths.size(); i++) {
+            tokenized_task_inputs(i + 1) = node_shuffle_map[ground_truths[i]];
+            tokenized_task_targets(i + 1, 0) = node_shuffle_map[ground_truths[i]];
+        }
+        tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
+        tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
+    }
+
+    static bool verify_khop_gen(const bool right_side_connect=true){
+        return false;
+    }
+
+    static bool verify_khop_gens(const bool right_side_connect=true){
+        return false;
     }
 
 
