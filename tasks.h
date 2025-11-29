@@ -598,21 +598,7 @@ public:
                 cur_value = segment[static_cast<int>(segment.size()) - 1];
             }
             segments.push_back(segment);
-
-
-            for (auto val : segment){
-                cout << val << " ";
-            }
-            cout << " with new cur_value=" << cur_value << endl;
         }
-
-        // print out ground truths and segments
-        cout << "KHopsGenTask generated with right_side_connect=" << right_side_connect << endl;
-        cout << "Ground truths: ";
-        for (auto gt : ground_truths) {
-            cout << gt << " ";
-        }
-        cout << endl;
     }
 
     void tokenize(
