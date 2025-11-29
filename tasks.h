@@ -562,8 +562,8 @@ public:
     vector<int> get_segment(std::mt19937 &gen, const int min_value, const int max_value,
                             const int cur_value, const int segment_len, const bool is_last){
         auto segment = vector<int>(segment_len + 1); // +1 for ground truth
-        auto d = std::uniform_int_distribution<int>(min_value, max_value);  // no +1 since we will adjust
-        for (int i = 0; i < segment_len; i++) {
+        auto d = std::uniform_int_distribution<int>(min_value, max_value - 1);  // -1 since we will adjust
+        for (int i = 0; i < static_cast<int>(segment.size()); i++) {
             auto rnd_value = d(gen);
             if (rnd_value >= cur_value) {
                 rnd_value += 1;   // can not sample the current value, easier than adjusting distribution
@@ -571,9 +571,9 @@ public:
             segment[i] = rnd_value;
         }
         if (is_last or right_side_connect) {  // then the new cur_value is at the last position
-            segment[segment.size() - 1] = cur_value;
+            segment[static_cast<int>(segment.size()) - 1] = cur_value;
         } else {  // the new cur_value is the second last position
-            segment[segment.size() - 2] = cur_value;
+            segment[static_cast<int>(segment.size()) - 2] = cur_value;
         }
         return segment;
 
@@ -582,20 +582,37 @@ public:
     KHopsGenTask(std::mt19937 &gen, const int min_value, const int max_value,
                  const vector<int> &segment_lengths, const bool right_side_connect=true){
         use_query_invariance = false;
+        this->right_side_connect = right_side_connect;
 
-        auto d = std::uniform_int_distribution<int>(min_value, max_value + 1);
+        auto d = std::uniform_int_distribution<int>(min_value, max_value);
         auto cur_value = d(gen);
-        for (int i = 0; i < segment_lengths.size(); i++) {
+        for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++) {
             ground_truths.push_back(cur_value);
+            auto is_last = (i == static_cast<int>(segment_lengths.size()) - 1);
             auto segment = get_segment(gen, min_value, max_value, cur_value,
-                                       segment_lengths[i], i == segment_lengths.size() - 1);
+                                       segment_lengths[i], is_last);
+            cout << "KHopsGenTask segment " << i << " with cur_value=" << cur_value << ": ";
             if (right_side_connect){
-                cur_value = segment[segment.size() - 2];
+                cur_value = segment[static_cast<int>(segment.size()) - 2];
             } else {
-                cur_value = segment[segment.size() - 1];
+                cur_value = segment[static_cast<int>(segment.size()) - 1];
             }
             segments.push_back(segment);
+
+
+            for (auto val : segment){
+                cout << val << " ";
+            }
+            cout << " with new cur_value=" << cur_value << endl;
         }
+
+        // print out ground truths and segments
+        cout << "KHopsGenTask generated with right_side_connect=" << right_side_connect << endl;
+        cout << "Ground truths: ";
+        for (auto gt : ground_truths) {
+            cout << gt << " ";
+        }
+        cout << endl;
     }
 
     void tokenize(
@@ -620,18 +637,20 @@ public:
         tokenized_task_inputs.resize(task_size);
         tokenized_task_targets.resize(task_size, 1, pad);
 
+
         int cur_idx = 0;
         for (size_t i = 0; i < segments.size(); i++) {
             for (size_t j = 0; j < segments[i].size(); j++) {
-                tokenized_query_inputs(cur_idx) = node_shuffle_map[segments[i][j]];
+                tokenized_query_inputs(cur_idx) = segments[i][j];
                 cur_idx += 1;
             }
         }
+
         cur_idx -= 1; // go back one for last token after this
         tokenized_query_inputs(cur_idx) = query_start_marker;
         cur_idx += 1;
         auto last_token = segments[segments.size() - 1][segments[segments.size() - 1].size() - 1];
-        tokenized_query_inputs(cur_idx) = node_shuffle_map[last_token];
+        tokenized_query_inputs(cur_idx) = last_token;
         cur_idx += 1;
         tokenized_query_inputs(cur_idx) = query_end_marker;
 
@@ -639,21 +658,68 @@ public:
         tokenized_task_inputs(0) = task_start_marker;
         tokenized_task_targets(0, 0) = task_start_marker;
         for (size_t i = 0; i < ground_truths.size(); i++) {
-            tokenized_task_inputs(i + 1) = node_shuffle_map[ground_truths[i]];
-            tokenized_task_targets(i + 1, 0) = node_shuffle_map[ground_truths[i]];
+            tokenized_task_inputs(i + 1) = ground_truths[i];
+            tokenized_task_targets(i + 1, 0) = ground_truths[i];
         }
         tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
         tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
+
+        tokenized_query_pos.resize(prefix_size, 1);
+        for (size_t i = 0; i < static_cast<size_t>(prefix_size); i++) {
+            tokenized_query_pos(i) = static_cast<int>(i);
+        }
+
+        // throw std::invalid_argument("KHopsGenTask tokenize not implemented yet");
     }
 
-    static bool verify_khop_gen(const bool right_side_connect=true){
-        return false;
+    static bool verify_khop_gen(const vector<int> &prefix, const vector<int> &ground_truths,  const bool right_side_connect=true){
+        auto reconstruct = vector<int>();
+        int cur_value = prefix[prefix.size() - 2];  // it is query / X ?
+        reconstruct.push_back(cur_value);
+        int cur_idx = static_cast<int>(prefix.size()) - 4;
+        while (cur_idx > 0) {  // zero is start of query
+            if (prefix[cur_idx] == cur_value) {
+                if (right_side_connect) {
+                    cur_value = prefix[cur_idx + 1];
+                } else {
+                    cur_value = prefix[cur_idx - 1];
+                    cur_idx -= 1; // skip one more since cur_value is before
+                }
+                reconstruct.push_back(cur_value);
+            }
+            cur_idx -= 1;
+        }
+        std::reverse(reconstruct.begin(), reconstruct.end());
+        return reconstruct == ground_truths;
     }
 
-    static bool verify_khop_gens(const bool right_side_connect=true){
-        return false;
+    template<typename T>
+    static py::array_t<int, py::array::c_style> verify_khop_gens(py::array_t<T, py::array::c_style> &prefixes,
+                                 py::array_t<T, py::array::c_style> &prefix_lengths,
+                                 py::array_t<T, py::array::c_style> &ground_truths,
+                                 py::array_t<T, py::array::c_style> &ground_truth_lengths,
+                                 const bool right_side_connect=true){
+        auto batch_size = prefixes.shape(0);
+        auto out = py::array_t<int, py::array::c_style>(static_cast<int>(batch_size));
+        out[py::make_tuple(py::ellipsis())] = 0; // initialize array to false
+        auto ra = out.mutable_unchecked();
+        for (auto b = 0; b < batch_size; b++) {
+            auto prefix_length = prefix_lengths.at(b);
+            auto ground_truth_length = ground_truth_lengths.at(b);
+            auto prefix = vector<int>(prefix_length);
+            auto ground_truth = vector<int>(ground_truth_length);
+            for (int i = 0; i < prefix_length; i++) {
+                prefix[i] = prefixes.at(b, i);
+            }
+            for (int i = 0; i < ground_truth_length; i++) {
+                ground_truth[i] = ground_truths.at(b, i);
+            }
+            if (verify_khop_gen(prefix, ground_truth, right_side_connect)){
+                ra(b) = 1;
+            }
+        }
+        return out;
     }
-
 
 };
 

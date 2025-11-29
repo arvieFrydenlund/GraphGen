@@ -144,21 +144,20 @@ map<std::string, int> pos_dictionary = {}; // token to idx map
  *  ********************************/
 SampleIntPartition sample_int_partition{};
 
-void set_int_partition_cache_size(const int suggested_cache_size=1000000000, const int max_cache_size=10){
+void set_int_partition_cache_size(const int suggested_cache_size = 1000000000, const int max_cache_size = 10) {
     sample_int_partition.suggested_cache_size = suggested_cache_size;
     sample_int_partition.max_cache_size = max_cache_size;
 }
 
-py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, const bool shuffle=true){
+py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, const bool shuffle = true) {
     auto segment_lengths = sample_int_partition.uniform_random_partition(Q, N, gen, shuffle);
     py::array_t<int, py::array::c_style> arr(static_cast<int>(segment_lengths.size()));
     auto ra = arr.mutable_unchecked();
-    for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++){
+    for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++) {
         ra(i) = segment_lengths[i];
     }
     return arr;
 }
-
 
 
 /* ************************************************
@@ -631,41 +630,45 @@ inline py::dict balanced_n(
 }
 
 
-inline py::dict khops_gen_n(const int min_k, const int max_k,
+inline py::dict khops_gen_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
-                            const bool right_side_connect=true, const string &partition_method="uniform",
+                            const bool right_side_connect = true, const string &partition_method = "uniform",
                             int min_vocab = -1, int max_vocab = -1,
                             const int batch_size = 256,
                             const int num_thinking_tokens = 0,
-                            const string &scratchpad_type="none",
+                            const string &scratchpad_type = "none",
                             const bool scratchpad_as_prefix = false,
                             const bool is_flat_model = true,
                             const bool align_prefix_front_pad = false,
-                            const py::kwargs &kwargs = py::kwargs()){
+                            const py::kwargs &kwargs = py::kwargs()) {
 
     check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
-    auto m = check_and_set_vocab_limits(1, 1, min_vocab, max_vocab);
-    min_vocab = m[2], max_vocab = m[3];
+    if (min_vocab == -1 and max_vocab == -1) {
+        min_vocab = dictionary_num_special;
+        max_vocab = dictionary_max_vocab - 1;
+    } else if (max_vocab == -1) {
+        throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
+    }
 
-    auto batched_instances = BatchedInstances<boost::directedS>(  // pretend its directed
-            "khops_gen", "khops_gen",
-            min_vocab, max_vocab,
-            false, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+    cout << min_vocab << " " << max_vocab << endl;
 
-    for (int b = 0; b < batch_size; b++){
-        int k = uniform_int_distribution<int>(min_k, max_k)(gen) + 1;
+    auto batched_instances = KHopsBatchedInstances("khops_gen", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+
+    for (int b = 0; b < batch_size; b++) {
+        int k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
         int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
         vector<int> segment_lengths;
-        if (partition_method == "uniform"){
+        if (partition_method == "uniform") {
             segment_lengths = sample_int_partition.uniform_random_partition(prefix_length - k, k, gen, true);
-            if (segment_lengths.size() != k){
+            if (static_cast<int>(segment_lengths.size()) != k) {
+                throw runtime_error("Error in uniform partitioning");
                 segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
             }
         } else {
             segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
         }
-        auto instance = Instance<boost::directedS>(gen, dictionary, min_vocab, min_vocab,
-                                                   "khops_gen", scratchpad_type,
+        auto instance = KHopsInstance(gen, dictionary, min_vocab, max_vocab,
+                                                    "khops_gen", scratchpad_type,
                                                    segment_lengths, right_side_connect,
                                                    scratchpad_as_prefix);
         batched_instances.add(instance);
@@ -804,7 +807,7 @@ PYBIND11_MODULE(generator, m) {
           "Returns:\n\t"
           "is_valid bool, int,"
           " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
-          py::arg("distance"),  py::arg("start"),  py::arg("end"), py::arg("gen"),
+          py::arg("distance"), py::arg("start"), py::arg("end"), py::arg("gen"),
           py::arg("check_special_tokens") = true);
 
     m.def("verify_bfs_gens", &BFSScratchPad::verify_bfs_gens<int>,
@@ -1065,4 +1068,34 @@ PYBIND11_MODULE(generator, m) {
           py::arg("use_query_invariance") = false,
           py::arg("use_task_structure") = false,
           py::arg("use_graph_structure") = false);
+
+    m.def("khops_gen_n", &khops_gen_n,
+          "Generate a batch of k-hops generation tasks\nParameters:\n\t"
+          "min_k: min number of hops.\n\t"
+          "max_k: max number of hops.\n\t"
+          "min_prefix_length: min prefix length.\n\t"
+          "max_prefix_length: max prefix length.\n\t"
+          "right_side_connect: whether to connect from right side.\n\t"
+          "partition_method: method to partition the prefix length ('uniform' or 'non_uniform').\n\t",
+
+          py::arg("min_khops"),
+          py::arg("max_khops"),
+          py::arg("min_prefix_length"),
+          py::arg("max_prefix_length"),
+          py::arg("right_side_connect") = true,
+          py::arg("partition_method") = "uniform",
+          py::arg("min_vocab") = 0,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
+          py::arg("scratchpad_as_prefix") = false,
+          py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false);
+
+    m.def("verify_khop_gens", &KHopsGenTask::verify_khop_gens<int>,
+          "Batch verify khops is correct",
+          py::arg("prefixes"), py::arg("prefix_lengths"),
+          py::arg("ground_truths"), py::arg("ground_truth_lengths"),
+          py::arg("right_side_connect") = true);
 }

@@ -61,10 +61,10 @@ public:
     }
 
     void clear_if_needed(){
-        if (QN_cache.size() > suggested_cache_size){
+        if (static_cast<int>(QN_cache.size()) > suggested_cache_size){
             QN_cache.clear();
         }
-        if (QNK_cache.size() > suggested_cache_size){
+        if (static_cast<int>(QNK_cache.size()) > suggested_cache_size){
             QNK_cache.clear();
         }
     }
@@ -84,7 +84,7 @@ public:
             return 1;
         }
         int result = partition_QN(Q - 1, N - 1) + partition_QN(Q - N, N);
-        if (QN_cache.size() > max_cache_size){
+        if (static_cast<int>(QN_cache.size()) > max_cache_size){
             QN_cache.clear();
         }
         QN_cache[key] = result;
@@ -106,7 +106,7 @@ public:
         for (int i = 0; i < N; i++){
             result += partition_QNK(Q - i * K, N - i, K - 1);
         }
-        if (QNK_cache.size() > max_cache_size){
+        if (static_cast<int>(QNK_cache.size()) > max_cache_size){
             QNK_cache.clear();
         }
         QNK_cache[key] = result;

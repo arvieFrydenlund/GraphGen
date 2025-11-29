@@ -16,7 +16,6 @@ using namespace std;
 namespace py = pybind11;
 
 
-
 void test_pybind(string graph_type = "erdos_renyi",
                  const int num_nodes = 15, const int batch_size = 7,
                  const bool is_casual = true, const bool shuffle_edges = false,
@@ -27,42 +26,46 @@ void test_pybind(string graph_type = "erdos_renyi",
                  const bool is_flat_model = true,
                  const bool for_plotting = false,
                  const int max_edges = 512) {
-  py::dict d;
+    py::dict d;
 
 
-  // print the dict
-  for (auto item : d) {
-    std::cout << "key: " << item.first << ", value=" << item.second;
-    // if numpy array print shape
-    if (py::isinstance<py::array>(item.second)) {
-      auto arr = item.second.cast<py::array>();
-      std::cout << " Shape: [";
-      for (size_t i = 0; i < static_cast<size_t>(arr.ndim()); i++) {
-        std::cout << arr.shape(i) << " ";
-      }
-      std::cout << "]";
+    // print the dict
+    for (auto item: d) {
+        std::cout << "key: " << item.first << ", value=" << item.second;
+        // if numpy array print shape
+        if (py::isinstance<py::array>(item.second)) {
+            auto arr = item.second.cast<py::array>();
+            std::cout << " Shape: [";
+            for (size_t i = 0; i < static_cast<size_t>(arr.ndim()); i++) {
+                std::cout << arr.shape(i) << " ";
+            }
+            std::cout << "]";
+        }
+        cout << endl;
     }
-    cout << endl;
-  }
 }
 
 
 int main() {
-  py::scoped_interpreter guard{};
-  // needed to run pybind11 code as a C++ program, not needed for module
+    py::scoped_interpreter guard{};
+    // needed to run pybind11 code as a C++ program, not needed for module
 
-  set_seed(42);
-  cout << "Seed: " << get_seed() << endl;
-  int max_num_nodes = 25;
+    set_seed(43);
+    cout << "Seed: " << get_seed() << endl;
+    int max_num_nodes = 25;
 
-  set_default_dictionary(max_num_nodes, 20);  // 10 extra tokens D0-D9
-  set_default_pos_dictionary();
+    set_default_dictionary(max_num_nodes, 20);  // 10 extra tokens D0-D9
+    set_default_pos_dictionary();
 
-  auto t1 = time_before();
-  test_erdos_renyi_n(15, max_num_nodes);
-  time_after(t1, "Final");
+    auto t = time_before();
+    test_erdos_renyi_n(15, max_num_nodes);
+    time_after(t, "Final test_erdos_renyi_n");
 
-  cout << "Done!" << endl;
+    t = time_before();
+    test_khops_gen();
+    time_after(t, "Final test_khops_gen");
 
-  return 0;
+    cout << "Done!" << endl;
+
+    return 0;
 };

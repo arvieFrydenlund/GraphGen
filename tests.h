@@ -9,6 +9,30 @@
 #include "instance.h"
 
 
+void test_khops_gen(const int min_khops = 1, const int max_khops = 7,
+                    const int min_prefix_length = 70, const int max_prefix_length = 100,
+                    const bool right_side_connect = true, const string &partition_method = "uniform",
+                    int min_vocab = -1, int max_vocab = -1,
+                    const int batch_size = 256,
+                    const int num_thinking_tokens = 0,
+                    const string &scratchpad_type = "none",
+                    const bool scratchpad_as_prefix = false,
+                    const bool is_flat_model = true,
+                    const bool align_prefix_front_pad = false){
+    auto d = khops_gen_n(
+            min_khops, max_khops,
+            min_prefix_length, max_prefix_length,
+            right_side_connect, partition_method,
+            min_vocab, max_vocab,
+            batch_size,
+            num_thinking_tokens,
+            scratchpad_type,
+            scratchpad_as_prefix,
+            is_flat_model,
+            align_prefix_front_pad);
+}
+
+
 void test_erdos_renyi_n( // basic one
         int min_num_nodes, int max_num_nodes,
         const string &task_type = "bfs", //"shortest_path",

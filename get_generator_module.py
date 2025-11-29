@@ -73,7 +73,7 @@ def get_args_parser():
                         help="Maximum number of parents for balanced graphs")
 
     # task settings
-    parser.add_argument('--task_type', type=str, default='shortest_path') #'shortest_path')  # 'center'  # 'centroid'
+    parser.add_argument('--task_type', type=str, default='shortest_path')
     parser.add_argument('--min_path_length', type=int, default=3,
                         help='Minimum path length for shortest path tasks (inclusive)')
     parser.add_argument('--max_path_length', type=int, default=12,
@@ -90,6 +90,14 @@ def get_args_parser():
                         help='Minimum query size for center/centroid tasks (inclusive)')
     parser.add_argument('--max_query_size', type=int, default=10,
                         help='Maximum query size for center/centroid tasks (inclusive)')
+    parser.add_argument('--min_khops', type=int, default=1,
+                        help='Minimum hops for khops path tasks (inclusive)')
+    parser.add_argument('--max_khops', type=int, default=7)
+    parser.add_argument('--min_prefix_length', type=int, default=70)
+    parser.add_argument('--max_prefix_length', type=int, default=100)
+    parser.add_argument('--right_side_connect', action='store_true', default=False,
+                        help='The usual khops version, but not how I have BFS set up.')
+    parser.add_argument('--partition_method', type=str, default='uniform')
 
     # tokenization settings
     parser.add_argument('--is_causal', action='store_true', default=False,

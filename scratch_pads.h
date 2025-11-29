@@ -255,23 +255,23 @@ public:
         bool found = false;
 
         int cur = 0;
-        while (cur < gen.size() and !found and !(cur_q.empty() and next_q.empty())) {
+        while (cur < static_cast<int>(gen.size()) and !found and !(cur_q.empty() and next_q.empty())) {
             if (check_special_tokens and !depth_check(gen[cur], cur_depth, reverse_dict)) {
                 return -4;  // depth is incorrect
             }
             cur++;
-            while (cur < gen.size() and !found and !cur_q.empty()) {
+            while (cur < static_cast<int>(gen.size()) and !found and !cur_q.empty()) {
                 auto cur_node = cur_q.front();
                 cur_q.pop();
-                if (cur < gen.size() and gen[cur] != cur_node) {
+                if (cur < static_cast<int>(gen.size()) and gen[cur] != cur_node) {
                     return -2;  // adjacency head is incorrect
                 }
                 cur++;
-                if (cur < gen.size() and check_special_tokens and gen[cur] != adjacency_start_idx) {
+                if (cur < static_cast<int>(gen.size()) and check_special_tokens and gen[cur] != adjacency_start_idx) {
                     return -3;  // adjacenct start is incorrect
                 }
                 cur++;
-                while (cur < gen.size() and gen[cur] != adjacency_end_idx) {
+                while (cur < static_cast<int>(gen.size()) and gen[cur] != adjacency_end_idx) {
                     auto nbr = gen[cur];
                     if (cur_node >= distances.shape(0) || nbr >= distances.shape(1) ||
                         distances.at(cur_node, nbr) != 1) {
@@ -283,7 +283,7 @@ public:
                     }
                     cur++;
                 }
-                if (cur < gen.size() and check_special_tokens and gen[cur] != adjacency_end_idx) {
+                if (cur < static_cast<int>(gen.size()) and check_special_tokens and gen[cur] != adjacency_end_idx) {
                     return -3;  // adjacency end is incorrect
                 }
                 cur++;
