@@ -667,6 +667,8 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
             b_n = generator.path_star_n(**args)
         elif graph_type == 'balanced':
             b_n = generator.balanced_n(**args)
+        elif graph_type == 'khops_gen':  # kinda a graph if you squint
+            b_n = generator.khops_gen_n(**args)
         else:
             raise ValueError(f"Unknown graph type: {graph_type}")
         return b_n
