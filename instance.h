@@ -1244,7 +1244,7 @@ public:
             // align up to prefix size and then targets after
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
-        auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len, 1});
+        auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len});
         src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
@@ -1303,9 +1303,7 @@ public:
                 offset = max_prefix_size - instances[i].task_start_idx;
             }
             for (size_t j = 0; j < instances[i].tokenized_inputs.shape()[0]; j++) {
-                for (size_t k = 0; k < instances[i].tokenized_inputs.shape()[1]; k++) {
-                    src_tokens_ar(i, j + offset, k) = instances[i].tokenized_inputs(j, k);
-                }
+                src_tokens_ar(i, j + offset) = instances[i].tokenized_inputs(j, 0);
             }
             if (instances[i].task) {
                 for (size_t j = 0; j < instances[i].tokenized_targets.shape()[0]; j++) {
@@ -1383,7 +1381,7 @@ public:
             d["true_task_gather_indices"] = py::none();
         }
 
-        d["hashes"] = py::none();  // TODO has by tokenization
+        d["hashes"] = hash_src_tokens(src_tokens);
 
         d["graph_edge_start_indices"] = py::none();
         d["graph_edge_lengths"] = py::none();
@@ -1407,6 +1405,29 @@ public:
 
         return d;
     }
+
+    // Hashing
+    template<typename T>
+    py::array_t<std::uint64_t, py::array::c_style> hash_src_tokens(
+            const py::array_t<T, py::array::c_style> &src_tokens) {
+        // Convert a distance matrix [N, N] to a numpy array [new_N, new_N] by mapping node ids
+        auto shape = src_tokens.shape();
+        py::array_t<std::uint64_t, py::array::c_style> arr({static_cast<int>(shape[0])});
+        auto ra = arr.mutable_unchecked();
+        auto bd = src_tokens.unchecked();
+        for (int b = 0; b < shape[0]; b++) {
+            std::string str = "";
+            for (int i = 0; i < shape[1]; i++) {
+                str += std::to_string(bd(b, i));
+            }
+            auto hash = std::hash<std::string>{}(str);
+            // auto has2 = static_cast<std::uint64_t>(hash);
+            // cout << "hash: " << hash << " has2: " << has2 << endl;
+            ra(b) = static_cast<std::uint64_t>(hash);
+        }
+        return arr;
+    }
+
 };
 
 

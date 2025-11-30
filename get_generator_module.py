@@ -489,6 +489,8 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
     max_num_chars = 0
     def update_max(b_, tensor, dict_, max_num_chars_):
+        if tensor.ndim < 3:
+            tensor = np.expand_dims(tensor, -1)
         for i in range(tensor.shape[1]):
             for j in range(tensor.shape[2]):
                 token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
@@ -509,6 +511,8 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
 
     def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   '), skip=0):
         s = ''
+        if tensor.ndim < 3:
+            tensor = np.expand_dims(tensor, -1)
         max_j_dim = tensor.shape[2]
         m = (tensor == pad).all(axis=1)
         for j in range(max_j_dim):

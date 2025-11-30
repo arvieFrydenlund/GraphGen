@@ -645,12 +645,10 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
     check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
     if (min_vocab == -1 and max_vocab == -1) {
         min_vocab = dictionary_num_special;
-        max_vocab = dictionary_max_vocab - 1;
     } else if (max_vocab == -1) {
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
-
-    cout << min_vocab << " " << max_vocab << endl;
+    max_vocab -= 1;  // do not know why this is needed here unlike other functions
 
     auto batched_instances = KHopsBatchedInstances("khops_gen", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
 
@@ -1084,7 +1082,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_prefix_length"),
           py::arg("right_side_connect") = true,
           py::arg("partition_method") = "uniform",
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("num_thinking_tokens") = 0,

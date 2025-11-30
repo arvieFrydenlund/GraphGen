@@ -591,7 +591,6 @@ public:
             auto is_last = (i == static_cast<int>(segment_lengths.size()) - 1);
             auto segment = get_segment(gen, min_value, max_value, cur_value,
                                        segment_lengths[i], is_last);
-            cout << "KHopsGenTask segment " << i << " with cur_value=" << cur_value << ": ";
             if (right_side_connect){
                 cur_value = segment[static_cast<int>(segment.size()) - 2];
             } else {

@@ -97,10 +97,10 @@ def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, batch_size
     max_prefix = np.max(task_start_indices)
     prefixes = np.ones((src.shape[0], max_prefix), dtype=src.dtype)
     for b in range(src.shape[0]):
-        prefixes[b, :task_start_indices[b]] = src[b, :task_start_indices[b], 0]
+        prefixes[b, :task_start_indices[b]] = src[b, :task_start_indices[b]]
     ground_truths = np.ones((src.shape[0], task_lengths.max() - 2), dtype=src.dtype)
     for b in range(src.shape[0]):
-        ground_truths[b, :task_lengths[b]-2] = src[b, task_start_indices[b]+1:task_start_indices[b]+task_lengths[b]-1, 0]
+        ground_truths[b, :task_lengths[b]-2] = src[b, task_start_indices[b]+1:task_start_indices[b]+task_lengths[b]-1]
 
     print('Verifying khops_gen outputs')
     verify = generator.verify_khop_gens(prefixes, task_start_indices, ground_truths, task_lengths-2, right_side_connect)
