@@ -650,10 +650,22 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
     }
     max_vocab -= 1;  // do not know why this is needed here unlike other functions
 
+    optional<vector<float>> task_sample_dist = nullopt;
+    if (kwargs.contains("task_sample_dist")) {
+        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
+            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
+        }
+    }
+
     auto batched_instances = KHopsBatchedInstances("khops_gen", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
 
     for (int b = 0; b < batch_size; b++) {
-        int k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
+        int k;
+        if (task_sample_dist.has_value()){
+            k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
+        } else {
+            k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
+        }
         int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
         vector<int> segment_lengths;
         if (partition_method == "uniform") {

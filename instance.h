@@ -35,6 +35,7 @@ template<typename D>
 class Instance {
 public:
 
+    string scratchpad_type;
     bool scratchpad_as_prefix;
     bool no_graph;
     bool use_task_structure;
@@ -148,6 +149,7 @@ public:
              optional<unique_ptr<vector<vector<float> > > > positions_ptr = nullopt
     ) {
 
+        this->scratchpad_type = scratchpad_type;
         this->scratchpad_as_prefix = scratchpad_as_prefix;
         this->no_graph = no_graph;
         this->use_task_structure = use_task_structure;
@@ -821,10 +823,12 @@ public:
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
                 d["scratch_pad_gather_indices"] = scratch_pad_gather_indices;
+                d["scratchpad_type"] = instances[0].scratchpad_type;
             } else {
                 d["scratch_pad_start_indices"] = py::none();
                 d["scratch_pad_lengths"] = py::none();
                 d["scratch_pad_gather_indices"] = py::none();
+                d["scratchpad_type"] = py::none();
             }
             d["true_task_start_indices"] = true_task_start_indices;
             d["true_task_lengths"] = true_task_lengths;
@@ -838,6 +842,7 @@ public:
             d["true_task_start_indices"] = py::none();
             d["true_task_lengths"] = py::none();
             d["true_task_gather_indices"] = py::none();
+            d["scratchpad_type"] = py::none();
         }
 
         // distances and ground truths batching
@@ -1362,10 +1367,12 @@ public:
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
                 d["scratch_pad_gather_indices"] = scratch_pad_gather_indices;
+                d["scratchpad_type"] = instances[0].scratchpad_type;
             } else {
                 d["scratch_pad_start_indices"] = py::none();
                 d["scratch_pad_lengths"] = py::none();
                 d["scratch_pad_gather_indices"] = py::none();
+                d["scratchpad_type"] = py::none();
             }
             d["true_task_start_indices"] = true_task_start_indices;
             d["true_task_lengths"] = true_task_lengths;
@@ -1379,6 +1386,7 @@ public:
             d["true_task_start_indices"] = py::none();
             d["true_task_lengths"] = py::none();
             d["true_task_gather_indices"] = py::none();
+            d["scratchpad_type"] = py::none();
         }
 
         d["hashes"] = hash_src_tokens(src_tokens);
