@@ -55,7 +55,7 @@ public:
                   const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
                   const bool sort_adjacency_lists = false,
                   const bool use_unique_depth_markers = true
-    ) {
+    ) { //  TODO include edge shuffle map and sort adjacency list by edge order  [IMPORTANT, no semantics]
 
         this->sort_adjacency_lists = sort_adjacency_lists;
         this->use_unique_depth_markers = use_unique_depth_markers;
@@ -79,6 +79,7 @@ public:
             }
             auto current_level_nodes = map<int, vector<int> >();
             auto next_level_nodes = vector<int>();
+            // TODO do not process beyond end node found
             while (!q.empty()) {  // process the current level
                 vector<int> cur_neighbors;
                 auto cur = q.front();
@@ -200,6 +201,8 @@ public:
                 cur++;
                 for (size_t k = 0; k < nbrs.size(); k++, cur++) {
                     tokenized_inputs(cur, 0) = node_shuffle_map[nbrs[k]];
+
+                    // TODO there should not be multiple targets if sorted or ordered by edge list
                     for (size_t t = k; t < nbrs.size(); t++) {
                         tokenized_targets(cur, t - k) = node_shuffle_map[nbrs[t]];
                     }
@@ -330,13 +333,18 @@ public:
 
 class DFSScratchPad : public ScratchPad {
     /*
-     * Note that DFS does not guarenttee getting a shortest path, only a path
+     * Note that DFS does not guarantee getting a shortest path, only a path.
      * Be careful with use_unique_depth_markers because of this, since you may need a lot of extra markers
+     *
+     *
+     * There are two versions: non-cheating and cheating version,
+     * the latter means that no multi-hop reasoning needs to be done
      */
 public:
 
     bool sort_adjacency_lists = false;
     bool use_unique_depth_markers = true;
+    bool is_cheat = false;
     vector<int> path;
 
     vector<tuple<int, int, int, vector<int> > > dfs_steps; // (current_node, parent_node, depth, neighbors)
@@ -393,11 +401,13 @@ public:
                   const unique_ptr<Graph<D> > &g_ptr,
                   const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
                   const bool sort_adjacency_lists = false,
-                  const bool use_unique_depth_markers = true
+                  const bool use_unique_depth_markers = true,
+                  const bool is_cheat = false
     ) {
 
         this->sort_adjacency_lists = sort_adjacency_lists;
         this->use_unique_depth_markers = use_unique_depth_markers;
+        this->is_cheat = is_cheat;
 
         auto reverse_node_shuffle_map = vector<int>(node_shuffle_map.size(), -1);
         if (sort_adjacency_lists) {
@@ -478,6 +488,14 @@ public:
             }
             cur += 1;
         }
+    }
+
+    template<typename T>
+    static int verify_dfs_gen(const py::array_t<T, py::array::c_style> &distances,
+                              const int start, const int end, const vector<int> &gen,
+                              const bool check_special_tokens = true,
+                              const bool is_cheat = false) {
+        return -1;
     }
 
 };
