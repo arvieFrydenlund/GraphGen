@@ -7,9 +7,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 
 # You need to include python library and pybind11 to the compiler options
 # examples:
-# -I/usr/include/python3.11 -lpython3.11
+# -I/usr/include/python3.12 -lpython3.12
 # -I/usr/include/python3.10 -lpython3.10
-# -I/fs1/home/arvie/PycharmProjects/Virtualenv/Next-Token-Failures/lib/python3.10/site-packages/pybind11/include
+# -I/h/arvie/PycharmProjects/Virtualenv/next_token_3.12/lib/python3.12/site-packages/pybind11/include
 
 add_executable(GraphGen main.cpp
         undirected_graphs.h

@@ -70,6 +70,9 @@ examples:
 * -I/usr/include/python3.10 -lpython3.10
 * -I/home/arvie/PycharmProjects/Virtualenv/Next-Token-Failures/lib/python3.10/site-packages/pybind11/include
 
+use 
+
+``python3 -c "import pybind11;print(pybind11.get_include())"`` to find last one
 
 ## Citation
 
