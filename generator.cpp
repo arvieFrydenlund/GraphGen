@@ -647,7 +647,7 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
     // if we do not do this then we need to use a node mapping which is extra complexity for little gain
     if (min_vocab == -1 and max_vocab == -1) {  // this is bad in general as the sequence length will be large
         min_vocab = dictionary_num_special;
-        max_vocab = dictionary_max_vocab;
+        max_vocab = dictionary_max_vocab - 1;
     } else if (max_vocab == -1) {
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
