@@ -53,30 +53,31 @@ This will be useful for real world datasets where the graphs are pre-defined.
 
 ## Build
 
-clion options `-I/usr/include/python3.10 -lpython3.10  -I/fs1/home/arvie/PycharmProjects/Virtualenv/Next-Token-Failures/lib/python3.10/site-packages/pybind11/include -Wall -Wpedantic  -fsanitize=address`
-
-
-[todo]  this is outdated
-
- `g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) -I/usr/include/boost/graph/ -I. undirected_graphs.h directed_graphs.h utils.h generator.cpp -o generator$(python3-config --extension-suffix)`
-
-Note this works if using the primary system python, if you have multiple versions of python installed [see here where python3-config --extension-suffix fails](https://stackoverflow.com/questions/77112605/what-is-the-prefered-way-of-generating-extension-module-filename-suffix-in-virtu) 
-
-Note to self: running with `-fsanitize=address -g` helps with memory leak debugging.  
-
 You need to include python library and pybind11 to the compiler options, for Clion include
 examples:
 * -I/usr/include/python3.11 -lpython3.11
 * -I/usr/include/python3.10 -lpython3.10
 * -I/home/arvie/PycharmProjects/Virtualenv/Next-Token-Failures/lib/python3.10/site-packages/pybind11/include
 
-use 
+use
 
 ``python3 -c "import pybind11;print(pybind11.get_include())"`` to find last one
 
+My current clion build options: `-g -I/usr/include/python3.12 -lpython3.12 -I/h/arvie/PycharmProjects/Virtualenv/next_token_3.12/lib/python3.12/site-packages/pybind11/include  -Wall -Wpedantic  -fsanitize=address`
+and maybe `-fsanitize=leak` and `ASAN_OPTIONS=detect_leaks=1`.
+
+Also, remember to set the environmental file to the python interpreter you want to use with pybind11 in the project settings.
+
+
+Direct compilation: `g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) -I/usr/include/boost/graph/ -I. undirected_graphs.h directed_graphs.h utils.h generator.cpp -o generator$(python3-config --extension-suffix)`
+
+Note this works if using the primary system python, if you have multiple versions of python installed [see here where python3-config --extension-suffix fails](https://stackoverflow.com/questions/77112605/what-is-the-prefered-way-of-generating-extension-module-filename-suffix-in-virtu) 
+
+
+
 ## Citation
 
-Code from [https://github.com/asaparov/learning_to_search](https://github.com/asaparov/learning_to_search) was a great help in figuring out some things, like using different seeding across python threads.
+Code from [https://github.com/asaparov/learning_to_search](https://github.com/asaparov/learning_to_search) was a great help in figuring out some things, like using different seeding across python threads and pybind.
 
 from paper:
 > @inproceedings{
