@@ -179,7 +179,8 @@ public:
             segment_lengths[i] += r;
             remaining_length -= r;
         }
-        segment_lengths[-1] += remaining_length;
+        segment_lengths.back() += remaining_length;   // add remaining length to last segment_lengths
+
         if (shuffle){
             std::shuffle(segment_lengths.begin(), segment_lengths.end(), gen);
         } else {

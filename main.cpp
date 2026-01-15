@@ -45,12 +45,13 @@ void test_pybind(string graph_type = "erdos_renyi",
     }
 }
 
-
+// run with -fsanitize=address
+// ASAN_OPTIONS=detect_leaks=1
 int main() {
     py::scoped_interpreter guard{};
     // needed to run pybind11 code as a C++ program, not needed for module
 
-    set_seed(43);
+    set_seed(44);
     cout << "Seed: " << get_seed() << endl;
     int max_num_nodes = 25;
 
@@ -58,8 +59,8 @@ int main() {
     set_default_pos_dictionary();
 
     auto t = time_before();
-    test_erdos_renyi_n(15, max_num_nodes);
-    time_after(t, "Final test_erdos_renyi_n");
+    // test_erdos_renyi_n(15, max_num_nodes);
+    // time_after(t, "Final test_erdos_renyi_n");
 
     t = time_before();
     test_khops_gen();

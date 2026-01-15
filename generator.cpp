@@ -643,12 +643,14 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
                             const py::kwargs &kwargs = py::kwargs()) {
 
     check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
-    if (min_vocab == -1 and max_vocab == -1) {
+    // we always use the full vocabulary, this is another difference from graphs where the number of nodes can vary
+    // if we do not do this then we need to use a node mapping which is extra complexity for little gain
+    if (min_vocab == -1 and max_vocab == -1) {  // this is bad in general as the sequence length will be large
         min_vocab = dictionary_num_special;
+        max_vocab = dictionary_max_vocab;
     } else if (max_vocab == -1) {
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
-    max_vocab -= 1;  // do not know why this is needed here unlike other functions
 
     optional<vector<float>> task_sample_dist = nullopt;
     if (kwargs.contains("task_sample_dist")) {

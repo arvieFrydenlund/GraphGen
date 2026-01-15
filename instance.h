@@ -999,6 +999,7 @@ public:
 
 class KHopsInstance {
 public:
+    string scratchpad_type;
     bool scratchpad_as_prefix;
     unique_ptr<Task> task;
     unique_ptr<ScratchPad> scratch_pad;
@@ -1032,6 +1033,7 @@ public:
         /*
          * For non-graph instances
          */
+        this->scratchpad_type = scratchpad_type;
         this->scratchpad_as_prefix = scratchpad_as_prefix;
 
         if (task_type == "khops_gen") {
@@ -1249,10 +1251,10 @@ public:
             // align up to prefix size and then targets after
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
+
         auto src_tokens = py::array_t<int, py::array::c_style>({batch_size, new_max_tokenized_inputs_len});
         src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
-
         auto task_targets = py::array_t<int, py::array::c_style>(
                 {batch_size, max_tokenized_targets_len, max_tokenized_targets_labels});
         task_targets[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
