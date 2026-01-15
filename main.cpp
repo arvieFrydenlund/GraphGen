@@ -45,8 +45,7 @@ void test_pybind(string graph_type = "erdos_renyi",
     }
 }
 
-// run with -fsanitize=address
-// ASAN_OPTIONS=detect_leaks=1
+
 int main() {
     py::scoped_interpreter guard{};
     // needed to run pybind11 code as a C++ program, not needed for module
