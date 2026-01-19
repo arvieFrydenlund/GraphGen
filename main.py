@@ -45,10 +45,11 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 
-def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=40):
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='dfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
-    args.scratchpad_type='bfs'
+    args.scratchpad_type = scratchpad_type
+    args.use_unique_depth_markers = use_unique_depth_markers
     b_n = generator.get_graph(args, batch_size=batch_size)
     # generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
@@ -71,8 +72,15 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
             r = np.random.randint(0, scratchpad_length)
             gens[b, r] = gens[b, r] + 1  # wrong node id
 
-    out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
-    print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_shapes=True)
+    if scratchpad_type in ('bfs', ):
+        out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
+        print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+    elif scratchpad_type in ('dfs',):
+        #out = generator.verify_dfs_gens(distances, queries, gens, lengths, use_unique_depth_markers=use_unique_depth_markers)
+        # print(f'DFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+        pass
+
 
 def _t_int_partition(Q=200, N=9, num=10000):
     print('Testing integer partitioning')
@@ -348,9 +356,9 @@ if __name__ == '__main__':
     pos_dict = generator.get_pos_dictionary()
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
-    # _t_scratchpad_validation(args, token_dict, pos_dict)
+    _t_scratchpad_validation(args, token_dict, pos_dict)
     #_t_int_partition()
-    _t_khops_gen(args, token_dict, pos_dict)
+    # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

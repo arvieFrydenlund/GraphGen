@@ -457,7 +457,7 @@ def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_
         print(d_out)
 
 def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
-                        print_dist=False):
+                        print_dist=False, print_shapes=False):
     """
     :param b_n: batched dict
     :param title:
@@ -476,6 +476,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     true_task_gather_indices = b_n['true_task_gather_indices']
     scratch_pad_gather_indices = b_n['scratch_pad_gather_indices']
     positions = b_n['positions']
+
+    if print_shapes:
+        print('src_tokens shape:', src_tokens.shape)
+        if task_targets is not None:
+            print('task_targets shape:', task_targets.shape)
+        if positions is not None:
+            print('positions shape:', positions.shape)
 
     if isinstance(idxs, int):
         if idxs > 0:

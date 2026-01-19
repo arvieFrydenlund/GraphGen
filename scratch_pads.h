@@ -344,7 +344,8 @@ public:
 
     bool sort_adjacency_lists = false;
     bool use_unique_depth_markers = true;
-    bool is_cheat = false;
+    bool is_partial_redundant = false;  // copy over choice node, with modified adjacency list
+    bool is_full_redundant = false;  // copy over full DFS prefix at each choice node
     vector<int> path;
 
     vector<tuple<int, int, int, vector<int> > > dfs_steps; // (current_node, parent_node, depth, neighbors)
@@ -402,12 +403,14 @@ public:
                   const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
                   const bool sort_adjacency_lists = false,
                   const bool use_unique_depth_markers = true,
-                  const bool is_cheat = false
+                  const bool bool is_partial_redundant = false,
+                  const bool bool is_full_redundant = false,
     ) {
 
         this->sort_adjacency_lists = sort_adjacency_lists;
         this->use_unique_depth_markers = use_unique_depth_markers;
-        this->is_cheat = is_cheat;
+        this->is_partial_redundant = is_partial_redundant;
+        this->is_full_redundant = is_full_redundant;
 
         auto reverse_node_shuffle_map = vector<int>(node_shuffle_map.size(), -1);
         if (sort_adjacency_lists) {

@@ -281,7 +281,7 @@ public:
         // init output matrices
         auto concat_edges = graph_tokenizer->concat_edges;
         auto use_graph_structure = graph_tokenizer->use_graph_structure;
-        if (!no_graph) {
+        if (no_graph) {  // cannot have graph structure or concat edges without a graph
             concat_edges = false;
             use_graph_structure = false;
         }
