@@ -576,7 +576,6 @@ public:
             segment[static_cast<int>(segment.size()) - 2] = cur_value;
         }
         return segment;
-
     }
 
     KHopsGenTask(std::mt19937 &gen, const int min_value, const int max_value,
@@ -600,6 +599,17 @@ public:
         }
     }
 
+    vector<vector<int>> label_smooth_ground_truths(){
+        // The labels for at label_smoothed_ground_truths[:][0] are just the original ground truths
+        vector<vector<int>> label_smoothed_ground_truths(ground_truths.size(), vector<int>());
+        for (size_t i = 0; i < ground_truths.size(); i++) {
+            for (int j = i; j < ground_truths.size(); j++) {
+                label_smoothed_ground_truths[i].push_back(ground_truths[j]);  // add true path
+            }
+        }
+        return label_smoothed_ground_truths;
+    }
+
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,  // not really nodes but whatever the vocab is
@@ -620,8 +630,16 @@ public:
 
         tokenized_query_inputs.resize(prefix_size);
         tokenized_task_inputs.resize(task_size);
-        tokenized_task_targets.resize(task_size, 1, pad);
 
+
+        auto label_smoothed_ground_truths = label_smooth_ground_truths();
+        int max_num_labels = 1;
+        for (size_t i = 0; i < label_smoothed_ground_truths.size(); i++) {
+            if (label_smoothed_ground_truths[i].size() > static_cast<size_t>(max_num_labels)) {
+                max_num_labels = static_cast<int>(label_smoothed_ground_truths[i].size());
+            }
+        }
+        tokenized_task_targets.resize(task_size, max_num_labels, pad);
 
         int cur_idx = 0;
         for (size_t i = 0; i < segments.size(); i++) {
@@ -644,7 +662,10 @@ public:
         tokenized_task_targets(0, 0) = task_start_marker;
         for (size_t i = 0; i < ground_truths.size(); i++) {
             tokenized_task_inputs(i + 1) = ground_truths[i];
-            tokenized_task_targets(i + 1, 0) = ground_truths[i];
+            // tokenized_task_targets(i + 1, 0) = ground_truths[i];
+            for (size_t j = 0; j < label_smoothed_ground_truths[i].size(); j++) {
+                tokenized_task_targets(i + 1, j) = label_smoothed_ground_truths[i][j];
+            }
         }
         tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
         tokenized_task_targets(tokenized_task_targets.shape()[0] - 1, 0) = task_end_marker;
@@ -653,8 +674,6 @@ public:
         for (size_t i = 0; i < static_cast<size_t>(prefix_size); i++) {
             tokenized_query_pos(i) = static_cast<int>(i);
         }
-
-        // throw std::invalid_argument("KHopsGenTask tokenize not implemented yet");
     }
 
     static bool verify_khop_gen(const vector<int> &prefix, const vector<int> &ground_truths,  const bool right_side_connect=true){
