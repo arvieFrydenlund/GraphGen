@@ -192,24 +192,27 @@ public:
                                                             should_sample_path);
             if (scratchpad_type == "bfs" || scratchpad_type == "BFS") {
                 auto bfs_scratch_pad = make_unique<BFSScratchPad>(short_path->start, short_path->end, g_ptr,
-                                                                  node_shuffle_map, sort_adjacency_lists,
-                                                                  use_unique_depth_markers);
+                                                                  edge_list, use_unique_depth_markers);
                 short_path->set_path(bfs_scratch_pad->path, graph_tokenizer->distances_ptr, false);
                 scratch_pad = std::move(bfs_scratch_pad);
             } else if (scratchpad_type == "dfs" || scratchpad_type == "DFS") {
+                /*
                 auto dfs_scratch_pad = make_unique<DFSScratchPad>(short_path->start, short_path->end, g_ptr,
                                                                   node_shuffle_map, sort_adjacency_lists,
                                                                   use_unique_depth_markers);
                 short_path->set_path(dfs_scratch_pad->path, graph_tokenizer->distances_ptr, false);
                 scratch_pad = std::move(dfs_scratch_pad);
+                */
+                throw std::invalid_argument("DFS SP not implemented yet");
+
             }
             task = std::move(short_path);
         } else if (task_type == "bfs" || task_type == "BFS") {  // the scratchpad generation as the main task
-            task = make_unique<BFSTask>(gen, g_ptr, node_shuffle_map,
+            task = make_unique<BFSTask>(gen, g_ptr, edge_list,
                                         graph_tokenizer->distances_ptr,
                                         max_path_length, min_path_length,
                                         start, end, task_sample_dist, use_query_invariance,
-                                        sort_adjacency_lists, use_unique_depth_markers);
+                                        use_unique_depth_markers);
         } else if (task_type == "dfs" || task_type == "DFS") {
             throw std::invalid_argument("DFS task not implemented yet");
 

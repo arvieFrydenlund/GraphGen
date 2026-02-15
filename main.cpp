@@ -52,18 +52,81 @@ int main() {
 
     set_seed(44);
     cout << "Seed: " << get_seed() << endl;
+    int min_num_nodes = 25;
     int max_num_nodes = 25;
 
     set_default_dictionary(max_num_nodes, 20);  // 10 extra tokens D0-D9
     set_default_pos_dictionary();
 
-    auto t = time_before();
-    // test_erdos_renyi_n(15, max_num_nodes);
-    // time_after(t, "Final test_erdos_renyi_n");
+    // write in all other arguments for test_erdos_renyi_n
+    string task_type = "shortest_path";
+    int max_path_length = 12;
+    int min_path_length = 3;
+    bool sort_adjacency_lists = false;
+    bool use_unique_depth_markers = true;
+    int max_query_size = -1;
+    int min_query_size = 2;
+    bool is_causal = false;
+    bool is_direct_ranking = false;
+    bool shuffle_edges = true;
+    bool shuffle_nodes = true;
+    int min_vocab = -1;
+    int max_vocab = -1;
+    int batch_size = 3;
+    bool concat_edges = false;
+    bool duplicate_edges = false;
+    bool include_nodes_in_graph_tokenization = true;
+    bool query_at_end = false;
+    int num_thinking_tokens = 0;
+    string scratchpad_type = "bfs";
+    bool scratchpad_as_prefix = true;
+    bool no_graph = false;
+    bool is_flat_model = true;
+    bool align_prefix_front_pad = true;
+    bool use_edges_invariance = false;  // for concated edges this allows true permutation invariance
+    bool use_node_invariance = false;
+    bool use_graph_invariance = true;
+    bool use_query_invariance = false;
+    bool use_task_structure = false;  // divide positions by task structure
+    bool use_graph_structure = true;
 
-    t = time_before();
-    test_khops_gen();
-    time_after(t, "Final test_khops_gen");
+    auto t = time_before();
+
+    if (false) {  // khops
+        t = time_before();
+        test_khops_gen();
+        time_after(t, "Final test_khops_gen");
+    }
+    else if (true) {  // bfs task
+        t = time_before();
+        task_type = "bfs";
+        test_erdos_renyi_n(
+                min_num_nodes, max_num_nodes,
+                task_type,
+                max_path_length, min_path_length,
+                sort_adjacency_lists, use_unique_depth_markers,
+                max_query_size, min_query_size,
+                is_causal, is_direct_ranking, shuffle_edges,
+                shuffle_nodes, min_vocab, max_vocab,
+                batch_size,
+                concat_edges,
+                duplicate_edges,
+                include_nodes_in_graph_tokenization,
+                query_at_end,
+                num_thinking_tokens,
+                scratchpad_type,
+                scratchpad_as_prefix, no_graph,
+                is_flat_model,
+                align_prefix_front_pad,
+                use_edges_invariance,
+                use_node_invariance,
+                use_graph_invariance,
+                use_query_invariance,
+                use_task_structure,
+                use_graph_structure
+        );
+        time_after(t, "Final test_erdos_renyi_n bfs task");
+    }
 
     cout << "Done!" << endl;
 

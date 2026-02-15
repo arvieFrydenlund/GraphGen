@@ -373,12 +373,11 @@ public:
     template<typename D>
     BFSTask(std::mt19937 &gen,
             const unique_ptr<Graph<D> > &g_ptr,
-            const vector<int> &node_shuffle_map,  // needed if sorting adjacency lists
-                     const unique_ptr<vector<vector<int> > > &distances_ptr,
-                     const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
-                     const optional<vector<float>> &task_sample_dist = nullopt,
-                     const bool use_query_invariance = false,
-            const bool sort_adjacency_lists = false,
+            const vector<pair<int, int> > &edge_list,
+            const unique_ptr<vector<vector<int> > > &distances_ptr,
+            const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
+            const optional<vector<float>> &task_sample_dist = nullopt,
+            const bool use_query_invariance = false,
             const bool use_unique_depth_markers = true) {
 
         // define d1
@@ -396,8 +395,7 @@ public:
         this->start = start_end.first;
         this->end = start_end.second;
 
-        auto scratchpad = BFSScratchPad(this->start, this->end, g_ptr,
-                                node_shuffle_map, sort_adjacency_lists, use_unique_depth_markers);
+        auto scratchpad = BFSScratchPad(this->start, this->end, g_ptr, edge_list, use_unique_depth_markers);
         this->scratchpad = make_unique<BFSScratchPad>(scratchpad );
         auto path(this->scratchpad->path);
         this->path = path;
@@ -603,7 +601,7 @@ public:
         // The labels for at label_smoothed_ground_truths[:][0] are just the original ground truths
         vector<vector<int>> label_smoothed_ground_truths(ground_truths.size(), vector<int>());
         for (size_t i = 0; i < ground_truths.size(); i++) {
-            for (int j = i; j < ground_truths.size(); j++) {
+            for (size_t j = i; j < ground_truths.size(); j++) {
                 label_smoothed_ground_truths[i].push_back(ground_truths[j]);  // add true path
             }
         }

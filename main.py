@@ -44,6 +44,49 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
+# KHOPS
+
+def _t_int_partition(Q=200, N=9, num=10000):
+    print('Testing integer partitioning')
+    for _i in range(num):
+        partition = generator.uniform_random_int_partition(Q, N, shuffle=True)
+        print(f'Partition of {Q} into {N} parts: {partition}, sum: {sum(partition)}')
+
+
+def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, batch_size=40):
+    args.task_type = "khops_gen"
+    args.right_side_connect = right_side_connect
+    args.batch_size = batch_size
+
+    b_n = generator.khops_gen_n(**vars(args))
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+    # verify
+    src = b_n['src_tokens']
+    task_start_indices = b_n['task_start_indices']
+    task_lengths = b_n['task_lengths']
+    max_prefix = np.max(task_start_indices)
+    prefixes = np.ones((src.shape[0], max_prefix), dtype=src.dtype)
+    for b in range(src.shape[0]):
+        prefixes[b, :task_start_indices[b]] = src[b, :task_start_indices[b]]
+    ground_truths = np.ones((src.shape[0], task_lengths.max() - 2), dtype=src.dtype)
+    for b in range(src.shape[0]):
+        ground_truths[b, :task_lengths[b]-2] = src[b, task_start_indices[b]+1:task_start_indices[b]+task_lengths[b]-1]
+
+    print('Verifying khops_gen outputs')
+    verify = generator.verify_khop_gens(prefixes, task_start_indices, ground_truths, task_lengths-2, right_side_connect)
+    print(verify)
+
+
+# Scratchpads
+def _t_bfs_task(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20):
+    args.batch_size = batch_size
+    args.task_type = 'bfs'
+    args.scratchpad_type = 'none'
+    args.use_unique_depth_markers = use_unique_depth_markers
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
 
 def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='dfs'):
     args.batch_size = batch_size
@@ -82,37 +125,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         pass
 
 
-def _t_int_partition(Q=200, N=9, num=10000):
-    print('Testing integer partitioning')
-    for _i in range(num):
-        partition = generator.uniform_random_int_partition(Q, N, shuffle=True)
-        print(f'Partition of {Q} into {N} parts: {partition}, sum: {sum(partition)}')
 
-
-def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, batch_size=40):
-    args.task_type = "khops_gen"
-    args.right_side_connect = right_side_connect
-    args.batch_size = batch_size
-
-    args = vars(args)
-    b_n = generator.khops_gen_n(**args)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
-
-    # verify
-    src = b_n['src_tokens']
-    task_start_indices = b_n['task_start_indices']
-    task_lengths = b_n['task_lengths']
-    max_prefix = np.max(task_start_indices)
-    prefixes = np.ones((src.shape[0], max_prefix), dtype=src.dtype)
-    for b in range(src.shape[0]):
-        prefixes[b, :task_start_indices[b]] = src[b, :task_start_indices[b]]
-    ground_truths = np.ones((src.shape[0], task_lengths.max() - 2), dtype=src.dtype)
-    for b in range(src.shape[0]):
-        ground_truths[b, :task_lengths[b]-2] = src[b, task_start_indices[b]+1:task_start_indices[b]+task_lengths[b]-1]
-
-    print('Verifying khops_gen outputs')
-    verify = generator.verify_khop_gens(prefixes, task_start_indices, ground_truths, task_lengths-2, right_side_connect)
-    print(verify)
 
 
 def _t_single_graph():
@@ -356,9 +369,13 @@ if __name__ == '__main__':
     pos_dict = generator.get_pos_dictionary()
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
-    _t_scratchpad_validation(args, token_dict, pos_dict)
-    #_t_int_partition()
+
+    # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
+
+    _t_bfs_task(args, token_dict, pos_dict)
+
+    # _t_scratchpad_validation(args, token_dict, pos_dict)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

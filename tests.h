@@ -35,7 +35,7 @@ void test_khops_gen(const int min_khops = 1, const int max_khops = 7,
 
 void test_erdos_renyi_n( // basic one
         int min_num_nodes, int max_num_nodes,
-        const string &task_type = "bfs", //"shortest_path",
+        const string &task_type = "shortest_path",
         const int max_path_length = 12, const int min_path_length = 3,
         const bool sort_adjacency_lists = false, const bool use_unique_depth_markers = true,
         int max_query_size = -1, const int min_query_size = 2,
