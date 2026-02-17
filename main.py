@@ -88,7 +88,7 @@ def _t_bfs_task(args, token_dict, pos_dict, use_unique_depth_markers=True, batch
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
-def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='dfs'):
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
@@ -125,9 +125,27 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         pass
 
 
+def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
+    args.batch_size = batch_size
+    args.min_num_nodes = 100
+    args.max_num_nodes = 150
+    args.task_type = 'shortest_path'
+    args.graph_type = 'random_tree'
+
+    print('With bernoulli_p')
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+    args.probs = [0.1, 0.4, 0.5]
+    print('With probs')
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
 
+
+
+# old
 def _t_single_graph():
     # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
     d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
@@ -339,7 +357,7 @@ def _t_bfs(args, d, batch_size=3):
             print(f'{k}: {v}, {type(v)}')
 
 
-if __name__ == '__main__':
+def main(max_vocab_size=200):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -357,7 +375,7 @@ if __name__ == '__main__':
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(args.max_num_nodes, 20, 'D')
+    generator.set_default_dictionary(max_vocab_size, 20, 'D')
     token_dict = generator.get_dictionary()
     # sort by value
     d = dict(sorted(token_dict.items(), key=lambda item: item[1]))
@@ -373,9 +391,10 @@ if __name__ == '__main__':
     # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
 
-    _t_bfs_task(args, token_dict, pos_dict)
-
+    # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
+
+    _t_random_trees(args, token_dict, pos_dict)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
@@ -391,3 +410,7 @@ if __name__ == '__main__':
     # _t_bfs(args, d, batch_size=7)
 
     print('\n\nDone Testing')
+
+
+if __name__ == '__main__':
+    main()

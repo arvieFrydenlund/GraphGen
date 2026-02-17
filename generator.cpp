@@ -236,7 +236,7 @@ inline py::dict erdos_renyi_n(
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string scratchpad_type = "none",
+        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
@@ -318,7 +318,7 @@ inline py::dict euclidean_n(
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string scratchpad_type = "none",
+        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
@@ -383,7 +383,7 @@ inline py::dict euclidean_n(
 
 
 inline py::dict random_tree_n(
-        int min_num_nodes, int max_num_nodes, vector<float> &probs, const int max_depth,
+        int min_num_nodes, int max_num_nodes, const int max_degree, const int max_depth, const float bernoulli_p,
         const int c_min = 75, const int c_max = 125,
         const string &task_type = "shortest_path",
         const int max_path_length = 10, const int min_path_length = 1,
@@ -398,7 +398,7 @@ inline py::dict random_tree_n(
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string scratchpad_type = "none",
+        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
@@ -415,12 +415,24 @@ inline py::dict random_tree_n(
     auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
     min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
 
+    // sample different paths but lose that it is exactly k-hops
     bool start_at_root = true;
     if (kwargs.contains("start_at_root")) {
         start_at_root = kwargs["start_at_root"].cast<bool>();
     }
+    bool end_at_leaf = true;
+    if (kwargs.contains("end_at_leaf")) {
+        end_at_leaf = kwargs["end_at_leaf"].cast<bool>();
+    }
 
-    optional<vector<float>> task_sample_dist = nullopt;
+    optional<vector<float>> probs = nullopt;  // override default probabilities for branching in random tree generator
+    if (kwargs.contains("probs")) {
+        if (!kwargs["probs"].is_none() and !kwargs["probs"].cast<py::list>().empty()) {
+            probs = kwargs["probs"].cast<vector<float> >();
+        }
+    }
+
+    optional<vector<float>> task_sample_dist = nullopt;  // then sample max_depth
     if (kwargs.contains("task_sample_dist")) {
         if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
             task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
@@ -437,9 +449,21 @@ inline py::dict random_tree_n(
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
         int num_nodes = sample_num_nodes(min_num_nodes, max_num_nodes);
         unique_ptr<Graph<boost::undirectedS> > g_ptr;
-        int start = random_tree_generator(g_ptr, num_nodes, gen, probs, max_depth, false);
+
+        int sample_depth = max_depth;
+        if (task_sample_dist.has_value()) {
+            std::discrete_distribution<int> d(task_sample_dist.value().begin(), task_sample_dist.value().end());
+            sample_depth = d(gen);
+        }
+
+        auto start_end = random_tree_generator(g_ptr, num_nodes, gen , max_degree,
+                                               sample_depth, max_depth,  bernoulli_p, probs);
+        auto start = start_end.first, end = start_end.second;
         if (!start_at_root) {
             start = -1;
+        }
+        if (!end_at_leaf) {
+            end = -1;
         }
         const auto E = num_edges(*g_ptr);
         if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
@@ -449,7 +473,7 @@ inline py::dict random_tree_n(
         auto instance = Instance<boost::undirectedS>(g_ptr, gen, dictionary,
                                                      min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
                                                      task_type, scratchpad_type,
-                                                     max_path_length, min_path_length, start, -1, task_sample_dist,
+                                                     max_path_length, min_path_length, start, end, task_sample_dist,
                                                      sort_adjacency_lists, use_unique_depth_markers,
                                                      given_query, max_query_size, min_query_size,
                                                      is_causal, is_direct_ranking, concat_edges, duplicate_edges,
@@ -477,7 +501,7 @@ inline py::dict path_star_n(
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string scratchpad_type = "none",
+        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
@@ -550,7 +574,7 @@ inline py::dict balanced_n(
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string scratchpad_type = "none",
+        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
@@ -952,8 +976,9 @@ PYBIND11_MODULE(generator, m) {
 
           py::arg("min_num_nodes"),
           py::arg("max_num_nodes"),
-          py::arg("probs") = vector<float>{0.5, 0.5},
-          py::arg("max_depth") = -1.0,
+          py::arg("max_degree") = 3,
+          py::arg("max_depth") = 7,
+          py::arg("bernoulli_p") = 0.5,
           py::arg("c_min") = 75,
           py::arg("c_max") = 125,
           py::arg("task_type") = "shortest_path",

@@ -96,8 +96,7 @@ int main() {
         t = time_before();
         test_khops_gen();
         time_after(t, "Final test_khops_gen");
-    }
-    else if (true) {  // bfs task
+    } else if (false) {  // bfs task
         t = time_before();
         task_type = "bfs";
         test_erdos_renyi_n(
@@ -126,7 +125,42 @@ int main() {
                 use_graph_structure
         );
         time_after(t, "Final test_erdos_renyi_n bfs task");
-    }
+        } else if (true) {  //random_tree
+
+           const int max_degree = 3;
+           const int max_depth = 7;
+           const float bernoulli_p = 0.5;
+
+            t = time_before();
+            task_type = "shortest_path";
+            test_random_tree_n(
+                    min_num_nodes, max_num_nodes,
+                    max_degree, max_depth, bernoulli_p,
+                    task_type,
+                    max_path_length, min_path_length,
+                    sort_adjacency_lists, use_unique_depth_markers,
+                    max_query_size, min_query_size,
+                    is_causal, is_direct_ranking, shuffle_edges,
+                    shuffle_nodes, min_vocab, max_vocab,
+                    batch_size,
+                    concat_edges,
+                    duplicate_edges,
+                    include_nodes_in_graph_tokenization,
+                    query_at_end,
+                    num_thinking_tokens,
+                    scratchpad_type,
+                    scratchpad_as_prefix, no_graph,
+                    is_flat_model,
+                    align_prefix_front_pad,
+                    use_edges_invariance,
+                    use_node_invariance,
+                    use_graph_invariance,
+                    use_query_invariance,
+                    use_task_structure,
+                    use_graph_structure
+            );
+            time_after(t, "Final test_random_tree_n");
+        }
 
     cout << "Done!" << endl;
 

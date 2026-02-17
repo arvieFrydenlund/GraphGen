@@ -48,9 +48,11 @@ def get_args_parser():
                         help="Radius for euclidean graphs, -1.0 means random")
 
     # random tree graphs settings
-    parser.add_argument('--probs', type=float, nargs='+', default=[0.5, 0.5],
-                        help="Probabilities for random tree graphs, should sum to 1.0")
+    parser.add_argument('--max-degree', type=int, default=3)
     parser.add_argument('--max-depth', type=int, default=7)
+    parser.add_argument('--bernoulli-p', type=float, default=0.5)
+    parser.add_argument('--probs', type=float, nargs='+',
+                        help="Probabilities for random tree graphs, should sum to 1.0")
 
     # path star graphs settings
     parser.add_argument('--min_num_arms', type=int, default=2,
@@ -680,6 +682,8 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
             b_n = generator.balanced_n(**args)
         elif graph_type == 'khops_gen':  # kinda a graph if you squint
             b_n = generator.khops_gen_n(**args)
+        elif graph_type == 'khops':  # kinda a graph if you squint
+            b_n = generator.khops_n(**args)
         else:
             raise ValueError(f"Unknown graph type: {graph_type}")
         return b_n

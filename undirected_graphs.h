@@ -22,12 +22,15 @@
 #include <vector>
 #include <memory>
 #include <queue>
+#include <cmath>
 
 /*
  * Undirected graphs and utils, read before directed_graphs.h and py_bindings.h
  */
 
 using namespace std;
+
+typedef pair<int, int> start_end_pair;
 
 typedef int t_weight;
 typedef boost::property<boost::edge_weight_t, t_weight> EdgeWeightProperty;
@@ -371,48 +374,71 @@ inline bool depth_check(const int cur_depth, const int max_depth) {
     return true;
 }
 
-inline int random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,  const int num_nodes, std::mt19937 &gen,
-    vector<float> &probs, const int max_depth, const bool verbose = false) {
 
-    // check probs sum to one
-    /*  Do these on the batch check
-    float sum = 0.0;
-    for (auto p : probs) {
-        sum += p;
-    }
-    if ( abs(sum - 1.0) > 0.0001 ) {
-        throw invalid_argument("probs must sum to 1");
-    }
-    if ( max_depth <= 0  && num_nodes <= 0 ) {
-        throw invalid_argument("must provide max_depth or num_nodes");
-    }
-    */
+inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
+                                const int num_nodes, std::mt19937 &gen,
+                                const int d, int sample_depth, const int max_depth,
+                                const float bernoulli_p=0., optional<vector<float>> probs=nullopt,
+                                const bool verbose = false) {
+    // Either full d-ary trees (bernoulli_p=0.) or random binomial trees with at most d children per node depending on bernoulli_p
+    // binomial random tree, modeled as a Galton-Watson branching process with a binomial offspring distribution
+    // E[children per node] = d * bernoulli_p
+    // E[total children at gen k] = (d * bernoulli_p)^k
+    // E[total nodes] = sum i = 0 to k (d * bernoulli_p)^i = (1 - (d * bernoulli_p)^(k + 1)) / (1 - d * bernoulli_p) if d * bernoulli_p != 1 else k + 1
+
+    // do not do this check
+    //if ( num_nodes < pow(d, max_depth)) {
+    //    throw invalid_argument("num_nodes must be at least d^max_depth");
+    //}
 
     g_ptr = make_unique<Graph<boost::undirectedS>>();
 
+    if (sample_depth <= 0) {
+        assert (max_depth > 0);
+        sample_depth = max_depth;
+    }
     int start = 0;
+    int end = -1;  // return a leaf node
     int cur_depth = 0;
     int cur_node = start;
     // make expansion queue of leaf nodes
-    queue<int> expansion_q{};
-    expansion_q.push(cur_node);
 
-    while ( depth_check(cur_depth, max_depth) && node_check(cur_node, num_nodes) ) {
-        while ( !expansion_q.empty() ) {
+    queue<int> expansion_q{};
+    queue<int> expansion_q_next{};
+    expansion_q.push(cur_node);
+    while ( depth_check(cur_depth, max_depth) && !expansion_q.empty() && node_check(cur_node, num_nodes) ) {
+        while ( !expansion_q.empty() && node_check(cur_node, num_nodes) ) {
             auto to_expand = expansion_q.front();
             expansion_q.pop();
-            // sample number of children from probs
-            std::discrete_distribution<int> d(probs.begin(), probs.end());
-            int num_children = d(gen) + 1;  // at least one child
-            for ( int i = 0; i < num_children && node_check(cur_node, num_nodes - 1); i++ ) {
+
+            int num_children;
+            if (probs.has_value() && !probs.value().empty()) {  // old version
+                std::discrete_distribution<int> d(probs->begin(), probs->end());
+                num_children = d(gen) + 1;  // at least one child
+            } else {
+                num_children = d;
+                if (bernoulli_p > 0.) {
+                    std::binomial_distribution<> dist(d, bernoulli_p);
+                    num_children = dist(gen);
+                }
+            }
+            if ( num_children == 0 && cur_depth < 3 ) {  // safety to avoid empty graphs
+                num_children = 1;  // ensure at least one child if we have not reached the max number of nodes
+            }
+
+            for (int i = 0; i < num_children && node_check(cur_node + 1, num_nodes); i++) {
                 cur_node++;
                 boost::add_edge(to_expand, cur_node, *g_ptr);
-                expansion_q.push(cur_node);
+                expansion_q_next.push(cur_node);
             }
         }
         cur_depth++;
+        if (cur_depth == sample_depth and !expansion_q.empty()) {
+            end = expansion_q_next.back();  // return the last leaf node at the sampled depth}
+        }
+        swap(expansion_q, expansion_q_next);
     }
-    return start;
+    return make_pair(start, end);
 }
 
 #endif //GRAPH_H

@@ -549,6 +549,93 @@ public:
 
 };
 
+class KHopsTask : public Task {
+    /*
+     * Original versio
+     */
+public:
+    bool right_side_connect;
+
+    vector<int> seq;
+    vector<vector<int>> hops;
+
+    KHopsTask(std::mt19937 &gen, const int k, const int min_value, const int max_value,
+              const int length, const bool right_side_connect=true) {
+        assert (max_value - min_value > 2);
+        use_query_invariance = false;
+        this->right_side_connect = right_side_connect;
+        auto d = std::uniform_int_distribution<int>(min_value, max_value);
+
+        // generate sequence, ensure no adjacent tokens repeat, otherwise infinite loop in hops
+        seq.push_back(d(gen));
+        for (int i = 1; i < length; i++) {
+            auto next_token = d(gen);
+            while (next_token == seq[i - 1]) {
+                next_token = d(gen);
+            }
+            seq.push_back(next_token);
+        }
+
+        // generate hops, by starting at end and then search backwards until a match
+        auto back_pointer = vector<int>(length, -1);  // is your first hop, but used for all other hops
+        hops = vector<vector<int>>(k, vector<int>(length, -1));
+
+        for (int i = length - 1; i >= 0; i--) {
+            auto target = seq[i];
+            // next match in seq
+            for (int j = i - 1; j >= 0; j--) {
+                if (seq[j] == target) {
+                    int offset = 1;
+                    if (!right_side_connect) {
+                        offset = -1;
+                    }
+                    auto ptr_idx = j + offset;
+                    if (ptr_idx >= 0 && ptr_idx < length) {
+                        back_pointer[i] = ptr_idx;
+                        hops[0][i] = seq[ptr_idx];
+                    }
+                }
+            }
+        }
+        auto cur_back_pointer(back_pointer);
+        for (int kp = 1; kp < k; kp++) {
+            auto cur_seq = hops[kp];
+            for (int i = 0; i < length; i++) {
+                auto new_ptr_idx = cur_back_pointer[i];
+                if (new_ptr_idx == -1) {
+                    continue;
+                }
+                cur_back_pointer[i] = back_pointer[new_ptr_idx];
+                hops[kp][i] = seq[cur_back_pointer[i]];
+            }
+        }
+
+    }
+
+    void tokenize(
+            const map<std::string, int> &dictionary,
+            const vector<int> &node_shuffle_map,  // not really nodes but whatever the vocab is
+            const map<std::string, int> pos_dictionary,
+            std::mt19937 &gen) {
+
+        auto pad = dictionary.at("<pad>");
+        auto query_start_marker = dictionary.at("/");
+        auto query_end_marker = dictionary.at("?");
+        auto task_start_marker = dictionary.at("=");
+        auto task_end_marker = dictionary.at(".");
+
+
+        int prefix_size = 3; // q_start, k, q_end
+        auto task_size = 2 + static_cast<int>(seq.size()); // t_start, ground truths, t_end
+
+        tokenized_query_inputs.resize(prefix_size);
+        tokenized_task_inputs.resize(task_size);
+
+
+    }
+
+
+};
 
 class KHopsGenTask : public Task {
 public:
@@ -558,7 +645,7 @@ public:
     vector<int> ground_truths;
 
     vector<int> get_segment(std::mt19937 &gen, const int min_value, const int max_value,
-                            const int cur_value, const int segment_len, const bool is_last){
+                            const int cur_value, const int segment_len, const bool is_last) const{
         auto segment = vector<int>(segment_len + 1); // +1 for ground truth
         auto d = std::uniform_int_distribution<int>(min_value, max_value - 1);  // -1 since we will adjust
         for (int i = 0; i < static_cast<int>(segment.size()); i++) {
@@ -597,7 +684,8 @@ public:
         }
     }
 
-    vector<vector<int>> label_smooth_ground_truths(){
+    // TODO fix call MTP GTs and make it so that repeats stop the sequence
+    vector<vector<int>> label_smooth_ground_truths(){  // not for smoothing but MTP
         // The labels for at label_smoothed_ground_truths[:][0] are just the original ground truths
         vector<vector<int>> label_smoothed_ground_truths(ground_truths.size(), vector<int>());
         for (size_t i = 0; i < ground_truths.size(); i++) {

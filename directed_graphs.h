@@ -24,8 +24,6 @@
 
 using namespace std;
 
-typedef pair<int, int> start_end_pair;
-
 
 inline vector<unordered_set<int>> get_children(const unique_ptr<Graph<boost::directedS>> &g_ptr, const int N) {
   /*
