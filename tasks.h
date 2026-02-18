@@ -551,7 +551,7 @@ public:
 
 class KHopsTask : public Task {
     /*
-     * Original versio
+     * Original version
      */
 public:
     bool right_side_connect;
@@ -559,22 +559,44 @@ public:
     vector<int> seq;
     vector<vector<int>> hops;
 
-    KHopsTask(std::mt19937 &gen, const int k, const int min_value, const int max_value,
-              const int length, const bool right_side_connect=true) {
+    KHopsTask(std::mt19937 &gen, const int k, const int max_k, const int min_value, const int max_value,
+              const int length, const bool right_side_connect=true,
+              const bool mask_to_vocab_size=false  // i.e. fair sequential supervision efficiency
+                      ) {
         assert (max_value - min_value > 2);
         use_query_invariance = false;
         this->right_side_connect = right_side_connect;
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
 
-        // generate sequence, ensure no adjacent tokens repeat, otherwise infinite loop in hops
-        seq.push_back(d(gen));
-        for (int i = 1; i < length; i++) {
-            auto next_token = d(gen);
-            while (next_token == seq[i - 1]) {
-                next_token = d(gen);
+        cout << "Generating sequence for KHopsTask with parameters: k=" << k << ", min_value=" << min_value
+             << ", max_value=" << max_value << ", length=" << length
+             << ", right_side_connect=" << right_side_connect << endl;
+
+        if (length > 0) {
+            // generate sequence, ensure no adjacent tokens repeat, otherwise infinite loop in hops
+            seq.push_back(d(gen));
+            for (int i = 1; i < length; i++) {
+                auto next_token = d(gen);
+                while (next_token == seq[i - 1]) {
+                    next_token = d(gen);
+                }
+                seq.push_back(next_token);
             }
-            seq.push_back(next_token);
+        } else {  // treat the sequence length as max_k permutations of vocab
+            auto vocab = vector<int>(max_value - min_value + 1);
+            std::iota(vocab.begin(), vocab.end(), min_value);
+            for (int i = 0; i < max_k + 1; i++) {
+                std::shuffle(vocab.begin(), vocab.end(), gen);
+                for (size_t j = 0; j < vocab.size(); j++) {
+                    seq.push_back(vocab[j]);
+                }
+            }
         }
+
+        for (size_t i = 0; i < seq.size(); i++) {
+            cout << seq[i] << " ";
+        }
+        cout << endl;
 
         // generate hops, by starting at end and then search backwards until a match
         auto back_pointer = vector<int>(length, -1);  // is your first hop, but used for all other hops
@@ -599,16 +621,27 @@ public:
         }
         auto cur_back_pointer(back_pointer);
         for (int kp = 1; kp < k; kp++) {
+            cout << "Hop " << kp << ": " << endl;
             auto cur_seq = hops[kp];
             for (int i = 0; i < length; i++) {
                 auto new_ptr_idx = cur_back_pointer[i];
                 if (new_ptr_idx == -1) {
+                    cout << -1 << " ";
                     continue;
                 }
                 cur_back_pointer[i] = back_pointer[new_ptr_idx];
+                if (cur_back_pointer[i] == -1) {
+                    cout << -1 << " ";
+                    continue;
+                }
+                // store all hops for future use i.e. supervise intra-model via Markovian supervision
                 hops[kp][i] = seq[cur_back_pointer[i]];
+                cout << hops[kp][i] << " ";
             }
+            cout << endl;
         }
+
+        cout << "Finished generating hops for KHopsTask." << endl;
 
     }
 
@@ -624,18 +657,44 @@ public:
         auto task_start_marker = dictionary.at("=");
         auto task_end_marker = dictionary.at(".");
 
-
         int prefix_size = 3; // q_start, k, q_end
         auto task_size = 2 + static_cast<int>(seq.size()); // t_start, ground truths, t_end
-
         tokenized_query_inputs.resize(prefix_size);
         tokenized_task_inputs.resize(task_size);
+        tokenized_task_targets.resize(task_size, 1, pad);
 
+        // need to tokenize k, which means k-values need to be in vocab, use depth markers for this as work around
+        tokenized_query_inputs(0) = query_start_marker;
+        auto k_marker = "D" + to_string(hops.size());
+        tokenized_query_inputs(1) = dictionary.at(k_marker);
+        tokenized_query_inputs(2) = query_end_marker;
 
+        tokenized_task_inputs(0) = task_start_marker;
+        tokenized_task_targets(0, 0) = task_start_marker;
+
+        cout << "here1" << endl;
+
+        auto khops = hops[hops.size() - 1];
+        cout << "here2" << endl;
+        for (size_t i = 0; i < seq.size(); i++) {
+            tokenized_task_inputs(i + 1) = node_shuffle_map.at(seq[i]);
+            if (khops[i] >= 0) {
+                // tokenized_task_targets(i + 1, 0) = node_shuffle_map.at(khops[i]);
+            }
+        }
+
+        cout << "here3" << endl;
+
+        tokenized_task_inputs(task_size - 1) = task_end_marker;
+        tokenized_task_targets(task_size - 1, 0) = task_end_marker;
+
+        tokenized_query_pos.resize(task_size, 1);
+        for (size_t i = 0; i < static_cast<size_t>(prefix_size); i++) {
+            tokenized_query_pos(i) = static_cast<int>(i);
+        }
     }
-
-
 };
+
 
 class KHopsGenTask : public Task {
 public:
@@ -684,16 +743,15 @@ public:
         }
     }
 
-    // TODO fix call MTP GTs and make it so that repeats stop the sequence
-    vector<vector<int>> label_smooth_ground_truths(){  // not for smoothing but MTP
-        // The labels for at label_smoothed_ground_truths[:][0] are just the original ground truths
-        vector<vector<int>> label_smoothed_ground_truths(ground_truths.size(), vector<int>());
+    vector<vector<int>> get_multi_label_ground_truths(const bool no_repeats=true){  // TODO no repeats
+        // The labels for at multi_label_ground_truths[:][0] are just the original ground truths
+        vector<vector<int>> multi_label_ground_truths(ground_truths.size(), vector<int>());
         for (size_t i = 0; i < ground_truths.size(); i++) {
             for (size_t j = i; j < ground_truths.size(); j++) {
-                label_smoothed_ground_truths[i].push_back(ground_truths[j]);  // add true path
+                multi_label_ground_truths[i].push_back(ground_truths[j]);  // add true path
             }
         }
-        return label_smoothed_ground_truths;
+        return multi_label_ground_truths;
     }
 
     void tokenize(
@@ -717,12 +775,11 @@ public:
         tokenized_query_inputs.resize(prefix_size);
         tokenized_task_inputs.resize(task_size);
 
-
-        auto label_smoothed_ground_truths = label_smooth_ground_truths();
+        auto multi_label_ground_truths = get_multi_label_ground_truths();
         int max_num_labels = 1;
-        for (size_t i = 0; i < label_smoothed_ground_truths.size(); i++) {
-            if (label_smoothed_ground_truths[i].size() > static_cast<size_t>(max_num_labels)) {
-                max_num_labels = static_cast<int>(label_smoothed_ground_truths[i].size());
+        for (size_t i = 0; i < multi_label_ground_truths.size(); i++) {
+            if (multi_label_ground_truths[i].size() > static_cast<size_t>(max_num_labels)) {
+                max_num_labels = static_cast<int>(multi_label_ground_truths[i].size());
             }
         }
         tokenized_task_targets.resize(task_size, max_num_labels, pad);
@@ -749,8 +806,8 @@ public:
         for (size_t i = 0; i < ground_truths.size(); i++) {
             tokenized_task_inputs(i + 1) = ground_truths[i];
             // tokenized_task_targets(i + 1, 0) = ground_truths[i];
-            for (size_t j = 0; j < label_smoothed_ground_truths[i].size(); j++) {
-                tokenized_task_targets(i + 1, j) = label_smoothed_ground_truths[i][j];
+            for (size_t j = 0; j < multi_label_ground_truths[i].size(); j++) {
+                tokenized_task_targets(i + 1, j) = multi_label_ground_truths[i][j];
             }
         }
         tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;

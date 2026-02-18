@@ -1024,11 +1024,13 @@ public:
     KHopsInstance(std::mt19937
                   &gen,
                   const map<std::string, int> &dictionary,
+                  const int k, const int max_k,
                   const int min_vocab,
                   int max_vocab,
             // task parameters
                   const string &task_type,
                   const string scratchpad_type,
+                  const int length,
                   const vector<int> &segment_lengths,
                   const bool right_side_connect,  // khops gen
                   const bool scratchpad_as_prefix
@@ -1041,6 +1043,10 @@ public:
 
         if (task_type == "khops_gen") {
             task = make_unique<KHopsGenTask>(gen, min_vocab, max_vocab, segment_lengths, right_side_connect);
+        } else if (task_type == "khops") {
+            task = make_unique<KHopsTask>(gen, k, max_k, min_vocab, max_vocab, length, right_side_connect);
+        } else {
+            throw std::invalid_argument("Invalid task type: " + task_type);
         }
         if (task) {  // node_shuffle_map is not used
             task->tokenize(dictionary, vector<int>(), pos_dictionary, gen);

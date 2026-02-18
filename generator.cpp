@@ -654,6 +654,61 @@ inline py::dict balanced_n(
 }
 
 
+inline py::dict khops_n(const int min_khops, const int max_khops,
+                            const int min_prefix_length, const int max_prefix_length,
+                            const bool right_side_connect = true,
+                            int min_vocab = -1, int max_vocab = -1,
+                            const int batch_size = 256,
+                            const int num_thinking_tokens = 0,
+                            const string &scratchpad_type = "none",
+                            const bool scratchpad_as_prefix = false,
+                            const bool is_flat_model = true,
+                            const bool align_prefix_front_pad = false,
+                            const py::kwargs &kwargs = py::kwargs()) {
+
+    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
+    // we always use the full vocabulary, this is another difference from graphs where the number of nodes can vary
+    // if we do not do this then we need to use a node mapping which is extra complexity for little gain
+    if (min_vocab == -1 and max_vocab == -1) {  // this is bad in general as the sequence length will be large
+        min_vocab = dictionary_num_special;
+        max_vocab = dictionary_max_vocab - 1;
+    } else if (max_vocab == -1) {
+        throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
+    }
+
+    optional<vector<float>> task_sample_dist = nullopt;
+    if (kwargs.contains("task_sample_dist")) {
+        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
+            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
+        }
+    }
+
+    vector<int> fake_segment_lengths;
+    auto batched_instances = KHopsBatchedInstances("khops", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+
+    for (int b = 0; b < batch_size; b++) {
+        int k;
+        int max_k;
+        if (task_sample_dist.has_value()){
+            k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
+            max_k = task_sample_dist.value()[task_sample_dist.value().size() - 1] + min_khops;
+        } else {
+            k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
+            max_k = max_khops + 1;
+        }
+        int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
+
+
+        auto instance = KHopsInstance(gen, dictionary, k, max_k , min_vocab, max_vocab,
+                                      "khops", scratchpad_type,
+                                      prefix_length, fake_segment_lengths, right_side_connect,
+                                      scratchpad_as_prefix);
+        batched_instances.add(instance);
+    }
+    return batched_instances.package_for_model(dictionary, pos_dictionary);
+}
+
+
 inline py::dict khops_gen_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
                             const bool right_side_connect = true, const string &partition_method = "uniform",
@@ -703,10 +758,11 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
         } else {
             segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
         }
-        auto instance = KHopsInstance(gen, dictionary, min_vocab, max_vocab,
-                                                    "khops_gen", scratchpad_type,
-                                                   segment_lengths, right_side_connect,
-                                                   scratchpad_as_prefix);
+        auto instance = KHopsInstance(gen, dictionary, -1, -1,
+                                      min_vocab, max_vocab,
+                                      "khops_gen", scratchpad_type,
+                                      -1, segment_lengths, right_side_connect,
+                                      scratchpad_as_prefix);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
