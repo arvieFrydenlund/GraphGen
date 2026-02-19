@@ -555,94 +555,88 @@ class KHopsTask : public Task {
      */
 public:
     bool right_side_connect;
+    bool permutation_version;
+    bool mask_to_vocab_size;
+    bool vocab_size;
 
     vector<int> seq;
     vector<vector<int>> hops;
 
     KHopsTask(std::mt19937 &gen, const int k, const int max_k, const int min_value, const int max_value,
               const int length, const bool right_side_connect=true,
-              const bool mask_to_vocab_size=false  // i.e. fair sequential supervision efficiency
+              const bool permutation_version=false, const bool mask_to_vocab_size=false  // i.e. fair sequential supervision efficiency
                       ) {
         assert (max_value - min_value > 2);
         use_query_invariance = false;
         this->right_side_connect = right_side_connect;
+        this->permutation_version = permutation_version;
+        this->mask_to_vocab_size = mask_to_vocab_size;
+        this->vocab_size = max_value - min_value + 1;
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
 
-        cout << "Generating sequence for KHopsTask with parameters: k=" << k << ", min_value=" << min_value
-             << ", max_value=" << max_value << ", length=" << length
-             << ", right_side_connect=" << right_side_connect << endl;
-
-        if (length > 0) {
-            // generate sequence, ensure no adjacent tokens repeat, otherwise infinite loop in hops
+        if (permutation_version) {  // treat the sequence length as max_k permutations of vocab
+            auto vocab = vector<int>(max_value - min_value + 1);
+            std::iota(vocab.begin(), vocab.end(), min_value);
+            auto prior_last = -1;
+            for (int i = 0; i < max_k + 1; i++) {  // +1 for ground truths
+                std::shuffle(vocab.begin(), vocab.end(), gen);
+                // ensure no adjacent tokens repeat, otherwise infinite loop in hops
+                if (prior_last > 0 && vocab[0] == prior_last) {
+                    std::shuffle(vocab.begin(), vocab.end(), gen);
+                }
+                for (size_t j = 0; j < vocab.size(); j++) {
+                    seq.push_back(vocab[j]);
+                }
+                prior_last = vocab[vocab.size() - 1];
+            }
+        } else {
             seq.push_back(d(gen));
             for (int i = 1; i < length; i++) {
                 auto next_token = d(gen);
+                // generate sequence, ensure no adjacent tokens repeat, otherwise infinite loop in hops
                 while (next_token == seq[i - 1]) {
                     next_token = d(gen);
                 }
                 seq.push_back(next_token);
             }
-        } else {  // treat the sequence length as max_k permutations of vocab
-            auto vocab = vector<int>(max_value - min_value + 1);
-            std::iota(vocab.begin(), vocab.end(), min_value);
-            for (int i = 0; i < max_k + 1; i++) {
-                std::shuffle(vocab.begin(), vocab.end(), gen);
-                for (size_t j = 0; j < vocab.size(); j++) {
-                    seq.push_back(vocab[j]);
-                }
-            }
         }
-
-        for (size_t i = 0; i < seq.size(); i++) {
-            cout << seq[i] << " ";
-        }
-        cout << endl;
-
+        
         // generate hops, by starting at end and then search backwards until a match
-        auto back_pointer = vector<int>(length, -1);  // is your first hop, but used for all other hops
-        hops = vector<vector<int>>(k, vector<int>(length, -1));
+        auto back_pointer = vector<int>(seq.size(), -1);  // is your first hop, but used for all other hops
+        hops = vector<vector<int>>(k, vector<int>(seq.size(), -1));
 
-        for (int i = length - 1; i >= 0; i--) {
+        auto offset = right_side_connect ? 1 : -1;
+        for (int i = seq.size() - 1; i >= 0; i--) {
             auto target = seq[i];
             // next match in seq
             for (int j = i - 1; j >= 0; j--) {
                 if (seq[j] == target) {
-                    int offset = 1;
-                    if (!right_side_connect) {
-                        offset = -1;
-                    }
                     auto ptr_idx = j + offset;
-                    if (ptr_idx >= 0 && ptr_idx < length) {
+                    if (ptr_idx >= 0 && ptr_idx < seq.size() ) {
                         back_pointer[i] = ptr_idx;
                         hops[0][i] = seq[ptr_idx];
                     }
+                    break;
                 }
             }
         }
+
         auto cur_back_pointer(back_pointer);
         for (int kp = 1; kp < k; kp++) {
-            cout << "Hop " << kp << ": " << endl;
             auto cur_seq = hops[kp];
-            for (int i = 0; i < length; i++) {
+            for (int i = 0; i < seq.size(); i++) {
                 auto new_ptr_idx = cur_back_pointer[i];
                 if (new_ptr_idx == -1) {
-                    cout << -1 << " ";
                     continue;
                 }
                 cur_back_pointer[i] = back_pointer[new_ptr_idx];
                 if (cur_back_pointer[i] == -1) {
-                    cout << -1 << " ";
                     continue;
                 }
                 // store all hops for future use i.e. supervise intra-model via Markovian supervision
                 hops[kp][i] = seq[cur_back_pointer[i]];
-                cout << hops[kp][i] << " ";
             }
-            cout << endl;
         }
-
-        cout << "Finished generating hops for KHopsTask." << endl;
-
     }
 
     void tokenize(
@@ -672,18 +666,15 @@ public:
         tokenized_task_inputs(0) = task_start_marker;
         tokenized_task_targets(0, 0) = task_start_marker;
 
-        cout << "here1" << endl;
-
         auto khops = hops[hops.size() - 1];
-        cout << "here2" << endl;
         for (size_t i = 0; i < seq.size(); i++) {
-            tokenized_task_inputs(i + 1) = node_shuffle_map.at(seq[i]);
+            tokenized_task_inputs(i + 1) = seq[i];
             if (khops[i] >= 0) {
-                // tokenized_task_targets(i + 1, 0) = node_shuffle_map.at(khops[i]);
+                if (!mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens to vocab size
+                    tokenized_task_targets(i + 1, 0) = khops[i];
+                }
             }
         }
-
-        cout << "here3" << endl;
 
         tokenized_task_inputs(task_size - 1) = task_end_marker;
         tokenized_task_targets(task_size - 1, 0) = task_end_marker;
@@ -706,10 +697,10 @@ public:
     vector<int> get_segment(std::mt19937 &gen, const int min_value, const int max_value,
                             const int cur_value, const int segment_len, const bool is_last) const{
         auto segment = vector<int>(segment_len + 1); // +1 for ground truth
-        auto d = std::uniform_int_distribution<int>(min_value, max_value - 1);  // -1 since we will adjust
+        auto d = std::uniform_int_distribution<int>(min_value, max_value - 1);  // -1 since we will adjust off cur_value
         for (int i = 0; i < static_cast<int>(segment.size()); i++) {
             auto rnd_value = d(gen);
-            if (rnd_value >= cur_value) {
+            if (rnd_value >= cur_value) {  // forces skipping the cur_value
                 rnd_value += 1;   // can not sample the current value, easier than adjusting distribution
             }
             segment[i] = rnd_value;
@@ -723,20 +714,44 @@ public:
     }
 
     KHopsGenTask(std::mt19937 &gen, const int min_value, const int max_value,
-                 const vector<int> &segment_lengths, const bool right_side_connect=true){
+                 const vector<int> &segment_lengths, const bool right_side_connect=true, const bool no_repeats=true){
         use_query_invariance = false;
         this->right_side_connect = right_side_connect;
 
+        if (no_repeats && segment_lengths.size() + 1 > static_cast<size_t>(max_value - min_value + 1)) {
+            throw std::invalid_argument("Not enough unique values to fill segments with no repeats.");
+        }
+
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
-        auto cur_value = d(gen);
+
+        int cur_value;
+        vector<int> path(segment_lengths.size() + 1);
+        if (no_repeats) {  // sample a path with no repeats
+            auto vocab = vector<int>(max_value - min_value + 1);
+            std::iota(vocab.begin(), vocab.end(), min_value);
+            std::shuffle(vocab.begin(), vocab.end(), gen);
+            for (size_t i = 0; i < path.size(); i++) {
+                path[i] = vocab[i];
+            }
+            cur_value = path[0];
+        } else {
+            cur_value = d(gen);
+        }
+
         for (int i = 0; i < static_cast<int>(segment_lengths.size()); i++) {
             ground_truths.push_back(cur_value);
             auto is_last = (i == static_cast<int>(segment_lengths.size()) - 1);
             auto segment = get_segment(gen, min_value, max_value, cur_value,
                                        segment_lengths[i], is_last);
             if (right_side_connect){
+                if (no_repeats) {
+                    segment[static_cast<int>(segment.size()) - 2] = path[i + 1];
+                }
                 cur_value = segment[static_cast<int>(segment.size()) - 2];
             } else {
+                if (no_repeats) {
+                    segment[static_cast<int>(segment.size()) - 1] = path[i + 1];
+                }
                 cur_value = segment[static_cast<int>(segment.size()) - 1];
             }
             segments.push_back(segment);

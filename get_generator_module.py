@@ -48,9 +48,9 @@ def get_args_parser():
                         help="Radius for euclidean graphs, -1.0 means random")
 
     # random tree graphs settings
-    parser.add_argument('--max-degree', type=int, default=3)
-    parser.add_argument('--max-depth', type=int, default=7)
-    parser.add_argument('--bernoulli-p', type=float, default=0.5)
+    parser.add_argument('--max_degree', type=int, default=3)
+    parser.add_argument('--max_depth', type=int, default=7)
+    parser.add_argument('--bernoulli_p', type=float, default=0.5)
     parser.add_argument('--probs', type=float, nargs='+',
                         help="Probabilities for random tree graphs, should sum to 1.0")
 
@@ -99,6 +99,8 @@ def get_args_parser():
     parser.add_argument('--max_prefix_length', type=int, default=100)
     parser.add_argument('--right_side_connect', action='store_true', default=False,
                         help='The usual khops version, but not how I have BFS set up.')
+    parser.add_argument('--permutation_version', action='store_true', default=False,)
+    parser.add_argument('--mask_to_vocab_size', action='store_true', default=False,)
     parser.add_argument('--partition_method', type=str, default='uniform')
 
     # tokenization settings

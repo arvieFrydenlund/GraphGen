@@ -656,7 +656,9 @@ inline py::dict balanced_n(
 
 inline py::dict khops_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
-                            const bool right_side_connect = true,
+                            const bool right_side_connect=true,
+                            const bool permutation_version=false,
+                            const bool mask_to_vocab_size=false,
                             int min_vocab = -1, int max_vocab = -1,
                             const int batch_size = 256,
                             const int num_thinking_tokens = 0,
@@ -701,7 +703,8 @@ inline py::dict khops_n(const int min_khops, const int max_khops,
 
         auto instance = KHopsInstance(gen, dictionary, k, max_k , min_vocab, max_vocab,
                                       "khops", scratchpad_type,
-                                      prefix_length, fake_segment_lengths, right_side_connect,
+                                      prefix_length, fake_segment_lengths,
+                                      right_side_connect, permutation_version, mask_to_vocab_size,
                                       scratchpad_as_prefix);
         batched_instances.add(instance);
     }
@@ -761,7 +764,7 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
         auto instance = KHopsInstance(gen, dictionary, -1, -1,
                                       min_vocab, max_vocab,
                                       "khops_gen", scratchpad_type,
-                                      -1, segment_lengths, right_side_connect,
+                                      -1, segment_lengths, right_side_connect, false, false,
                                       scratchpad_as_prefix);
         batched_instances.add(instance);
     }

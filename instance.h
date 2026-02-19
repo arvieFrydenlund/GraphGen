@@ -249,6 +249,8 @@ public:
             query_length = static_cast<int>(task->tokenized_query_inputs.shape()[0]);
             num_tokens += query_length;
         }
+
+        // todo no graph for khops
         graph_length = static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]);
         if (graph_tokenizer->include_nodes_in_graph_tokenization) {
             graph_nodes_length = static_cast<int>(graph_tokenizer->node_list.size());
@@ -256,6 +258,8 @@ public:
         if (!no_graph) {
             num_tokens += graph_length;
         }
+        // todo
+
         thinking_tokens_length = num_thinking_tokens;
         num_tokens += thinking_tokens_length;
         auto max_labels = 0;
@@ -873,7 +877,7 @@ public:
                 d["ground_truths_gather_indices"] = py::none();
             }
         } else {
-            d["hashes"] = py::none();  // TODO has by tokenization
+            d["hashes"] = py::none();  // TODO has to be done by tokenization
 
             d["graph_edge_start_indices"] = py::none();
             d["graph_edge_lengths"] = py::none();
@@ -1033,6 +1037,8 @@ public:
                   const int length,
                   const vector<int> &segment_lengths,
                   const bool right_side_connect,  // khops gen
+                  const bool permutation_version,
+                  const bool mask_to_vocab_size,
                   const bool scratchpad_as_prefix
     ) {
         /*
@@ -1044,7 +1050,7 @@ public:
         if (task_type == "khops_gen") {
             task = make_unique<KHopsGenTask>(gen, min_vocab, max_vocab, segment_lengths, right_side_connect);
         } else if (task_type == "khops") {
-            task = make_unique<KHopsTask>(gen, k, max_k, min_vocab, max_vocab, length, right_side_connect);
+            task = make_unique<KHopsTask>(gen, k, max_k, min_vocab, max_vocab, length, right_side_connect, permutation_version, mask_to_vocab_size);
         } else {
             throw std::invalid_argument("Invalid task type: " + task_type);
         }

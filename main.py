@@ -46,6 +46,17 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
 
 # KHOPS
 
+def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=True, mask_to_vocab_size=False, batch_size=40):
+    args.task_type = "khops"
+    args.right_side_connect = right_side_connect
+    args.permutation_version = permutation_version
+    args.mask_to_vocab_size = mask_to_vocab_size
+    args.batch_size = batch_size
+
+    b_n = generator.khops_gen_n(**vars(args))
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+
 def _t_int_partition(Q=200, N=9, num=10000):
     print('Testing integer partitioning')
     for _i in range(num):
@@ -357,7 +368,7 @@ def _t_bfs(args, d, batch_size=3):
             print(f'{k}: {v}, {type(v)}')
 
 
-def main(max_vocab_size=200):
+def main(max_vocab_size=10):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -388,13 +399,14 @@ def main(max_vocab_size=200):
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
+    _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
 
-    _t_random_trees(args, token_dict, pos_dict)
+    # _t_random_trees(args, token_dict, pos_dict)
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()
