@@ -46,14 +46,14 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
 
 # KHOPS
 
-def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=True, mask_to_vocab_size=False, batch_size=40):
+def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=True, mask_to_vocab_size=True, batch_size=40):
     args.task_type = "khops"
     args.right_side_connect = right_side_connect
     args.permutation_version = permutation_version
     args.mask_to_vocab_size = mask_to_vocab_size
     args.batch_size = batch_size
 
-    b_n = generator.khops_gen_n(**vars(args))
+    b_n = generator.khops_n(**vars(args))
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
@@ -407,6 +407,12 @@ def main(max_vocab_size=10):
     # _t_scratchpad_validation(args, token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)
+
+
+
+
+
+
 
     # _t_batched_graphs_for_plotting_and_hashes()
     # _t_batched_graphs_flat_model()

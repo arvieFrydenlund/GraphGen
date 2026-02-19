@@ -1165,6 +1165,32 @@ PYBIND11_MODULE(generator, m) {
           py::arg("use_task_structure") = false,
           py::arg("use_graph_structure") = false);
 
+    m.def("khops_n", &khops_n,
+          "Generate a batch of k-hops tasks\nParameters:\n\t"
+          "min_k: min number of hops.\n\t"
+          "max_k: max number of hops.\n\t"
+          "min_prefix_length: min prefix length.\n\t"
+          "max_prefix_length: max prefix length.\n\t"
+          "right_side_connect: whether to connect from right side.\n\t"
+          "permutation_version:  \n\t"
+          "mask_to_vocab_size:  \n\t",
+
+          py::arg("min_khops"),
+          py::arg("max_khops"),
+          py::arg("min_prefix_length"),
+          py::arg("max_prefix_length"),
+          py::arg("right_side_connect") = true,
+          py::arg("permutation_version") = true,
+          py::arg("mask_to_vocab_size") = false,
+          py::arg("min_vocab") = -1,
+          py::arg("max_vocab") = -1,
+          py::arg("batch_size") = 256,
+          py::arg("num_thinking_tokens") = 0,
+          py::arg("scratchpad_type") = "none",
+          py::arg("scratchpad_as_prefix") = false,
+          py::arg("is_flat_model") = true,
+          py::arg("align_prefix_front_pad") = false);
+
     m.def("khops_gen_n", &khops_gen_n,
           "Generate a batch of k-hops generation tasks\nParameters:\n\t"
           "min_k: min number of hops.\n\t"

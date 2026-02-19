@@ -557,7 +557,7 @@ public:
     bool right_side_connect;
     bool permutation_version;
     bool mask_to_vocab_size;
-    bool vocab_size;
+    int vocab_size;
 
     vector<int> seq;
     vector<vector<int>> hops;
@@ -572,6 +572,7 @@ public:
         this->permutation_version = permutation_version;
         this->mask_to_vocab_size = mask_to_vocab_size;
         this->vocab_size = max_value - min_value + 1;
+
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
 
         if (permutation_version) {  // treat the sequence length as max_k permutations of vocab
@@ -670,7 +671,7 @@ public:
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
             if (khops[i] >= 0) {
-                if (!mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens to vocab size
+                if (!mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
                     tokenized_task_targets(i + 1, 0) = khops[i];
                 }
             }
