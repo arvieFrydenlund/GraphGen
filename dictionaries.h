@@ -192,10 +192,14 @@ inline void set_default_pos_dictionary() {
     */
     pos_dictionary = {
             {"pad", 0},  // needed for embedding look-up
+            // task tokens
             {"query_invariance", 1},
             {"edge_invariance", 2},
             {"node_invariance", 3},
             {"graph_invariance", 4},
+            {"scratchpad_invariance", 5},
+            {"gen_invariance", 6},
+
             {"misc_start", 11},
             {"misc_end", 99},
             {"query_start", 100},

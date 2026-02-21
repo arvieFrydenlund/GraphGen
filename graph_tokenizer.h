@@ -18,7 +18,7 @@ using namespace std;
 class GraphTokenizer {
 public:
     Matrix<int> tokenized_inputs; // possibly 2D inputs when using concat_edges
-    Matrix<int> tokenized_pos;  // possibly 2D positions when using use_graph_structure
+    Matrix<int> tokenized_pos;  // possibly 2D positions when using use_graph_structure or task_tokens
 
     vector<int> node_list;
     // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
@@ -34,6 +34,7 @@ public:
     bool use_node_invariance;
     bool use_graph_invariance;
     bool use_graph_structure;
+    bool use_task_tokens;
 
     GraphTokenizer(vector<pair<int, int> > edge_list,
                    const bool is_causal = false, const bool is_direct_ranking = false,
@@ -42,7 +43,8 @@ public:
                    const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
                    const bool use_node_invariance = false,
                    const bool use_graph_invariance = false,  // divide positions by task structure
-                   const bool use_graph_structure = false) {  // 2d positions by graph structure
+                   const bool use_graph_structure = false,
+                   const bool use_task_tokens = false) {  // 2d positions by graph structure
         this->edge_list = edge_list;
         this->is_causal = is_causal;
         this->is_direct_ranking = is_direct_ranking;
@@ -53,6 +55,7 @@ public:
         this->use_node_invariance = use_node_invariance;
         this->use_graph_invariance = use_graph_invariance;
         this->use_graph_structure = use_graph_structure;
+        this->use_task_tokens = use_task_tokens;
 
         // build node list by edge list order, this is not always needed
         node_list = vector<int>();
