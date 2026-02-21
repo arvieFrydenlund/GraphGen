@@ -86,8 +86,9 @@ public:
     vector<int> path;
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
     int max_num_labels = 1;
+    float sample_choice_node = 0.9; //  same a choice head (look-ahead at k would be nice but bias topology I think)
 
-    static pair<int, int> sample_start_end(std::mt19937 &gen,
+    pair<int, int> sample_start_end(std::mt19937 &gen,
                                     const unique_ptr<vector<vector<int> > > &distances_ptr,
                                     const int max_path_length, const int min_path_length,
                                     std::discrete_distribution<int> &d1, int start = -1) {
@@ -100,6 +101,7 @@ public:
             auto sampled_path_length = d1(gen) + min_path_length;
             // get all paths of that length
             auto set_of_paths = vector<pair<int, int> >();
+            auto set_of_choice_paths = vector<pair<int, int> >();
             if (start != -1) {  // known start
                 for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
                     // + 1 because distance is path length - 1
@@ -113,13 +115,28 @@ public:
                         // + 1 because distance is path length - 1
                         if ((*distances_ptr)[i][j] + 1 == sampled_path_length) {
                             set_of_paths.push_back(make_pair(i, j));
+                            // if i has degree >= 2, add to choice path, making start node a choice node
+                            int degree = 0;
+                            for (int k = 0; k < static_cast<int>((*distances_ptr)[i].size()); k++) {
+                                if ((*distances_ptr)[i][k] == 1) {
+                                    degree += 1;
+                                }
+                            }
+                            if (degree >= 2) {
+                                set_of_choice_paths.push_back(make_pair(i, j));
+                            }
                         }
                     }
                 }
             }
             if (!set_of_paths.empty()) { // sample a path from the set
-                uniform_int_distribution<int> d2(0, static_cast<int>(set_of_paths.size()) - 1);
-                start_end = set_of_paths[d2(gen)];
+                if (!set_of_choice_paths.empty() && sample_choice_node > 0 && std::uniform_real_distribution<float>(0.0, 1.0)(gen) < sample_choice_node) {
+                    uniform_int_distribution<int> d2(0, static_cast<int>(set_of_choice_paths.size()) - 1);
+                    start_end = set_of_choice_paths[d2(gen)];
+                } else {
+                    uniform_int_distribution<int> d2(0, static_cast<int>(set_of_paths.size()) - 1);
+                    start_end = set_of_paths[d2(gen)];
+                }
                 break;
             }
             attempts += 1;
