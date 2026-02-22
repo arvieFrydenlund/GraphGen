@@ -189,16 +189,17 @@ inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = fal
 
 inline void set_default_pos_dictionary() {
     /* Sets a default pos dictionary
+     * tokenization is [Q E N S T]
     */
     pos_dictionary = {
             {"pad", 0},  // needed for embedding look-up
-            // task tokens
+            // task tokens, note that these are not the same as the ones in the seq due to different embedding tables.
             {"query_invariance", 1},
             {"edge_invariance", 2},
             {"node_invariance", 3},
             {"graph_invariance", 4},
             {"scratchpad_invariance", 5},
-            {"gen_invariance", 6},
+            {"task_invariance", 6},
 
             {"misc_start", 11},
             {"misc_end", 99},
