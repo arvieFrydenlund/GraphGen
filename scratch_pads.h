@@ -46,6 +46,7 @@ public:
     *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
     */
 
+
     bool stop_once_found = true;
     bool use_unique_depth_markers = true;
     vector<int> path;
@@ -55,7 +56,7 @@ public:
                   const unique_ptr<Graph<D> > &g_ptr,
                   const vector<pair<int, int> > &edge_list,  // sort by edge list order to avoid semantics leak
                   const bool use_unique_depth_markers = true
-    ) {
+    ) : {
         this->use_unique_depth_markers = use_unique_depth_markers;
 
         auto node_order = vector<int>( static_cast<int>(boost::num_vertices(*g_ptr)), -1);

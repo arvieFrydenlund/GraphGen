@@ -19,6 +19,7 @@
 #include "instance.h"
 #include "tasks.h"
 #include "dictionaries.h"
+#include "args.h"
 
 using namespace std;
 namespace py = pybind11;
@@ -163,26 +164,15 @@ py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, 
 /* ************************************************
  *  Batched graph generation
  *  ***********************************************/
-
-void check_args(const int c_min, const int c_max,
-                const int batch_size,
-                const int min_path_length, const int max_path_length,
-                const int num_thinking_tokens) {
-    if (c_min > 0 and c_min > c_max) { throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
+void checks_and_sets(int &min_num_nodes, int &max_num_nodes,
+                     int &min_vocab, int &max_vocab,
+                     const int batch_size) {
     if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
-    if (min_path_length > 0 and min_path_length > max_path_length) {
-        throw std::invalid_argument("Invalid arguments: min_path_length > max_path_length");
-    }
-    if (num_thinking_tokens < 0) {
-        throw std::invalid_argument("Invalid arguments: num_thinking_tokens < 0");
-    }
+
     if (dictionary.empty()) {
         throw std::invalid_argument("Invalid arguments: dictionary is empty.  Please set it first.");
     }
-}
 
-vector<int> check_and_set_vocab_limits(int min_num_nodes, int max_num_nodes,
-                                       int min_vocab, int max_vocab) {
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -198,183 +188,95 @@ vector<int> check_and_set_vocab_limits(int min_num_nodes, int max_num_nodes,
                  to_string(max_vocab) + " - " + to_string(min_vocab) + " < " + to_string(max_num_nodes);
         throw std::invalid_argument(s);
     }
-    return {min_num_nodes, max_num_nodes, min_vocab, max_vocab};
 }
-
-inline int sample_num_nodes(const int min_num_nodes, const int max_num_nodes) {
-    if (max_num_nodes == min_num_nodes) {
-        return max_num_nodes;
-    }
-    uniform_int_distribution<int> d(min_num_nodes, max_num_nodes);
-    return d(gen);
-};
-
-
-inline int attempt_check(const int E, const int max_edges, const int attempts, const int max_attempts) {
-    if (E > max_edges) {
-        if (attempts > max_attempts) {
-            cout << "Failed to generate graph after " << attempts << " attempts" << endl;
-        }
-        return 1;
-    }
-    return 0;
-}
-
 
 inline py::dict erdos_renyi_n(
         int min_num_nodes, int max_num_nodes, float p = -1.0, const int c_min = 75, const int c_max = 125,
         const string &task_type = "shortest_path",
-        const int max_path_length = 10, const int min_path_length = 1,
-        const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-        int max_query_size = -1, const int min_query_size = 2,
-        const bool is_causal = false, const bool is_direct_ranking = false,
+        const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
         int min_vocab = -1, int max_vocab = -1,
         const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+        const bool is_causal = false,
+        const bool is_direct_ranking = false,
         const bool concat_edges = true,
         const bool duplicate_edges = false,
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
-        const bool use_edges_invariance = false,  // for concated edges this allows true permutation invariance
-        const bool use_node_invariance = false,
-        const bool use_graph_invariance = false,
-        const bool use_query_invariance = false,
-        const bool use_task_structure = false,  // divide positions by task structure
-        const bool use_graph_structure = false,  // 2d positions by graph structure
         const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(c_min, c_max, batch_size, min_path_length, max_path_length, num_thinking_tokens);
     if (p > 1.0) { throw std::invalid_argument("Invalid arguments: p > 1.0"); }
+    checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
-    auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
-    min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
-
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
-    optional<vector<int>> given_query = nullopt;
-
-    auto batched_instances = BatchedInstances<boost::undirectedS>(
-            "erdos_renyi", task_type,
-            min_vocab, max_vocab,
-            query_at_end, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+    Args args(task_type, scratchpad_type, "erdos_renyi", min_vocab, max_vocab,
+              is_causal, is_direct_ranking, query_at_end, no_graph,
+              concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
     int attempts = 0;
+    auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        int num_nodes = sample_num_nodes(min_num_nodes, max_num_nodes);
-        unique_ptr<Graph<boost::undirectedS> > g_ptr;
-        // auto graph_t = time_before();
-        erdos_renyi_generator(g_ptr, num_nodes, gen, p, c_min, c_max, false);
-        // time_after(graph_t, "graph gen");
-        // const auto N = num_vertices(*g_ptr);
-        const auto E = num_edges(*g_ptr);
-        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+        auto graph = make_unique<GraphWrapper<boost::undirectedS> >(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                                                    shuffle_edges, shuffle_nodes, c_min, c_max);
+        graph->make_erdos_renyi(gen, p);
+        if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
         // auto pack_t = time_before();
-        auto instance = Instance<boost::undirectedS>(g_ptr, gen, dictionary,
-                                                     min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
-                                                     task_type, scratchpad_type,
-                                                     max_path_length, min_path_length, -1, -1, task_sample_dist,
-                                                     sort_adjacency_lists, use_unique_depth_markers,
-                                                     given_query, max_query_size, min_query_size,
-                                                     is_causal, is_direct_ranking, concat_edges, duplicate_edges,
-                                                     include_nodes_in_graph_tokenization,
-                                                     scratchpad_as_prefix, no_graph,
-                                                     pos_dictionary, use_edges_invariance, use_node_invariance,
-                                                     use_graph_invariance, use_query_invariance,
-                                                     use_task_structure, use_graph_structure
-        );
+        Instance<boost::undirectedS> instance(gen, graph, args, dictionary, pos_dictionary);
         // time_after(pack_t, "pack");
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
 }
 
-
 inline py::dict euclidean_n(
-        int min_num_nodes, int max_num_nodes, const int dim = 2, float radius = -1.0,
-        const int c_min = 75, const int c_max = 125,
+        int min_num_nodes, int max_num_nodes, const int dim = 2, float radius = -1.0, const int c_min = 75, const int c_max = 125,
         const string &task_type = "shortest_path",
-        const int max_path_length = 10, const int min_path_length = 1,
-        const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-        int max_query_size = -1, const int min_query_size = 2,
-        const bool is_causal = false, const bool is_direct_ranking = false,
+        const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
         int min_vocab = -1, int max_vocab = -1,
         const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+        const bool is_causal = false,
+        const bool is_direct_ranking = false,
         const bool concat_edges = true,
         const bool duplicate_edges = false,
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
-        const bool use_edges_invariance = false,
-        const bool use_node_invariance = false,
-        const bool use_graph_invariance = false,
-        const bool use_query_invariance = false,
-        const bool use_task_structure = false,
-        const bool use_graph_structure = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(c_min, c_max, batch_size, min_path_length, max_path_length, num_thinking_tokens);
     if (dim < 0) { throw std::invalid_argument("Invalid arguments: dim < 0"); }
-    auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
-    min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
+    checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
-
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
-    optional<vector<int>> given_query = nullopt;
-
-    auto batched_instances = BatchedInstances<boost::undirectedS>(
-            "euclidean", task_type,
-            min_vocab, max_vocab,
-            query_at_end, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+    Args args(task_type, scratchpad_type, "euclidean", min_vocab, max_vocab,
+              is_causal, is_direct_ranking, query_at_end, no_graph,
+              concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
     int attempts = 0;
+    auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        int num_nodes = sample_num_nodes(min_num_nodes, max_num_nodes);
-        unique_ptr<Graph<boost::undirectedS> > g_ptr;
-        unique_ptr<vector<vector<float> > > positions_ptr;
-        euclidean_generator(g_ptr, positions_ptr, num_nodes, gen, dim, radius, c_min, c_max, false);
-        const auto E = num_edges(*g_ptr);
-        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+        GraphWrapper<boost::undirectedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                               shuffle_edges, shuffle_nodes, c_min, c_max);
+        graph.make_euclidean(gen, dim, radius);
+        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::undirectedS>(g_ptr, gen, dictionary,
-                                                     min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
-                                                     task_type, scratchpad_type,
-                                                     max_path_length, min_path_length, -1, -1, task_sample_dist,
-                                                     sort_adjacency_lists, use_unique_depth_markers,
-                                                     given_query, max_query_size, min_query_size,
-                                                     is_causal, is_direct_ranking, concat_edges, duplicate_edges,
-                                                     include_nodes_in_graph_tokenization,
-                                                     scratchpad_as_prefix, no_graph,
-                                                     pos_dictionary, use_edges_invariance, use_node_invariance,
-                                                     use_graph_invariance, use_query_invariance,
-                                                     use_task_structure, use_graph_structure,
-                                                     optional<unique_ptr<vector<vector<float> > > >(
-                                                             std::move(positions_ptr))
+        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
         );
         batched_instances.add(instance);
     }
@@ -384,36 +286,31 @@ inline py::dict euclidean_n(
 
 inline py::dict random_tree_n(
         int min_num_nodes, int max_num_nodes, const int max_degree, const int max_depth, const float bernoulli_p,
-        const int c_min = 75, const int c_max = 125,
         const string &task_type = "shortest_path",
-        const int max_path_length = 10, const int min_path_length = 1,
-        const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-        int max_query_size = -1, const int min_query_size = 2,
-        const bool is_causal = false, const bool is_direct_ranking = false,
+        const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
         int min_vocab = -1, int max_vocab = -1,
         const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+        const bool is_causal = false,
+        const bool is_direct_ranking = false,
         const bool concat_edges = true,
         const bool duplicate_edges = false,
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
-        const bool use_edges_invariance = false,
-        const bool use_node_invariance = false,
-        const bool use_graph_invariance = false,
-        const bool use_query_invariance = false,
-        const bool use_task_structure = false,
-        const bool use_graph_structure = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(c_min, c_max, batch_size, min_path_length, max_path_length, num_thinking_tokens);
-    auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
-    min_num_nodes = m[0], max_num_nodes = m[1], min_vocab = m[2], max_vocab = m[3];
+    checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
+
+    Args args(task_type, scratchpad_type, "random_tree", min_vocab, max_vocab,
+              is_causal, is_direct_ranking, query_at_end, no_graph,
+              concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
     // sample different paths but lose that it is exactly k-hops
     bool start_at_root = true;
@@ -424,7 +321,6 @@ inline py::dict random_tree_n(
     if (kwargs.contains("end_at_leaf")) {
         end_at_leaf = kwargs["end_at_leaf"].cast<bool>();
     }
-
     optional<vector<float>> probs = nullopt;  // override default probabilities for branching in random tree generator
     if (kwargs.contains("probs")) {
         if (!kwargs["probs"].is_none() and !kwargs["probs"].cast<py::list>().empty()) {
@@ -432,57 +328,25 @@ inline py::dict random_tree_n(
         }
     }
 
-    optional<vector<float>> task_sample_dist = nullopt;  // then sample max_depth
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
-    optional<vector<int>> given_query = nullopt;
-
-    auto batched_instances = BatchedInstances<boost::undirectedS>(
-            "euclidean", task_type,
-            min_vocab, max_vocab,
-            query_at_end, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
-
     int attempts = 0;
+    auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        int num_nodes = sample_num_nodes(min_num_nodes, max_num_nodes);
-        unique_ptr<Graph<boost::undirectedS> > g_ptr;
 
-        int sample_depth = max_depth;
-        if (task_sample_dist.has_value()) {
-            std::discrete_distribution<int> d(task_sample_dist.value().begin(), task_sample_dist.value().end());
+        int sample_depth = max_depth;  // this is because topology and task mix.  Path length is defined by tree struct.
+        if (args.task.task_sample_dist.has_value()) {
+            std::discrete_distribution<int> d(args.task.task_sample_dist.value().begin(), args.task.task_sample_dist.value().end());
             sample_depth = d(gen);
         }
 
-        auto start_end = random_tree_generator(g_ptr, num_nodes, gen , max_degree,
-                                               sample_depth, max_depth,  bernoulli_p, probs);
-        auto start = start_end.first, end = start_end.second;
-        if (!start_at_root) {
-            start = -1;
-        }
-        if (!end_at_leaf) {
-            end = -1;
-        }
-        const auto E = num_edges(*g_ptr);
-        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+        GraphWrapper<boost::undirectedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                               shuffle_edges, shuffle_nodes);
+        graph.make_random_tree(gen, max_degree, sample_depth, max_depth, bernoulli_p, probs);
+        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::undirectedS>(g_ptr, gen, dictionary,
-                                                     min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
-                                                     task_type, scratchpad_type,
-                                                     max_path_length, min_path_length, start, end, task_sample_dist,
-                                                     sort_adjacency_lists, use_unique_depth_markers,
-                                                     given_query, max_query_size, min_query_size,
-                                                     is_causal, is_direct_ranking, concat_edges, duplicate_edges,
-                                                     include_nodes_in_graph_tokenization,
-                                                     scratchpad_as_prefix, no_graph,
-                                                     pos_dictionary, use_edges_invariance, use_node_invariance,
-                                                     use_graph_invariance, use_query_invariance,
-                                                     use_task_structure, use_graph_structure
-        );
+
+        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -491,67 +355,44 @@ inline py::dict random_tree_n(
 inline py::dict path_star_n(
         const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
         const string &task_type = "shortest_path",
-        const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-        const bool is_causal = false, const bool is_direct_ranking = false,
+        const string &task_type = "shortest_path",
+        const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
         int min_vocab = -1, int max_vocab = -1,
         const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+        const bool is_causal = false,
+        const bool is_direct_ranking = false,
         const bool concat_edges = true,
         const bool duplicate_edges = false,
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
-        const bool use_edges_invariance = false,
-        const bool use_node_invariance = false,
-        const bool use_graph_invariance = false,
-        const bool use_query_invariance = false,
-        const bool use_task_structure = false,
-        const bool use_graph_structure = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
-    auto m = check_and_set_vocab_limits(1, 1, min_vocab, max_vocab);
-    min_vocab = m[2], max_vocab = m[3];
+    checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
 
-    auto batched_instances = BatchedInstances<boost::directedS>(
-            "euclidean", task_type,
-            min_vocab, max_vocab,
-            query_at_end, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+    Args args(task_type, scratchpad_type, "path_star", min_vocab, max_vocab,
+              is_causal, is_direct_ranking, query_at_end, no_graph,
+              concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
     int attempts = 0;
+    auto batched_instances = BatchedInstances<boost::directedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        unique_ptr<Graph<boost::directedS> > g_ptr;
-        auto start_end = path_star_generator(g_ptr, min_num_arms, max_num_arms, min_arm_length, max_arm_length, gen,
-                                             false);
-        const auto E = num_edges(*g_ptr);
-        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+        GraphWrapper<boost::directedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                               shuffle_edges, shuffle_nodes);
+        graph.make_path_star(gen, min_num_arms, max_num_arms, min_arm_length, max_arm_length);
+        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::directedS>(g_ptr, gen, dictionary,
-                                                   min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
-                                                   task_type, scratchpad_type,
-                                                   -1, -1, start_end.first, start_end.second, task_sample_dist,
-                                                   sort_adjacency_lists, use_unique_depth_markers,
-                                                   (optional<vector<int>> &) nullopt, -1, -1,
-                                                   is_causal, is_direct_ranking, concat_edges, duplicate_edges,
-                                                   include_nodes_in_graph_tokenization,
-                                                   scratchpad_as_prefix, no_graph,
-                                                   pos_dictionary, use_edges_invariance, use_node_invariance,
-                                                   use_graph_invariance, use_query_invariance,
-                                                   use_task_structure, use_graph_structure
+        auto instance = Instance<boost::directedS>(gen, graph, args, dictionary, pos_dictionary);
         );
         batched_instances.add(instance);
     }
@@ -563,33 +404,22 @@ inline py::dict balanced_n(
         const int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead,
         const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
         const string &task_type = "shortest_path",
-        int max_query_size = -1, const int min_query_size = 2,
-        const bool sort_adjacency_lists = true, const bool use_unique_depth_markers = true,
-        const bool is_causal = false, const bool is_direct_ranking = false,
+        const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
         int min_vocab = -1, int max_vocab = -1,
         const int batch_size = 256, const int max_edges = 512, int max_attempts = 1000,
+        const bool is_causal = false,
+        const bool is_direct_ranking = false,
         const bool concat_edges = true,
         const bool duplicate_edges = false,
         const bool include_nodes_in_graph_tokenization = false,
         const bool query_at_end = true,
         const int num_thinking_tokens = 0,
-        const string &scratchpad_type = "none",
         const bool scratchpad_as_prefix = false,
         const bool no_graph = false,
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
-        const bool use_edges_invariance = false,
-        const bool use_node_invariance = false,
-        const bool use_graph_invariance = false,
-        const bool use_query_invariance = false,
-        const bool use_task_structure = false,
-        const bool use_graph_structure = false,
         const py::kwargs &kwargs = py::kwargs()) {
-
-    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
-    auto m = check_and_set_vocab_limits(min_num_nodes, max_num_nodes, min_vocab, max_vocab);
-    min_vocab = m[2], max_vocab = m[3];
 
     if (min_lookahead <= 0) { throw std::invalid_argument("Invalid arguments: min_lookahead <= 0"); }
     if (max_lookahead <= 0) { throw std::invalid_argument("Invalid arguments: max_lookahead <= 0"); }
@@ -597,20 +427,16 @@ inline py::dict balanced_n(
     if (!balanced_graph_size_check(min_num_nodes, max_lookahead, min_noise_reserve)) {
         throw std::invalid_argument("Invalid arguments: balanced_graph_size_check failed");
     }
+    checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
-
-    auto batched_instances = BatchedInstances<boost::directedS>(
-            "euclidean", task_type,
-            min_vocab, max_vocab,
-            query_at_end, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
+    Args args(task_type, scratchpad_type, "balanced", min_vocab, max_vocab,
+              is_causal, is_direct_ranking, query_at_end, no_graph,
+              concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
     int attempts = 0;
+    auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
         int num_nodes;
         if (max_num_nodes == min_num_nodes) {
@@ -626,27 +452,14 @@ inline py::dict balanced_n(
         } else {
             max_noise_sample = uniform_int_distribution<int>(-1, lookahead)(gen); // -1 means all remaining
         }
-        unique_ptr<Graph<boost::directedS> > g_ptr;
-        // auto graph_t = time_before();
-        auto start_end = balanced_generator(g_ptr, num_nodes, gen, lookahead, min_noise_reserve, max_num_parents,
-                                            max_noise_sample);
-        const auto E = num_edges(*g_ptr);
-        if (const auto a = attempt_check(E, max_edges, attempts, max_attempts)) {
+        GraphWrapper<boost::directedS> graph(num_nodes, num_nodes, min_vocab, max_vocab,
+                                             shuffle_edges, shuffle_nodes);
+        graph.make_balanced(gen, lookahead, min_noise_reserve, max_num_parents, max_noise_sample);
+        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::directedS>(g_ptr, gen, dictionary,
-                                                   min_vocab, max_vocab, shuffle_nodes, shuffle_edges,
-                                                   task_type, scratchpad_type,
-                                                   -1, -1, start_end.first, start_end.second, task_sample_dist,
-                                                   sort_adjacency_lists, use_unique_depth_markers,
-                                                   (optional<vector<int>> &) nullopt, max_query_size, min_query_size,
-                                                   is_causal, is_direct_ranking, concat_edges, duplicate_edges,
-                                                   include_nodes_in_graph_tokenization,
-                                                   scratchpad_as_prefix, no_graph,
-                                                   pos_dictionary, use_edges_invariance, use_node_invariance,
-                                                   use_graph_invariance, use_query_invariance,
-                                                   use_task_structure, use_graph_structure
+        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
         );
         batched_instances.add(instance);
     }
@@ -668,7 +481,6 @@ inline py::dict khops_n(const int min_khops, const int max_khops,
                             const bool align_prefix_front_pad = false,
                             const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
     // we always use the full vocabulary, this is another difference from graphs where the number of nodes can vary
     // if we do not do this then we need to use a node mapping which is extra complexity for little gain
     if (min_vocab == -1 and max_vocab == -1) {  // this is bad in general as the sequence length will be large
@@ -724,7 +536,6 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
                             const bool align_prefix_front_pad = false,
                             const py::kwargs &kwargs = py::kwargs()) {
 
-    check_args(-1, -1, batch_size, -1, -1, num_thinking_tokens);
     // we always use the full vocabulary, this is another difference from graphs where the number of nodes can vary
     // if we do not do this then we need to use a node mapping which is extra complexity for little gain
     if (min_vocab == -1 and max_vocab == -1) {  // this is bad in general as the sequence length will be large
@@ -950,38 +761,25 @@ PYBIND11_MODULE(generator, m) {
           py::arg("c_min") = 75,
           py::arg("c_max") = 125,
           py::arg("task_type") = "shortest_path",
-          py::arg("max_path_length") = 10,
-          py::arg("min_path_length") = 1,
-          py::arg("sort_adjacency_lists") = true,
-          py::arg("use_unique_depth_markers") = true,
-            // optional 'task_sample_dist' can be passed by kwarg
-          py::arg("max_query_size") = -1,
-          py::arg("min_query_size") = 2,
-          py::arg("is_causal") = false,
-          py::arg("is_direct_ranking") = false,
+          py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("is_causal") = false,
+          py::arg("is_direct_ranking") = false,
           py::arg("concat_edges") = true,
           py::arg("duplicate_edges") = false,
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
-          py::arg("scratchpad_type") = "none",
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false,
-          py::arg("use_edges_invariance") = false,
-          py::arg("use_node_invariance") = false,
-          py::arg("use_graph_invariance") = false,
-          py::arg("use_query_invariance") = false,
-          py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false);
+          py::arg("align_prefix_front_pad") = false;
 
     m.def("euclidean_n", &euclidean_n,
           "Generate a batch of Euclidean graphs\nGraph specific parameters:\n\t"
@@ -995,38 +793,25 @@ PYBIND11_MODULE(generator, m) {
           py::arg("c_min") = 75,
           py::arg("c_max") = 125,
           py::arg("task_type") = "shortest_path",
-          py::arg("max_path_length") = 10,
-          py::arg("min_path_length") = 1,
-          py::arg("sort_adjacency_lists") = true,
-          py::arg("use_unique_depth_markers") = true,
-            // optional 'task_sample_dist' can be passed by kwarg
-          py::arg("max_query_size") = -1,
-          py::arg("min_query_size") = 2,
-          py::arg("is_causal") = false,
-          py::arg("is_direct_ranking") = false,
+          py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("is_causal") = false,
+          py::arg("is_direct_ranking") = false,
           py::arg("concat_edges") = true,
           py::arg("duplicate_edges") = false,
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
-          py::arg("scratchpad_type") = "none",
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false,
-          py::arg("use_edges_invariance") = false,
-          py::arg("use_node_invariance") = false,
-          py::arg("use_graph_invariance") = false,
-          py::arg("use_query_invariance") = false,
-          py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false);
+          py::arg("align_prefix_front_pad") = false;
 
     m.def("random_tree_n", &random_tree_n,
           "Generate a batch of random tree graphs\nGraph specific parameters:\n\t"
@@ -1041,39 +826,25 @@ PYBIND11_MODULE(generator, m) {
           py::arg("c_min") = 75,
           py::arg("c_max") = 125,
           py::arg("task_type") = "shortest_path",
-          py::arg("max_path_length") = 10,
-          py::arg("min_path_length") = 1,
-            // optional start_at_root can be passed by kwarg, default is true
-          py::arg("sort_adjacency_lists") = true,
-          py::arg("use_unique_depth_markers") = true,
-            // optional 'task_sample_dist' can be passed by kwarg
-          py::arg("max_query_size") = -1,
-          py::arg("min_query_size") = 2,
-          py::arg("is_causal") = false,
-          py::arg("is_direct_ranking") = false,
+          py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("is_causal") = false,
+          py::arg("is_direct_ranking") = false,
           py::arg("concat_edges") = true,
           py::arg("duplicate_edges") = false,
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
-          py::arg("scratchpad_type") = "none",
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false,
-          py::arg("use_edges_invariance") = false,
-          py::arg("use_node_invariance") = false,
-          py::arg("use_graph_invariance") = false,
-          py::arg("use_query_invariance") = false,
-          py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false);
+          py::arg("align_prefix_front_pad") = false;
 
     m.def("path_star_n", &path_star_n,
           "Generate a batch of path star graphs\nGraph specific parameters:\n\t"
@@ -1087,34 +858,25 @@ PYBIND11_MODULE(generator, m) {
           py::arg("min_arm_length"),
           py::arg("max_arm_length"),
           py::arg("task_type") = "shortest_path",
-          py::arg("sort_adjacency_lists") = true,
-          py::arg("use_unique_depth_markers") = true,
-            // optional 'task_sample_dist' can be passed by kwarg
-          py::arg("is_causal") = false,
-          py::arg("is_direct_ranking") = false,
+          py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("is_causal") = false,
+          py::arg("is_direct_ranking") = false,
           py::arg("concat_edges") = true,
           py::arg("duplicate_edges") = false,
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
-          py::arg("scratchpad_type") = "none",
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false,
-          py::arg("use_edges_invariance") = false,
-          py::arg("use_node_invariance") = false,
-          py::arg("use_graph_invariance") = false,
-          py::arg("use_query_invariance") = false,
-          py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false);
+          py::arg("align_prefix_front_pad") = false;
 
     m.def("balanced_n", &balanced_n,
           "Generate a batch of balanced graphs\nParameters:\n\t"
@@ -1134,36 +896,25 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_num_parents") = 4,
           py::arg("max_noise") = -1,
           py::arg("task_type") = "shortest_path",
-          py::arg("sort_adjacency_lists") = true,
-          py::arg("use_unique_depth_markers") = true,
-            // optional 'task_sample_dist' can be passed by kwarg
-          py::arg("max_query_size") = -1,
-          py::arg("min_query_size") = 2,
-          py::arg("is_causal") = false,
-          py::arg("is_direct_ranking") = false,
+          py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
           py::arg("shuffle_nodes") = false,
-          py::arg("min_vocab") = 0,
+          py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
           py::arg("max_edges") = 512,
           py::arg("max_attempts") = 1000,
+          py::arg("is_causal") = false,
+          py::arg("is_direct_ranking") = false,
           py::arg("concat_edges") = true,
           py::arg("duplicate_edges") = false,
           py::arg("include_nodes_in_graph_tokenization") = false,
           py::arg("query_at_end") = true,
           py::arg("num_thinking_tokens") = 0,
-          py::arg("scratchpad_type") = "none",
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false,
-          py::arg("use_edges_invariance") = false,
-          py::arg("use_node_invariance") = false,
-          py::arg("use_graph_invariance") = false,
-          py::arg("use_query_invariance") = false,
-          py::arg("use_task_structure") = false,
-          py::arg("use_graph_structure") = false);
+          py::arg("align_prefix_front_pad") = false;
 
     m.def("khops_n", &khops_n,
           "Generate a batch of k-hops tasks\nParameters:\n\t"

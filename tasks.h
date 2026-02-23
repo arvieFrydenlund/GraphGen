@@ -82,16 +82,20 @@ public:
 
 class ShortestPathTask : public Task {
 public:
+    const ShortestPathTaskArgs &task_args;
+    const PosArgs &pos_args;
+
     int start, end = -1;
     vector<int> path;
     vector<vector<int> > label_smoothed_path; // multi-labels for alternative valid paths from start to end
     int max_num_labels = 1;
     float sample_choice_node = 0.9; //  same a choice head (look-ahead at k would be nice but bias topology I think)
 
-    pair<int, int> sample_start_end(std::mt19937 &gen,
+    static pair<int, int> sample_start_end(std::mt19937 &gen,
                                     const unique_ptr<vector<vector<int> > > &distances_ptr,
                                     const int max_path_length, const int min_path_length,
-                                    std::discrete_distribution<int> &d1, int start = -1) {
+                                    std::discrete_distribution<int> &d1, int start = -1,
+                                    float sample_choice_node = 0.9) {
 
         pair<int, int> start_end;
         int attempts = 0;
@@ -162,11 +166,10 @@ public:
         return start_end;
     }
 
-    ShortestPathTask(std::mt19937 &gen,
+    ShortestPathTask(std::mt19937 &gen, const ShortestPathTaskArgs &task_args, const PosArgs &pos_args,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
-                     const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
-                     const optional<vector<float>> &task_sample_dist = nullopt,
-                     const bool use_query_invariance = false, const bool sample_path = true) {
+                     int start = -1, int end = -1,
+                     const bool sample_path = true) : task_args(task_args), pos_args(pos_args) {
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
@@ -178,19 +181,19 @@ public:
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (!task_sample_dist.has_value()) {
+        if (!task_args.task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
-            vector<float> uweights(max_path_length - min_path_length + 1, 1.0); // uniform distribution
+            vector<float> uweights(task_args.max_path_length - task_args.min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
         } else {
-            d1 = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end());
+            d1 = std::discrete_distribution<int>(task_args.task_sample_dist->begin(), task_args.task_sample_dist->end());
         }
 
         pair<int, int> start_end;
         if (start != -1 && end != -1) {
             start_end = make_pair(start, end);
         } else {
-            start_end = sample_start_end(gen, distances_ptr, max_path_length, min_path_length, d1, start);
+            start_end = sample_start_end(gen, distances_ptr, task_args.max_path_length, task_args.min_path_length, d1, start, sample_choice_node);
         }
         this->start = start_end.first;
         this->end = start_end.second;
@@ -383,19 +386,20 @@ class BFSTask : public Task {
      * The task is to generate the scratchpad-only
      */
 public:
+    const BFSTaskArgs &task_args;
+    const PosArgs &pos_args;
+
     int start, end = -1;
     vector<int> path;
     unique_ptr<BFSScratchPad> scratchpad;
 
     template<typename D>
     BFSTask(std::mt19937 &gen,
+            const BFSTaskArgs &task_args, const PosArgs &pos_args,
             const unique_ptr<Graph<D> > &g_ptr,
             const vector<pair<int, int> > &edge_list,
             const unique_ptr<vector<vector<int> > > &distances_ptr,
-            const int max_path_length = 10, const int min_path_length = 3, int start = -1, int end = -1,
-            const optional<vector<float>> &task_sample_dist = nullopt,
-            const bool use_query_invariance = false,
-            const bool use_unique_depth_markers = true) {
+            int start = -1, int end = -1): task_args(task_args), pos_args(pos_args) {
 
         // define d1
         std::discrete_distribution<int> d1;
@@ -407,8 +411,12 @@ public:
             d1 = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end());
         }
 
-        auto start_end = ShortestPathTask::sample_start_end(gen, distances_ptr, max_path_length, min_path_length, d1, start);
-
+        pair<int, int> start_end;
+        if (start != -1 && end != -1) {
+            start_end = make_pair(start, end);
+        } else {
+            start_end = ShortestPathTask::sample_start_end(gen, distances_ptr, task_args.max_path_length, task_args.min_path_length, d1, start);
+        }
         this->start = start_end.first;
         this->end = start_end.second;
 
@@ -417,7 +425,6 @@ public:
         auto path(this->scratchpad->path);
         this->path = path;
     }
-
 
     void tokenize(
             const map<std::string, int> &dictionary,

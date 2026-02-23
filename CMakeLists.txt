@@ -19,6 +19,8 @@ message(STATUS "Python interpreter: ${Python3_EXECUTABLE}")
 add_executable(GraphGen main.cpp
         undirected_graphs.h
         directed_graphs.h,
+        graph_wrapper.h,
+        args.h,
         utils.h,
         matrix.h,
         graph_tokenizer.h,
