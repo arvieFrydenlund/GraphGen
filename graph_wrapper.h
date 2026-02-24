@@ -40,6 +40,7 @@ public:
 
     int N{};
     int E{};
+
     vector<int> node_shuffle_map;
     vector<int> edge_shuffle_map;
 
@@ -239,7 +240,7 @@ public:
             floyd_warshall_frydenlund(g_ptr, distances_ptr, graph_ground_truths_ptr, edge_list, false);
         } else {
             if (!distances_ptr) {
-                get_distances(g_ptr); // already node_shuffle_map, so edges will be too
+                get_distances(); // already node_shuffle_map, so edges will be too
             }
             // Makes a [E, N] matrix of ground truths where each row is the distance from the edge.first to all other nodes
             graph_ground_truths_ptr = make_unique<vector<vector<int> > >(E, vector<int>(N, -1));

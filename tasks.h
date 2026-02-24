@@ -403,12 +403,12 @@ public:
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (!task_sample_dist.has_value()) {
+        if (!task_args.task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
-            vector<float> uweights(max_path_length - min_path_length + 1, 1.0); // uniform distribution
+            vector<float> uweights(task_args.max_path_length - task_args.min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
         } else {
-            d1 = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end());
+            d1 = std::discrete_distribution<int>(task_args.task_sample_dist->begin(), task_args.task_sample_dist->end());
         }
 
         pair<int, int> start_end;
@@ -420,8 +420,8 @@ public:
         this->start = start_end.first;
         this->end = start_end.second;
 
-        auto scratchpad = BFSScratchPad(this->start, this->end, g_ptr, edge_list, use_unique_depth_markers);
-        this->scratchpad = make_unique<BFSScratchPad>(scratchpad );
+        auto scratchpad = BFSScratchPad(BFSScratchpadArgs(task_args), pos_args, g_ptr, edge_list, this->start, this->end);
+        this->scratchpad = make_unique<BFSScratchPad>(scratchpad);
         auto path(this->scratchpad->path);
         this->path = path;
     }
@@ -631,13 +631,13 @@ public:
         hops = vector<vector<int>>(k, vector<int>(seq.size(), -1));
 
         auto offset = right_side_connect ? 1 : -1;
-        for (int i = seq.size() - 1; i >= 0; i--) {
+        for (int i = static_cast<int>(seq.size()) - 1; i >= 0; i--) {
             auto target = seq[i];
             // next match in seq
             for (int j = i - 1; j >= 0; j--) {
                 if (seq[j] == target) {
                     auto ptr_idx = j + offset;
-                    if (ptr_idx >= 0 && ptr_idx < seq.size() ) {
+                    if (ptr_idx >= 0 && ptr_idx < static_cast<int>(seq.size())) {
                         back_pointer[i] = ptr_idx;
                         hops[0][i] = seq[ptr_idx];
                     }
@@ -649,7 +649,7 @@ public:
         auto cur_back_pointer(back_pointer);
         for (int kp = 1; kp < k; kp++) {
             auto cur_seq = hops[kp];
-            for (int i = 0; i < seq.size(); i++) {
+            for (int i = 0; i < static_cast<int>(seq.size()); i++) {
                 auto new_ptr_idx = cur_back_pointer[i];
                 if (new_ptr_idx == -1) {
                     continue;

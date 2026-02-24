@@ -230,7 +230,7 @@ inline py::dict erdos_renyi_n(
             continue;
         }
         // auto pack_t = time_before();
-        Instance<boost::undirectedS> instance(gen, graph, args, dictionary, pos_dictionary);
+        Instance<boost::undirectedS> instance(gen, std::move(graph), args, dictionary, pos_dictionary);
         // time_after(pack_t, "pack");
         batched_instances.add(instance);
     }
@@ -269,15 +269,14 @@ inline py::dict euclidean_n(
     int attempts = 0;
     auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        GraphWrapper<boost::undirectedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
-                                               shuffle_edges, shuffle_nodes, c_min, c_max);
-        graph.make_euclidean(gen, dim, radius);
-        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
+        auto graph = make_unique<GraphWrapper<boost::undirectedS> >(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                                                    shuffle_edges, shuffle_nodes, c_min, c_max);
+        graph->make_euclidean(gen, dim, radius);
+        if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
-        );
+        auto instance = Instance<boost::undirectedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -338,15 +337,15 @@ inline py::dict random_tree_n(
             sample_depth = d(gen);
         }
 
-        GraphWrapper<boost::undirectedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
-                                               shuffle_edges, shuffle_nodes);
-        graph.make_random_tree(gen, max_degree, sample_depth, max_depth, bernoulli_p, probs);
-        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
+        auto graph = make_unique<GraphWrapper<boost::undirectedS> >(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                                                    shuffle_edges, shuffle_nodes);
+        graph->make_random_tree(gen, max_degree, sample_depth, max_depth, bernoulli_p, probs, start_at_root, end_at_leaf);
+        if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
 
-        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
+        auto instance = Instance<boost::undirectedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -354,7 +353,6 @@ inline py::dict random_tree_n(
 
 inline py::dict path_star_n(
         const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
-        const string &task_type = "shortest_path",
         const string &task_type = "shortest_path",
         const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
@@ -373,8 +371,9 @@ inline py::dict path_star_n(
         const bool align_prefix_front_pad = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
+    int min_num_nodes = 1 + min_num_arms * min_arm_length;
+    int max_num_nodes = 1 + max_num_arms * max_arm_length;
     checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
-
 
     Args args(task_type, scratchpad_type, "path_star", min_vocab, max_vocab,
               is_causal, is_direct_ranking, query_at_end, no_graph,
@@ -385,15 +384,14 @@ inline py::dict path_star_n(
     int attempts = 0;
     auto batched_instances = BatchedInstances<boost::directedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
-        GraphWrapper<boost::directedS> graph(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
-                                               shuffle_edges, shuffle_nodes);
-        graph.make_path_star(gen, min_num_arms, max_num_arms, min_arm_length, max_arm_length);
-        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
+        auto graph = make_unique<GraphWrapper<boost::directedS> >(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
+                                                                  shuffle_edges, shuffle_nodes);
+        graph->make_path_star(gen, min_num_arms, max_num_arms, min_arm_length, max_arm_length);
+        if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::directedS>(gen, graph, args, dictionary, pos_dictionary);
-        );
+        auto instance = Instance<boost::directedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -401,7 +399,7 @@ inline py::dict path_star_n(
 
 
 inline py::dict balanced_n(
-        const int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead,
+        int min_num_nodes, int max_num_nodes, const int min_lookahead, const int max_lookahead,
         const int min_noise_reserve = 0, const int max_num_parents = 4, int max_noise = -1,
         const string &task_type = "shortest_path",
         const string &scratchpad_type = "none",
@@ -436,7 +434,7 @@ inline py::dict balanced_n(
               kwargs);
 
     int attempts = 0;
-    auto batched_instances = BatchedInstances<boost::undirectedS>(args);
+    auto batched_instances = BatchedInstances<boost::directedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
         int num_nodes;
         if (max_num_nodes == min_num_nodes) {
@@ -452,15 +450,14 @@ inline py::dict balanced_n(
         } else {
             max_noise_sample = uniform_int_distribution<int>(-1, lookahead)(gen); // -1 means all remaining
         }
-        GraphWrapper<boost::directedS> graph(num_nodes, num_nodes, min_vocab, max_vocab,
-                                             shuffle_edges, shuffle_nodes);
-        graph.make_balanced(gen, lookahead, min_noise_reserve, max_num_parents, max_noise_sample);
-        if (const auto a = graph.attempt_check(max_edges, attempts, max_attempts)) {
+        auto graph = make_unique<GraphWrapper<boost::directedS> >(num_nodes, num_nodes, min_vocab, max_vocab,
+                                                                  shuffle_edges, shuffle_nodes);
+        graph->make_balanced(gen, lookahead, min_noise_reserve, max_num_parents, max_noise_sample);
+        if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;
         }
-        auto instance = Instance<boost::undirectedS>(gen, graph, args, dictionary, pos_dictionary);
-        );
+        auto instance = Instance<boost::directedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -779,7 +776,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false;
+          py::arg("align_prefix_front_pad") = false);
 
     m.def("euclidean_n", &euclidean_n,
           "Generate a batch of Euclidean graphs\nGraph specific parameters:\n\t"
@@ -811,7 +808,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false;
+          py::arg("align_prefix_front_pad") = false);
 
     m.def("random_tree_n", &random_tree_n,
           "Generate a batch of random tree graphs\nGraph specific parameters:\n\t"
@@ -823,8 +820,6 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_degree") = 3,
           py::arg("max_depth") = 7,
           py::arg("bernoulli_p") = 0.5,
-          py::arg("c_min") = 75,
-          py::arg("c_max") = 125,
           py::arg("task_type") = "shortest_path",
           py::arg("scratchpad_type") = "none",
           py::arg("shuffle_edges") = false,
@@ -844,7 +839,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false;
+          py::arg("align_prefix_front_pad") = false);
 
     m.def("path_star_n", &path_star_n,
           "Generate a batch of path star graphs\nGraph specific parameters:\n\t"
@@ -876,7 +871,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false;
+          py::arg("align_prefix_front_pad") = false);
 
     m.def("balanced_n", &balanced_n,
           "Generate a batch of balanced graphs\nParameters:\n\t"
@@ -914,7 +909,7 @@ PYBIND11_MODULE(generator, m) {
           py::arg("scratchpad_as_prefix") = false,
           py::arg("no_graph") = false,
           py::arg("is_flat_model") = true,
-          py::arg("align_prefix_front_pad") = false;
+          py::arg("align_prefix_front_pad") = false);
 
     m.def("khops_n", &khops_n,
           "Generate a batch of k-hops tasks\nParameters:\n\t"

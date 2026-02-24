@@ -61,15 +61,22 @@ public:
 
 class BFSTaskArgs : public TaskArgs {
 public:
+    int max_path_length;
+    int min_path_length;
     bool sort_adjacency_lists;  // doesn't do anything anymore
     bool use_unique_depth_markers;
+    bool stop_once_found;
 
-    BFSTaskArgs(const py::kwargs &kwargs = py::kwargs(),
-                bool sort_adjacency_lists = true, bool use_unique_depth_markers = true) :
+    BFSTaskArgs(const py::kwargs &kwargs,
+                int max_path_length = 10, int min_path_length = 1,
+                bool sort_adjacency_lists=true, bool use_unique_depth_markers=true, bool stop_once_found=true) :
             TaskArgs("bfs", kwargs), sort_adjacency_lists(sort_adjacency_lists),
-            use_unique_depth_markers(use_unique_depth_markers) {
+            use_unique_depth_markers(use_unique_depth_markers), stop_once_found(stop_once_found) {
+        parse_and_set_arg(kwargs, "max_path_length", this->max_path_length, max_path_length);
+        parse_and_set_arg(kwargs, "min_path_length", this->min_path_length, min_path_length);
         parse_and_set_arg(kwargs, "sort_adjacency_lists", this->sort_adjacency_lists, sort_adjacency_lists);
         parse_and_set_arg(kwargs, "use_unique_depth_markers", this->use_unique_depth_markers, use_unique_depth_markers);
+        parse_and_set_arg(kwargs, "stop_once_found", this->stop_once_found, stop_once_found);
     }
 };
 
@@ -117,7 +124,7 @@ public:
     bool mask_to_vocab_size;
     string partition_method;
 
-    KhopsArgs(const py::kwargs &kwargs = py::kwargs(),
+    KhopsArgs(const py::kwargs &kwargs,
               int max_khops = 5, int min_khops = 2, int min_prefix_length = 3, int max_prefix_length = 20,
               bool right_side_connect = true, bool permutation_version = false, bool mask_to_vocab_size = false,
               const string &partition_method = "uniform") :
@@ -150,14 +157,22 @@ class BFSScratchpadArgs : public ScratchpadArgs {
 public:
     bool sort_adjacency_lists;  // doesn't do anything anymore
     bool use_unique_depth_markers;
+    bool stop_once_found;
 
-    BFSScratchpadArgs(const py::kwargs &kwargs = py::kwargs(),
-                      bool sort_adjacency_lists = true, bool use_unique_depth_markers = true) :
+    BFSScratchpadArgs(const py::kwargs &kwargs,
+                      bool sort_adjacency_lists=true, bool use_unique_depth_markers=true, bool stop_once_found=true) :
             ScratchpadArgs("bfs", kwargs), sort_adjacency_lists(sort_adjacency_lists),
-            use_unique_depth_markers(use_unique_depth_markers) {
+            use_unique_depth_markers(use_unique_depth_markers), stop_once_found(stop_once_found) {
         parse_and_set_arg(kwargs, "sort_adjacency_lists", this->sort_adjacency_lists, sort_adjacency_lists);
         parse_and_set_arg(kwargs, "use_unique_depth_markers", this->use_unique_depth_markers, use_unique_depth_markers);
+        parse_and_set_arg(kwargs, "stop_once_found", this->stop_once_found, stop_once_found);
     }
+
+    // copy from tasks, not sure if needed
+    BFSScratchpadArgs(const BFSTaskArgs &task_args) : ScratchpadArgs("bfs"),
+                                                sort_adjacency_lists(task_args.sort_adjacency_lists),
+                                                use_unique_depth_markers(task_args.use_unique_depth_markers),
+                                                stop_once_found(task_args.stop_once_found) {}
 };
 
 class TokenizationArgs {

@@ -30,14 +30,14 @@ using namespace py::literals;
 
 
 /*
- * Instance class to hold graph and related data i.e. all info for a single instance
+ * Instance class to hold all info for a single instance
  */
 template<typename D>
 class Instance {
 public:
 
     const Args &args;
-    unique_ptr<GraphWrapper<D>> graph= nullptr;  // optional because of k_hops
+    unique_ptr<GraphWrapper<D>> graph = nullptr;  // optional because of k_hops
 
     unique_ptr<GraphTokenizer> graph_tokenizer = nullptr;
     unique_ptr<Task> task = nullptr;
@@ -61,15 +61,14 @@ public:
     int scratch_pad_length = 0;
     int true_task_start_idx = -1; // index in the tokenized input where the task starts excluding any scratch pad
     int true_task_length = 0;
-    // task is anything the model generates i.e scratch pad and actual task
+    // task is anything the model generates i->E scratch pad and actual task
     int task_start_idx = -1; // index in the tokenized input where the task starts
     int task_length = 0;
 
-    Instance(std::mt19937 &gen, unique_ptr<GraphWrapper<D>>& ggraph, const Args &args,
+    Instance(std::mt19937 &gen, unique_ptr<GraphWrapper<D>> ggraph, const Args &args,
              const map<std::string, int> &dictionary,
              const map<std::string, int> &pos_dictionary
-    ): args(args) {
-        graph = std::move(ggraph);
+    ): args(args), graph(std::move(ggraph)) {
         if (graph) {  // true graph tasks
 
             if (!args.tok.no_graph) {  // for variant of BFS scratchpad task
@@ -100,9 +99,8 @@ public:
                                                                 graph->start, graph->end,
                                                                 should_sample_path);
                 if (args.sp.scratchpad_type == "bfs" || args.sp.scratchpad_type == "BFS") {
-                    auto bfs_scratch_pad = make_unique<BFSScratchPad>(dynamic_cast<const BFSScratchpadArgs&>(args.sp),
-                                                                      short_path->start, short_path->end,
-                                                                      graph->g_ptr, graph->edge_list);
+                    auto bfs_scratch_pad = make_unique<BFSScratchPad>(dynamic_cast<const BFSScratchpadArgs&>(args.sp), args.pos,
+                                                                      graph->g_ptr, graph->edge_list, short_path->start, short_path->end);
                     short_path->set_path(bfs_scratch_pad->path, graph->distances_ptr, false);
                     scratch_pad = std::move(bfs_scratch_pad);
                 } else if (args.sp.scratchpad_type == "dfs" || args.sp.scratchpad_type == "DFS") {
@@ -453,10 +451,6 @@ public:
         int max_num_nodes = 0;
         int max_num_edges = 0;
 
-        auto concat_edges = instances[0].graph_tokenizer->concat_edges;
-        auto use_graph_structure = instances[0].graph_tokenizer->use_graph_structure;
-        auto include_nodes_in_graph_tokenization = instances[0].graph_tokenizer->include_nodes_in_graph_tokenization;
-
         for (size_t i = 0; i < instances.size(); i++) {
             // create inputs, targets and positions, and component start_indices and lengths
             instances[i].tokenize(dictionary, pos_dictionary);
@@ -483,11 +477,11 @@ public:
                     }
                 }
             }
-            if (instances[i].N > max_num_nodes) {
-                max_num_nodes = instances[i].N;
+            if (instances[i].graph->N > max_num_nodes) {
+                max_num_nodes = instances[i].graph->N;
             }
-            if (instances[i].E > max_num_edges) {
-                max_num_edges = instances[i].E;
+            if (instances[i].graph->E > max_num_edges) {
+                max_num_edges = instances[i].graph->E;
             }
             // instances[i].pprint();
         }
@@ -501,7 +495,7 @@ public:
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
         auto src_tokens = py::array_t<int, py::array::c_style>(
-                {batch_size, new_max_tokenized_inputs_len, concat_edges ? 2 : 1});
+                {batch_size, new_max_tokenized_inputs_len, args.tok.concat_edges ? 2 : 1});
         src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
@@ -511,7 +505,7 @@ public:
         auto task_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
         auto positions = py::array_t<int, py::array::c_style>(
-                {batch_size, new_max_tokenized_inputs_len, use_graph_structure ? 2 : 1});
+                {batch_size, new_max_tokenized_inputs_len, args.pos.use_graph_structure ? 2 : 1});  // TODO
         positions[py::make_tuple(py::ellipsis())] = pos_dictionary.at("pad");
 
         py::array_t<int, py::array::c_style> num_nodes(batch_size);
@@ -617,13 +611,13 @@ public:
             }
             if (instances[0].graph_tokenizer) {
                 for (size_t j = 0; j < instances[i].graph_tokenizer->edge_list.size(); j++) {
-                    if (concat_edges) {
+                    if (args.tok.concat_edges) {
                         graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
                     } else { // need every third token since we just want the edge marker positions (which needs shift by 2)
                         graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3) + 2;
                     }
                 }
-                if (include_nodes_in_graph_tokenization) {
+                if (args.tok.include_nodes_in_graph_tokenization) {
                     for (size_t j = 0; j < instances[i].graph_tokenizer->node_list.size(); j++) {
                         graph_node_gather_indices_ar(i, j) = instances[i].graph_nodes_start_idx + offset + j;
                     }
@@ -631,8 +625,8 @@ public:
             }
 
             // all others
-            num_nodes_ar(i) = instances[i].N;
-            num_edges_ar(i) = instances[i].E;
+            num_nodes_ar(i) = instances[i].graph->N;
+            num_edges_ar(i) = instances[i].graph->E;
             src_lengths_ar(i) = instances[i].tokenized_inputs.shape()[0] + offset;
             query_start_indices_ar(i) = instances[i].query_start_idx + offset;
             query_lengths_ar(i) = instances[i].query_length;
@@ -656,7 +650,7 @@ public:
         d["src_tokens"] = src_tokens;
         d["src_lengths"] = src_lengths;
 
-        if (instances[0].use_task_structure) {
+        if (args.pos.return_pos_ids) {
             d["positions"] = positions;
         } else {
             d["positions"] = py::none();  // just delete the made positions and model will use range per norm
@@ -675,7 +669,7 @@ public:
         d["graph_edge_start_indices"] = graph_edge_start_indices;
         d["graph_edge_lengths"] = graph_edge_lengths;
         d["graph_edge_gather_indices"] = graph_edge_gather_indices;
-        if (include_nodes_in_graph_tokenization) {
+        if (args.tok.include_nodes_in_graph_tokenization) {
             d["graph_node_start_indices"] = graph_node_start_indices;
             d["graph_node_lengths"] = graph_node_lengths;
             d["graph_node_gather_indices"] = graph_node_gather_indices;
@@ -697,7 +691,7 @@ public:
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
                 d["scratch_pad_gather_indices"] = scratch_pad_gather_indices;
-                d["scratchpad_type"] = instances[0].scratchpad_type;
+                d["scratchpad_type"] = args.sp.scratchpad_type;
             } else {
                 d["scratch_pad_start_indices"] = py::none();
                 d["scratch_pad_lengths"] = py::none();
@@ -727,14 +721,14 @@ public:
             d["hashes"] = hash_distance_matrix<int>(bd);
 
             auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
-            if (instances[0].graph_tokenizer->is_direct_ranking) {
+            if (args.tok.is_direct_ranking) {
                 d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
             } else {
                 d["ground_truths_gather_indices"] = py::none();
             }
             d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
 
-            if (instances[0].no_graph) {
+            if (args.tok.no_graph) {
                 d["graph_edge_start_indices"] = py::none();
                 d["graph_edge_lengths"] = py::none();
                 d["graph_edge_gather_indices"] = py::none();
@@ -780,8 +774,8 @@ public:
         auto ra = arr.mutable_unchecked();
 
         for (int b = 0; b < batch_size; b++) {
-            const auto &distances_ptr = instances[b].graph_tokenizer->distances_ptr;
-            auto &node_shuffle_map = instances[b].node_shuffle_map;
+            const auto &distances_ptr = instances[b].graph->distances_ptr;
+            auto &node_shuffle_map = instances[b].graph->node_shuffle_map;
             for (int j = 0; j < static_cast<int>(distances_ptr->size()); j++) {
                 for (int k = 0; k < static_cast<int>((*distances_ptr)[j].size()); k++) {
                     auto mapped_j = node_shuffle_map[j];
@@ -807,11 +801,11 @@ public:
         int max_d2 = 0;  // nodes
         auto batch_size = static_cast<int>(instances.size());
         for (int b = 0; b < batch_size; b++) {
-            const auto &graph_ground_truths_ptr = instances[b].graph_tokenizer->graph_ground_truths_ptr;
+            const auto &graph_ground_truths_ptr = instances[b].graph->graph_ground_truths_ptr;
             if (static_cast<int>(graph_ground_truths_ptr->size()) > max_d1) {
                 max_d1 = static_cast<int>(graph_ground_truths_ptr->size());
             }
-            auto num_nodes = instances[b].N;
+            auto num_nodes = instances[b].graph->N;
             if (num_nodes > max_d2) {
                 max_d2 = num_nodes;
             }
@@ -825,8 +819,8 @@ public:
         auto ra_d = arr_distances.mutable_unchecked();
 
         for (int b = 0; b < batch_size; b++) {
-            const auto &graph_ground_truths_ptr = instances[b].graph_tokenizer->graph_ground_truths_ptr;
-            auto node_shuffle_map = instances[b].node_shuffle_map;
+            const auto &graph_ground_truths_ptr = instances[b].graph->graph_ground_truths_ptr;
+            auto node_shuffle_map = instances[b].graph->node_shuffle_map;
 
             for (int j = 0; j < static_cast<int>(graph_ground_truths_ptr->size()); j++) {
                 auto cur_gt = 0;
@@ -1330,7 +1324,6 @@ void print_np(py::array_t<T, py::array::c_style> arr, const string &title = "", 
         std::cout << title << std::endl;
     }
     auto ra = arr.mutable_unchecked();
-    // std::cout << "Shape: " << arr.ndim() << std::endl;
     for (int i = 0; i < arr.ndim(); i++) {
         std::cout << "Dim " << i << ": " << arr.shape(i) << " ";
     }
