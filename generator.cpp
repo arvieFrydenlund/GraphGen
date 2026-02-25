@@ -311,35 +311,21 @@ inline py::dict random_tree_n(
               num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
               kwargs);
 
-    // sample different paths but lose that it is exactly k-hops
-    bool start_at_root = true;
-    if (kwargs.contains("start_at_root")) {
-        start_at_root = kwargs["start_at_root"].cast<bool>();
-    }
-    bool end_at_leaf = true;
-    if (kwargs.contains("end_at_leaf")) {
-        end_at_leaf = kwargs["end_at_leaf"].cast<bool>();
-    }
-    optional<vector<float>> probs = nullopt;  // override default probabilities for branching in random tree generator
-    if (kwargs.contains("probs")) {
-        if (!kwargs["probs"].is_none() and !kwargs["probs"].cast<py::list>().empty()) {
-            probs = kwargs["probs"].cast<vector<float> >();
-        }
-    }
 
     int attempts = 0;
     auto batched_instances = BatchedInstances<boost::undirectedS>(args);
     while (batched_instances.size() < batch_size && attempts < max_attempts) {
 
         int sample_depth = max_depth;  // this is because topology and task mix.  Path length is defined by tree struct.
-        if (args.task.task_sample_dist.has_value()) {
-            std::discrete_distribution<int> d(args.task.task_sample_dist.value().begin(), args.task.task_sample_dist.value().end());
+        if (args.task->task_sample_dist.has_value()) {
+            std::discrete_distribution<int> d(args.task->task_sample_dist.value().begin(), args.task->task_sample_dist.value().end());
             sample_depth = d(gen);
         }
 
         auto graph = make_unique<GraphWrapper<boost::undirectedS> >(min_num_nodes, max_num_nodes, min_vocab, max_vocab,
                                                                     shuffle_edges, shuffle_nodes);
-        graph->make_random_tree(gen, max_degree, sample_depth, max_depth, bernoulli_p, probs, start_at_root, end_at_leaf);
+        graph->make_random_tree(gen, max_degree, sample_depth, max_depth, bernoulli_p,
+                                args.task->probs, args.task->start_at_root, args.task->end_at_leaf);
         if (const auto a = graph->attempt_check(max_edges, attempts, max_attempts)) {
             attempts += a;
             continue;

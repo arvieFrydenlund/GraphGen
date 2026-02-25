@@ -92,7 +92,7 @@ int main() {
 
     auto t = time_before();
 
-    if (true) {  // khops
+    if (false) {  // khops
         t = time_before();
         test_khops();
         time_after(t, "Final test_khops");
@@ -137,6 +137,7 @@ int main() {
 
             t = time_before();
             task_type = "shortest_path";
+            scratchpad_type = "none";
             test_random_tree_n(
                     min_num_nodes, max_num_nodes,
                     max_degree, max_depth, bernoulli_p,

@@ -21,12 +21,12 @@ public:
     Matrix<int> tokenized_inputs; // possibly 2D inputs when using concat_edges
     Matrix<int> tokenized_pos;  // possibly 2D positions when using use_graph_structure or task_tokens
 
-    const TokenizationArgs &tok_args;
-    const PosArgs &pos_args;
+    TokenizationArgs *tok_args;
+    PosArgs *pos_args;
     const vector<pair<int, int> > &edge_list;  // already shuffled
     const vector<int> &node_list;
 
-    GraphTokenizer(const TokenizationArgs &tok_args, const PosArgs &pos_args,
+    GraphTokenizer(TokenizationArgs *tok_args, PosArgs *pos_args,
                    const vector<pair<int, int> > &edge_list, const vector<int> &node_list) :
                    tok_args(tok_args), pos_args(pos_args), edge_list(edge_list), node_list(node_list) {
     }
@@ -39,7 +39,7 @@ public:
         auto num_tokens = static_cast<int>(edge_list.size());
         vector<pair<int, int> > new_edge_list;
         // remap edges according to node shuffle map
-        if (tok_args.duplicate_edges) {
+        if (tok_args->duplicate_edges) {
             num_tokens *= 2;
             // make copy of edge list with reversed edges
             std::copy(edge_list.begin(), edge_list.end(), std::back_inserter<vector<pair<int, int> > >(new_edge_list));
@@ -49,10 +49,10 @@ public:
         } else {
             new_edge_list = this->edge_list;
         }
-        if (!tok_args.concat_edges) {
+        if (!tok_args->concat_edges) {
             num_tokens *= 3;
         }
-        if (tok_args.include_nodes_in_graph_tokenization) {
+        if (tok_args->include_nodes_in_graph_tokenization) {
             num_tokens += static_cast<int>(node_list.size());
         }
 
@@ -70,24 +70,24 @@ public:
 
         auto cur = 0;
         // padding below is for sanity, there should be no pads left after writing in graph (at least in zero dim)
-        if (tok_args.concat_edges) {
+        if (tok_args->concat_edges) {
             tokenized_inputs.resize(num_tokens, 2, dictionary.at("<pad>"));
         } else {
             tokenized_inputs.resize(num_tokens, 1, dictionary.at("<pad>"));
         }
-        if (pos_args.use_graph_structure) {
+        if (pos_args->use_graph_structure) {
             tokenized_pos.resize(num_tokens, 2, pos_dictionary.at("pad"));
         } else {
             tokenized_pos.resize(num_tokens, 1, pos_dictionary.at("pad"));
         }
 
         // write in new edge list
-        if (!tok_args.concat_edges) {
+        if (!tok_args->concat_edges) {
             for (size_t i = 0; i < new_edge_list.size(); i++, cur += 3) {
                 tokenized_inputs(i * 3, 0) = node_shuffle_map.at(new_edge_list[i].first);
                 tokenized_inputs(i * 3 + 1, 0) = node_shuffle_map.at(new_edge_list[i].second);
                 tokenized_inputs(i * 3 + 2, 0) = dictionary.at("|");
-                if (pos_args.use_graph_structure){
+                if (pos_args->use_graph_structure){
                     auto edge_pos = graph_start + static_cast<int>(i);
                     tokenized_pos(i * 3, 0) = edge_pos;
                     tokenized_pos(i * 3 + 1, 0) = edge_pos;
@@ -105,24 +105,24 @@ public:
             for (size_t i = 0; i < new_edge_list.size(); i++, cur++) {
                 tokenized_inputs(i, 0) = node_shuffle_map.at(new_edge_list[i].first);
                 tokenized_inputs(i, 1) = node_shuffle_map.at(new_edge_list[i].second);
-                if (pos_args.use_edges_invariance) {
+                if (pos_args->use_edges_invariance) {
                     tokenized_pos(i, 0) = edge_invariance_marker;
-                } else if (pos_args.use_graph_invariance){
+                } else if (pos_args->use_graph_invariance){
                     tokenized_pos(i, 0) = graph_invariance_marker;
                 } else {
                     tokenized_pos(i, 0) = graph_start + cur;
                 }
             }
         }
-        if (tok_args.include_nodes_in_graph_tokenization) { // write in node list at end
+        if (tok_args->include_nodes_in_graph_tokenization) { // write in node list at end
             for (size_t i = 0; i < node_list.size(); i++, cur++) {
                 tokenized_inputs(cur, 0) = node_shuffle_map.at(node_list[i]);
-                if (tok_args.concat_edges) {  // duplicate node if concat edges in both dims
+                if (tok_args->concat_edges) {  // duplicate node if concat edges in both dims
                     tokenized_inputs(cur, 1) = tokenized_inputs(cur, 0);
                 }
-                if (pos_args.use_node_invariance) {
+                if (pos_args->use_node_invariance) {
                     tokenized_pos(cur, 0) = node_invariance_marker;
-                } else if (pos_args.use_graph_invariance){
+                } else if (pos_args->use_graph_invariance){
                     tokenized_pos(cur, 0) = graph_invariance_marker;
                 } else {
                     tokenized_pos(cur, 0) = graph_start + cur;

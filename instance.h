@@ -65,45 +65,46 @@ public:
     int task_start_idx = -1; // index in the tokenized input where the task starts
     int task_length = 0;
 
-    Instance(std::mt19937 &gen, unique_ptr<GraphWrapper<D>> ggraph, const Args &args,
+    Instance(std::mt19937 &gen, unique_ptr<GraphWrapper<D>> ggraph, Args &args,
              const map<std::string, int> &dictionary,
              const map<std::string, int> &pos_dictionary
     ): args(args), graph(std::move(ggraph)) {
         if (graph) {  // true graph tasks
 
-            if (!args.tok.no_graph) {  // for variant of BFS scratchpad task
+            if (!args.tok->no_graph) {  // for variant of BFS scratchpad task
                 graph_tokenizer = make_unique<GraphTokenizer>(args.tok, args.pos, graph->edge_list, graph->node_list);
                 graph_tokenizer->tokenize(dictionary, graph->node_shuffle_map, pos_dictionary, gen);
             }
 
             // issue of when to convert these to node shuffle map order, it can not be before we make the task
             // since these need the original distance matrix in the original node order
-            if (args.tok.include_nodes_in_graph_tokenization) {
+            if (args.tok->include_nodes_in_graph_tokenization) {
                 graph->get_distances();
-                graph->get_node_ground_truths(args.tok.is_direct_ranking);
+                graph->get_node_ground_truths(args.tok->is_direct_ranking);
             } else {
                 // this also gets the distances due to legacy code
-                graph->get_edge_ground_truths(args.tok.is_causal);
+                graph->get_edge_ground_truths(args.tok->is_causal);
             }
 
-            if (args.task.task_type == "shortest_path") {
+            if (args.task->task_type == "shortest_path") {
                 // the ShortestPathTask and BFSScratchPad are badly coupled
                 // this is because we use the ShortestPathTask to sample a start and end point
                 // however the BFSScratchPad needs to be able to construct the path since otherwise
                 // the scratch pad could be inconsistent with the task path in the case when multiple shortest paths exist
                 // thus we need to use the one first discovered by BFS.  Same goes for the DFS scratch pad.
 
-                auto should_sample_path = args.sp.scratchpad_type == "none" or args.sp.scratchpad_type == "None";
-                auto short_path = make_unique<ShortestPathTask>(gen, dynamic_cast<const ShortestPathTaskArgs&>(args.task), args.pos,
+                auto should_sample_path = args.sp->scratchpad_type == "none" or args.sp->scratchpad_type == "None";
+                auto short_path = make_unique<ShortestPathTask>(gen, args.task, args.pos,
                                                                 graph->distances_ptr,
                                                                 graph->start, graph->end,
                                                                 should_sample_path);
-                if (args.sp.scratchpad_type == "bfs" || args.sp.scratchpad_type == "BFS") {
-                    auto bfs_scratch_pad = make_unique<BFSScratchPad>(dynamic_cast<const BFSScratchpadArgs&>(args.sp), args.pos,
-                                                                      graph->g_ptr, graph->edge_list, short_path->start, short_path->end);
+                if (args.sp->scratchpad_type == "bfs" || args.sp->scratchpad_type == "BFS") {
+                    auto bfs_scratch_pad = make_unique<BFSScratchPad>(args.sp, args.pos,
+                                                                      graph->g_ptr, graph->edge_list,
+                                                                      short_path->start, short_path->end);
                     short_path->set_path(bfs_scratch_pad->path, graph->distances_ptr, false);
                     scratch_pad = std::move(bfs_scratch_pad);
-                } else if (args.sp.scratchpad_type == "dfs" || args.sp.scratchpad_type == "DFS") {
+                } else if (args.sp->scratchpad_type == "dfs" || args.sp->scratchpad_type == "DFS") {
                     /*
                     auto dfs_scratch_pad = make_unique<DFSScratchPad>(short_path->start, short_path->end, g_ptr,
                                                                       node_shuffle_map, sort_adjacency_lists,
@@ -115,15 +116,15 @@ public:
 
                 }
                 task = std::move(short_path);
-            } else if (args.task.task_type == "bfs" || args.task.task_type == "BFS") {  // the scratchpad generation as the main task
-                task = make_unique<BFSTask>(gen, dynamic_cast<const BFSTaskArgs&>(args.task), args.pos,
+            } else if (args.task->task_type == "bfs" || args.task->task_type == "BFS") {  // the scratchpad generation as the main task
+                task = make_unique<BFSTask>(gen, args.task, args.sp, args.pos,
                                             graph->g_ptr, graph->edge_list,
                                             graph->distances_ptr,
                                             graph->start, graph->end);
-            } else if (args.task.task_type == "dfs" || args.task.task_type == "DFS") {
+            } else if (args.task->task_type == "dfs" || args.task->task_type == "DFS") {
                 throw std::invalid_argument("DFS task not implemented yet");
 
-            } else if (args.task.task_type == "center" || args.task.task_type == "centroid") {
+            } else if (args.task->task_type == "center" || args.task->task_type == "centroid") {
                 //task = make_unique<CenterTask>(gen, dynamic_cast<const CenterCentroidTaskArgs&>(args.task), args.pos,
                 //                               graph->distances_ptr);
                 // scratch_pad in future?
@@ -156,18 +157,18 @@ public:
 
         if (graph_tokenizer){
             graph_length = static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]);
-            if (args.tok.include_nodes_in_graph_tokenization) {
+            if (args.tok->include_nodes_in_graph_tokenization) {
                 graph_nodes_length = static_cast<int>(graph_tokenizer->node_list.size());
             }
-            if (!args.tok.no_graph) {
+            if (!args.tok->no_graph) {
                 num_tokens += graph_length;
             }
         }
 
-        thinking_tokens_length = args.tok.num_thinking_tokens;
+        thinking_tokens_length = args.tok->num_thinking_tokens;
         num_tokens += thinking_tokens_length;
         auto max_labels = 0;
-        if (args.tok.is_flat_model) {
+        if (args.tok->is_flat_model) {
             if (task) {
                 task_length = static_cast<int>(task->tokenized_task_inputs.shape()[0]);
                 true_task_length = task_length;
@@ -175,7 +176,7 @@ public:
             }
             if (scratch_pad) {
                 scratch_pad_length = static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
-                if (args.tok.scratchpad_as_prefix) {
+                if (args.tok->scratchpad_as_prefix) {
                     num_tokens += scratch_pad_length;
                 } else {
                     task_length += scratch_pad_length;
@@ -190,7 +191,7 @@ public:
         }
 
         // init output matrices
-        if (args.tok.concat_edges && !args.tok.no_graph) {
+        if (args.tok->concat_edges && !args.tok->no_graph) {
             tokenized_inputs = Matrix<int>(num_tokens, 2, dictionary.at("<pad>"));
         } else {
             tokenized_inputs = Matrix<int>(num_tokens, 1, dictionary.at("<pad>"));
@@ -199,7 +200,7 @@ public:
             // + 1 for end of sequence token
             tokenized_targets = Matrix<int>(task_length + 1, max_labels, dictionary.at("<pad>"));
         }
-        if (args.pos.use_graph_structure) {  // TODO this needs fixing
+        if (args.pos->use_graph_structure) {  // TODO this needs fixing
             tokenized_positions = Matrix<int>(num_tokens, 2, pos_dictionary.at("pad"));
         } else {
             tokenized_positions = Matrix<int>(num_tokens, 1, pos_dictionary.at("pad"));
@@ -210,21 +211,21 @@ public:
         // start of sequence
         auto start_marker = dictionary.at("<s>");
         tokenized_inputs(cur, 0) = start_marker;
-        if (args.tok.concat_edges) {
+        if (args.tok->concat_edges) {
             tokenized_inputs(cur, 1) = start_marker;
         }
         tokenized_positions(cur, 0) = pos_dictionary.at("misc_start");
-        if (args.pos.use_graph_structure) { // TODO this needs fixing
+        if (args.pos->use_graph_structure) { // TODO this needs fixing
             tokenized_positions(cur, 1) = pos_dictionary.at("misc_start");
         }
         cur++;
 
-        if (!args.tok.query_at_end and task) {
+        if (!args.tok->query_at_end and task) {
             // write in query if before graph
             query_start_idx = cur;
             for (size_t i = 0; i < task->tokenized_query_inputs.shape()[0]; i++, cur++) {
                 tokenized_inputs(cur, 0) = task->tokenized_query_inputs(i);
-                if (args.tok.concat_edges) {
+                if (args.tok->concat_edges) {
                     // replicate query if concat edges in both dims
                     tokenized_inputs(cur, 1) = tokenized_inputs(cur, 0);
                 }
@@ -234,44 +235,44 @@ public:
         // write in graph tokens
         if (graph_tokenizer) {
             graph_start_idx = cur;
-            if (args.tok.include_nodes_in_graph_tokenization) {
+            if (args.tok->include_nodes_in_graph_tokenization) {
                 graph_nodes_start_idx = cur + static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]) -
                                         static_cast<int>(graph_tokenizer->node_list.size());
             }
             for (size_t i = 0; i < graph_tokenizer->tokenized_inputs.shape()[0]; i++, cur++) {
                 tokenized_inputs(cur, 0) = graph_tokenizer->tokenized_inputs(i, 0);
-                if (args.tok.concat_edges) {
+                if (args.tok->concat_edges) {
                     tokenized_inputs(cur, 1) = graph_tokenizer->tokenized_inputs(i, 1);
                 }
                 tokenized_positions(cur, 0) = graph_tokenizer->tokenized_pos(i, 0);
-                if (args.pos.use_graph_structure) {  // todo fix
+                if (args.pos->use_graph_structure) {  // todo fix
                     tokenized_positions(cur, 1) = graph_tokenizer->tokenized_pos(i, 1);
                 }
             }
         }
-        if (args.tok.query_at_end and task) {
+        if (args.tok->query_at_end and task) {
             // write in query if after graph
             query_start_idx = cur;
             for (size_t i = 0; i < task->tokenized_query_inputs.shape()[0]; i++, cur++) {
                 tokenized_inputs(cur, 0) = task->tokenized_query_inputs(i);
-                if (args.tok.concat_edges) {
+                if (args.tok->concat_edges) {
                     tokenized_inputs(cur, 1) = tokenized_inputs(cur, 0);
                 }
                 tokenized_positions(cur, 0) = task->tokenized_query_pos(i);
             }
         }
-        if (args.tok.num_thinking_tokens > 0) {
+        if (args.tok->num_thinking_tokens > 0) {
             // write in thinking tokens, these are part of the prefix!
             thinking_tokens_start_idx = cur;
             auto thinking_token_id = dictionary.at("!");
             auto thinking_start_marker = pos_dictionary.at("thinking_start");
             auto thinking_end_marker = pos_dictionary.at("thinking_end");
-            if (args.tok.num_thinking_tokens > thinking_end_marker - thinking_start_marker + 1) {
+            if (args.tok->num_thinking_tokens > thinking_end_marker - thinking_start_marker + 1) {
                 throw std::invalid_argument("num_thinking_tokens exceeds available thinking position markers");
             }
-            for (int i = 0; i < args.tok.num_thinking_tokens; i++, cur++) {
+            for (int i = 0; i < args.tok->num_thinking_tokens; i++, cur++) {
                 tokenized_inputs(cur, 0) = thinking_token_id;
-                if (args.tok.concat_edges) {
+                if (args.tok->concat_edges) {
                     tokenized_inputs(cur, 1) = thinking_token_id;
                 }
                 tokenized_positions(cur, 0) = thinking_start_marker + i;
@@ -279,10 +280,10 @@ public:
         }
 
         // the task
-        if (!args.tok.scratchpad_as_prefix) {
+        if (!args.tok->scratchpad_as_prefix) {
             task_start_idx = cur; // this gets defined regardless since it is also prefix end index
         }
-        if (args.tok.is_flat_model and task) {
+        if (args.tok->is_flat_model and task) {
             // write in task and scratchpad
             auto cur_task_pos = 0;
             auto task_start = pos_dictionary.at("task_start");
@@ -296,11 +297,11 @@ public:
                 scratch_pad_start_idx = cur;
                 for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++) {
                     tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
-                    if (args.tok.concat_edges) {
+                    if (args.tok->concat_edges) {
                         tokenized_inputs(cur, 1) = tokenized_inputs(cur, 0);
                     }
 
-                    if (!args.tok.scratchpad_as_prefix) {  // if part of targets
+                    if (!args.tok->scratchpad_as_prefix) {  // if part of targets
                         tokenized_positions(cur, 0) = task_start + cur_task_pos;
                         for (size_t j = 0; j < static_cast<size_t>(scratch_pad->tokenized_targets.shape()[1]); j++) {
                             tokenized_targets(cur_task_pos, j) = scratch_pad->tokenized_targets(i, j);
@@ -311,7 +312,7 @@ public:
                     }
                 }
             }
-            if (args.tok.scratchpad_as_prefix) {
+            if (args.tok->scratchpad_as_prefix) {
                 task_start_idx = cur;
             }
 
@@ -319,7 +320,7 @@ public:
             true_task_start_idx = cur;
             for (size_t i = 0; i < task->tokenized_task_inputs.shape()[0]; i++, cur++, cur_task_pos++) {
                 tokenized_inputs(cur, 0) = task->tokenized_task_inputs(i);
-                if (args.tok.concat_edges) {
+                if (args.tok->concat_edges) {
                     tokenized_inputs(cur, 1) = task->tokenized_task_inputs(i);
                 }
                 tokenized_positions(cur, 0) = task_start + cur_task_pos;
@@ -330,12 +331,12 @@ public:
             // end of sequence
             auto end_marker = dictionary.at("</s>");
             tokenized_inputs(cur, 0) = end_marker;
-            if (args.tok.concat_edges) {
+            if (args.tok->concat_edges) {
                 tokenized_inputs(cur, 1) = end_marker;
             }
             tokenized_targets(cur_task_pos, 0) = end_marker; // target also end marker
             tokenized_positions(cur, 0) = task_start + cur_task_pos;
-            if (args.pos.use_graph_structure) { // todo
+            if (args.pos->use_graph_structure) { // todo
                 tokenized_positions(cur, 1) = task_start + cur_task_pos;
             }
             cur++;
@@ -490,12 +491,12 @@ public:
         auto batch_size = static_cast<int>(instances.size());
 
         auto new_max_tokenized_inputs_len = max_tokenized_inputs_len;
-        if (args.tok.align_prefix_front_pad and args.tok.is_flat_model) {  // only align if flat model since non-flat separate prefixes
+        if (args.tok->align_prefix_front_pad and args.tok->is_flat_model) {  // only align if flat model since non-flat separate prefixes
             // align up to prefix size and then targets after
             new_max_tokenized_inputs_len = max_prefix_size + max_tokenized_targets_len;
         }
         auto src_tokens = py::array_t<int, py::array::c_style>(
-                {batch_size, new_max_tokenized_inputs_len, args.tok.concat_edges ? 2 : 1});
+                {batch_size, new_max_tokenized_inputs_len, args.tok->concat_edges ? 2 : 1});
         src_tokens[py::make_tuple(py::ellipsis())] = dictionary.at("<pad>");
         auto src_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
@@ -505,7 +506,7 @@ public:
         auto task_lengths = py::array_t<int, py::array::c_style>({batch_size});
 
         auto positions = py::array_t<int, py::array::c_style>(
-                {batch_size, new_max_tokenized_inputs_len, args.pos.use_graph_structure ? 2 : 1});  // TODO
+                {batch_size, new_max_tokenized_inputs_len, args.pos->use_graph_structure ? 2 : 1});  // TODO
         positions[py::make_tuple(py::ellipsis())] = pos_dictionary.at("pad");
 
         py::array_t<int, py::array::c_style> num_nodes(batch_size);
@@ -581,7 +582,7 @@ public:
 
         for (size_t i = 0; i < instances.size(); i++) {
             auto offset = 0;
-            if (args.tok.align_prefix_front_pad and args.tok.is_flat_model) {
+            if (args.tok->align_prefix_front_pad and args.tok->is_flat_model) {
                 offset = max_prefix_size - instances[i].task_start_idx;
             }
             for (size_t j = 0; j < instances[i].tokenized_inputs.shape()[0]; j++) {
@@ -611,13 +612,13 @@ public:
             }
             if (instances[0].graph_tokenizer) {
                 for (size_t j = 0; j < instances[i].graph_tokenizer->edge_list.size(); j++) {
-                    if (args.tok.concat_edges) {
+                    if (args.tok->concat_edges) {
                         graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
                     } else { // need every third token since we just want the edge marker positions (which needs shift by 2)
                         graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3) + 2;
                     }
                 }
-                if (args.tok.include_nodes_in_graph_tokenization) {
+                if (args.tok->include_nodes_in_graph_tokenization) {
                     for (size_t j = 0; j < instances[i].graph_tokenizer->node_list.size(); j++) {
                         graph_node_gather_indices_ar(i, j) = instances[i].graph_nodes_start_idx + offset + j;
                     }
@@ -650,7 +651,7 @@ public:
         d["src_tokens"] = src_tokens;
         d["src_lengths"] = src_lengths;
 
-        if (args.pos.return_pos_ids) {
+        if (args.pos->return_pos_ids) {
             d["positions"] = positions;
         } else {
             d["positions"] = py::none();  // just delete the made positions and model will use range per norm
@@ -669,7 +670,7 @@ public:
         d["graph_edge_start_indices"] = graph_edge_start_indices;
         d["graph_edge_lengths"] = graph_edge_lengths;
         d["graph_edge_gather_indices"] = graph_edge_gather_indices;
-        if (args.tok.include_nodes_in_graph_tokenization) {
+        if (args.tok->include_nodes_in_graph_tokenization) {
             d["graph_node_start_indices"] = graph_node_start_indices;
             d["graph_node_lengths"] = graph_node_lengths;
             d["graph_node_gather_indices"] = graph_node_gather_indices;
@@ -691,7 +692,7 @@ public:
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
                 d["scratch_pad_gather_indices"] = scratch_pad_gather_indices;
-                d["scratchpad_type"] = args.sp.scratchpad_type;
+                d["scratchpad_type"] = args.sp->scratchpad_type;
             } else {
                 d["scratch_pad_start_indices"] = py::none();
                 d["scratch_pad_lengths"] = py::none();
@@ -721,14 +722,14 @@ public:
             d["hashes"] = hash_distance_matrix<int>(bd);
 
             auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
-            if (args.tok.is_direct_ranking) {
+            if (args.tok->is_direct_ranking) {
                 d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
             } else {
                 d["ground_truths_gather_indices"] = py::none();
             }
             d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
 
-            if (args.tok.no_graph) {
+            if (args.tok->no_graph) {
                 d["graph_edge_start_indices"] = py::none();
                 d["graph_edge_lengths"] = py::none();
                 d["graph_edge_gather_indices"] = py::none();
@@ -754,12 +755,12 @@ public:
 
         // arguments
         d["graph_type"] = args.graph_type;
-        d["task_type"] = args.task.task_type;
-        d["is_flat_model"] = args.tok.is_flat_model;
-        d["concat_edges"] = args.tok.concat_edges;
-        d["query_at_end"] = args.tok.query_at_end;
-        d["scratchpad_as_prefix"] = args.tok.scratchpad_as_prefix;
-        d["align_prefix_front_pad"] = args.tok.align_prefix_front_pad;
+        d["task_type"] = args.task->task_type;
+        d["is_flat_model"] = args.tok->is_flat_model;
+        d["concat_edges"] = args.tok->concat_edges;
+        d["query_at_end"] = args.tok->query_at_end;
+        d["scratchpad_as_prefix"] = args.tok->scratchpad_as_prefix;
+        d["align_prefix_front_pad"] = args.tok->align_prefix_front_pad;
         d["min_vocab"] = args.min_vocab;
         d["max_vocab"] = args.max_vocab;
 

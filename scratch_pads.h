@@ -46,17 +46,17 @@ public:
     *  or sort them by id to get a deterministic order (this only works if I apply the node_shuffle_map first)
     */
 
-    const BFSScratchpadArgs &sp_args;
-    const PosArgs &pos_args;
+    BFSScratchpadArgs *sp_args;
+    PosArgs *pos_args;
 
     vector<int> path;
 
     template<typename D>
-    BFSScratchPad(const BFSScratchpadArgs &sp_args, const PosArgs &pos_args,
+    BFSScratchPad(ScratchpadArgs *sp_args_, PosArgs *pos_args,
                   const unique_ptr<Graph<D> > &g_ptr,
                   const vector<pair<int, int> > &edge_list,  // sort by edge list order to avoid semantics leak
                   int start = -1, int end = -1
-    ): sp_args(sp_args), pos_args(pos_args) {
+    ): sp_args(static_cast<BFSScratchpadArgs*>(sp_args_)), pos_args(pos_args) {
 
         auto node_order = vector<int>( static_cast<int>(boost::num_vertices(*g_ptr)), -1);
         // for each edge look at both nodes and add them to the node order if not already there,
@@ -116,7 +116,7 @@ public:
                     next_level_nodes.push_back(n);
                 }
                 should_stop = q.empty();
-                if (sp_args.stop_once_found and found) {
+                if (sp_args->stop_once_found and found) {
                     should_stop = true;
                 }
             }
@@ -184,7 +184,7 @@ public:
         auto prior_adj_orders = vector<int>{levels[0].begin()->first};  // start node
         for (size_t i = 0; i < levels.size(); i++) {
             string marker = "D";
-            if (sp_args.use_unique_depth_markers) {
+            if (sp_args->use_unique_depth_markers) {
                 marker = "D" + to_string(i);;
             }
             tokenized_inputs(cur, 0) = dictionary.at(marker);

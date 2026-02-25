@@ -82,8 +82,8 @@ public:
 
 class ShortestPathTask : public Task {
 public:
-    const ShortestPathTaskArgs &task_args;
-    const PosArgs &pos_args;
+    ShortestPathTaskArgs *task_args;
+    const PosArgs *pos_args;
 
     int start, end = -1;
     vector<int> path;
@@ -166,10 +166,11 @@ public:
         return start_end;
     }
 
-    ShortestPathTask(std::mt19937 &gen, const ShortestPathTaskArgs &task_args, const PosArgs &pos_args,
+    ShortestPathTask(std::mt19937 &gen, TaskArgs *task_args_, const PosArgs *pos_args,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      int start = -1, int end = -1,
-                     const bool sample_path = true) : task_args(task_args), pos_args(pos_args) {
+                     const bool sample_path = true) : task_args(static_cast<ShortestPathTaskArgs *>(task_args_))
+                     , pos_args(pos_args) {
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
@@ -181,19 +182,19 @@ public:
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (!task_args.task_sample_dist.has_value()) {
+        if (!task_args->task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
-            vector<float> uweights(task_args.max_path_length - task_args.min_path_length + 1, 1.0); // uniform distribution
+            vector<float> uweights(task_args->max_path_length - task_args->min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
         } else {
-            d1 = std::discrete_distribution<int>(task_args.task_sample_dist->begin(), task_args.task_sample_dist->end());
+            d1 = std::discrete_distribution<int>(task_args->task_sample_dist->begin(), task_args->task_sample_dist->end());
         }
 
         pair<int, int> start_end;
         if (start != -1 && end != -1) {
             start_end = make_pair(start, end);
         } else {
-            start_end = sample_start_end(gen, distances_ptr, task_args.max_path_length, task_args.min_path_length, d1, start, sample_choice_node);
+            start_end = sample_start_end(gen, distances_ptr, task_args->max_path_length, task_args->min_path_length, d1, start, sample_choice_node);
         }
         this->start = start_end.first;
         this->end = start_end.second;
@@ -386,8 +387,9 @@ class BFSTask : public Task {
      * The task is to generate the scratchpad-only
      */
 public:
-    const BFSTaskArgs &task_args;
-    const PosArgs &pos_args;
+    BFSTaskArgs *task_args;
+    BFSScratchpadArgs *sp_args;
+    PosArgs *pos_args;
 
     int start, end = -1;
     vector<int> path;
@@ -395,35 +397,36 @@ public:
 
     template<typename D>
     BFSTask(std::mt19937 &gen,
-            const BFSTaskArgs &task_args, const PosArgs &pos_args,
+            TaskArgs *task_args_, ScratchpadArgs *sp_args_, PosArgs *pos_args,
             const unique_ptr<Graph<D> > &g_ptr,
             const vector<pair<int, int> > &edge_list,
             const unique_ptr<vector<vector<int> > > &distances_ptr,
-            int start = -1, int end = -1): task_args(task_args), pos_args(pos_args) {
+            int start = -1, int end = -1):
+            task_args(static_cast<BFSTaskArgs *>(task_args_)),
+            sp_args(static_cast<BFSScratchpadArgs *>(sp_args_)),
+            pos_args(pos_args) {
 
         // define d1
         std::discrete_distribution<int> d1;
-        if (!task_args.task_sample_dist.has_value()) {
+        if (!task_args->task_sample_dist.has_value()) {
             // + 1 for inclusive i.e (3, 70) = 3, 4, 5, 6, 7 = five possible lengths
-            vector<float> uweights(task_args.max_path_length - task_args.min_path_length + 1, 1.0); // uniform distribution
+            vector<float> uweights(task_args->max_path_length - task_args->min_path_length + 1, 1.0); // uniform distribution
             d1 = std::discrete_distribution<int>(uweights.begin(), uweights.end());
         } else {
-            d1 = std::discrete_distribution<int>(task_args.task_sample_dist->begin(), task_args.task_sample_dist->end());
+            d1 = std::discrete_distribution<int>(task_args->task_sample_dist->begin(), task_args->task_sample_dist->end());
         }
 
         pair<int, int> start_end;
         if (start != -1 && end != -1) {
             start_end = make_pair(start, end);
         } else {
-            start_end = ShortestPathTask::sample_start_end(gen, distances_ptr, task_args.max_path_length, task_args.min_path_length, d1, start);
+            start_end = ShortestPathTask::sample_start_end(gen, distances_ptr, task_args->max_path_length, task_args->min_path_length, d1, start);
         }
         this->start = start_end.first;
         this->end = start_end.second;
 
-        auto scratchpad = BFSScratchPad(BFSScratchpadArgs(task_args), pos_args, g_ptr, edge_list, this->start, this->end);
-        this->scratchpad = make_unique<BFSScratchPad>(scratchpad);
-        auto path(this->scratchpad->path);
-        this->path = path;
+        this->scratchpad = make_unique<BFSScratchPad>(sp_args, pos_args, g_ptr, edge_list, this->start, this->end);
+        std::copy(this->scratchpad->path.begin(), this->scratchpad->path.end(), std::back_inserter(this->path));
     }
 
     void tokenize(
