@@ -35,8 +35,9 @@ public:
     unique_ptr<vector<vector<int> > > distances_ptr;
     unique_ptr<vector<vector<int> > > graph_ground_truths_ptr; // -1 for unreachable, either [E * N] or [N * N]
 
-    int start{};
-    int end{};
+    // note these are temporary to get to shortest path
+    int start = -1;
+    int end = -1;
 
     int N{};
     int E{};
@@ -105,6 +106,7 @@ public:
         // auto graph_t = time_before();
         auto start_end = random_tree_generator(g_ptr, num_nodes, gen, max_degree, sample_depth, max_depth, bernoulli_p, probs);
         start = start_end.first, end = start_end.second;
+
         if (!start_at_root) {
             start = -1;
         }

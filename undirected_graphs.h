@@ -377,7 +377,9 @@ inline bool depth_check(const int cur_depth, const int max_depth) {
 
 inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>> &g_ptr,
                                 const int num_nodes, std::mt19937 &gen,
-                                const int d, int sample_depth, const int max_depth,
+                                const int d,
+                                int sample_depth,
+                                const int max_depth,  // if -1 then go until num_nodes otherwise stop at max_depth whichever comes first
                                 const float bernoulli_p=0., optional<vector<float>> probs=nullopt,
                                 const bool verbose = false) {
     // Either full d-ary trees (bernoulli_p=0.) or random binomial trees with at most d children per node depending on bernoulli_p
@@ -413,8 +415,8 @@ inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>
 
             int num_children;
             if (probs.has_value() && !probs.value().empty()) {  // old version
-                std::discrete_distribution<int> d(probs->begin(), probs->end());
-                num_children = d(gen) + 1;  // at least one child
+                std::discrete_distribution<int> dist(probs->begin(), probs->end());
+                num_children = dist(gen) + 1;  // at least one child
             } else {
                 num_children = d;
                 if (bernoulli_p > 0.) {
@@ -433,11 +435,21 @@ inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>
             }
         }
         cur_depth++;
-        if (cur_depth == sample_depth and !expansion_q.empty()) {
-            end = expansion_q_next.back();  // return the last leaf node at the sampled depth}
+
+        if (cur_depth <= sample_depth and !expansion_q_next.empty()) {
+            // choose either front or end randomly
+            // important because end-side may be biased by weight due to num nodes limit
+            uniform_int_distribution<int> dist(0, 1);
+            if (dist(gen) == 0) {
+                end = expansion_q_next.front();
+            } else {
+                end = expansion_q_next.back();
+            }
         }
         swap(expansion_q, expansion_q_next);
     }
+
+
     return make_pair(start, end);
 }
 
