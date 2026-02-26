@@ -10,6 +10,7 @@
 #include "args.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -20,14 +21,16 @@ using namespace std;
 template<typename D>
 class GraphWrapper {
 public:
-    int min_num_nodes;  // global, not unique to this.  This is me mixing in graph args with specific values
-    int max_num_nodes;  // global
     int min_vocab;
     int max_vocab;
+
+    /* regular graphs */
+    int min_num_nodes;  // global, not unique to this.  This is me mixing in graph args with specific values
+    int max_num_nodes;  // global
     bool shuffle_edges;
     bool shuffle_nodes;
-    int c_min;
-    int c_max;
+    int c_min = -1;
+    int c_max = -1;
 
     unique_ptr<Graph<D> > g_ptr;
     unique_ptr<vector<vector<float> > > positions_ptr;
@@ -48,6 +51,14 @@ public:
     vector<int> node_list; // ordered in the constructor, PLEASE NOTE this is not the original order nore the shuffled order but order of nodes seen in shuffled edges
     vector<pair<int, int> > edge_list;
 
+    /* khops graphs
+     * This really should be typed*/
+    int khops_k;
+    int khops_max_k;
+    int khops_prefix_length;
+    vector<int> khops_segment_lengths;
+
+    // for regular graphs
     GraphWrapper(int min_num_nodes, int max_num_nodes,
                  int min_vocab, int max_vocab,
                  bool shuffle_edges, bool shuffle_nodes,
@@ -64,6 +75,12 @@ public:
         this->c_max = c_max;
 
         if (c_min > 0 and c_min > c_max) { throw std::invalid_argument("Invalid arguments: c_min > c_max"); }
+    }
+
+    // for khops
+    GraphWrapper(int min_vocab, int max_vocab){
+        this->min_vocab = min_vocab;
+        this->max_vocab = max_vocab;
     }
 
     inline int attempt_check(const int max_edges, const int attempts, const int max_attempts) {
@@ -135,6 +152,35 @@ public:
         start = start_end.first, end = start_end.second;
         // time_after(graph_t, "graph gen");
         finish(gen);
+    }
+
+
+    void make_khops(std::mt19937 &gen, const int min_khops, const int max_khops,
+                    const int min_prefix_length, const int max_prefix_length, optional<vector<float>> task_sample_dist) {
+        if (task_sample_dist.has_value()){
+            khops_k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
+            khops_max_k = task_sample_dist.value()[task_sample_dist.value().size() - 1] + min_khops;
+        } else {
+            khops_k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
+            khops_max_k = max_khops + 1;
+        }
+        khops_prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
+    }
+
+    void make_khops_gen(std::mt19937 &gen, const int min_khops, const int max_khops,
+                        const int min_prefix_length, const int max_prefix_length,
+                        const string &partition_method, SampleIntPartition &sample_int_partition,
+                        optional<vector<float>> task_sample_dist) {
+        make_khops(gen, min_khops, max_khops, min_prefix_length, max_prefix_length, task_sample_dist);
+
+        if (partition_method == "uniform") {
+            khops_segment_lengths = sample_int_partition.uniform_random_partition(khops_prefix_length - khops_k, khops_k, gen, true);
+            if (static_cast<int>(khops_segment_lengths.size()) != khops_k) {
+                throw runtime_error("Error in uniform partitioning");
+            }
+        } else {
+            khops_segment_lengths = sample_int_partition.non_uniform_random_partition(khops_prefix_length - khops_k, khops_k, gen, true);
+        }
     }
 
 

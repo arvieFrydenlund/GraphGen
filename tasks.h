@@ -581,28 +581,24 @@ class KHopsTask : public Task {
      * Original version
      */
 public:
-    bool right_side_connect;
-    bool permutation_version;
-    bool mask_to_vocab_size;
+    KhopsArgs *task_args;
+    PosArgs *pos_args;
     int vocab_size;
 
     vector<int> seq;
     vector<vector<int>> hops;
 
-    KHopsTask(std::mt19937 &gen, const int k, const int max_k, const int min_value, const int max_value,
-              const int length, const bool right_side_connect=true,
-              const bool permutation_version=false, const bool mask_to_vocab_size=false  // i.e. fair sequential supervision efficiency
-                      ) {
+    KHopsTask(std::mt19937 &gen, TaskArgs *task_args_, PosArgs *pos_args,
+              const int min_value, const int max_value,
+              const int k, const int max_k,const int length):
+              task_args(static_cast<KhopsArgs *>(task_args_)), pos_args(pos_args) {
         assert (max_value - min_value > 2);
         use_query_invariance = false;
-        this->right_side_connect = right_side_connect;
-        this->permutation_version = permutation_version;
-        this->mask_to_vocab_size = mask_to_vocab_size;
+
         this->vocab_size = max_value - min_value + 1;
 
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
-
-        if (permutation_version) {  // treat the sequence length as max_k permutations of vocab
+        if (task_args->permutation_version) {  // treat the sequence length as max_k permutations of vocab
             auto vocab = vector<int>(max_value - min_value + 1);
             std::iota(vocab.begin(), vocab.end(), min_value);
             auto prior_last = -1;
@@ -633,7 +629,7 @@ public:
         auto back_pointer = vector<int>(seq.size(), -1);  // is your first hop, but used for all other hops
         hops = vector<vector<int>>(k, vector<int>(seq.size(), -1));
 
-        auto offset = right_side_connect ? 1 : -1;
+        auto offset = task_args->right_side_connect ? 1 : -1;
         for (int i = static_cast<int>(seq.size()) - 1; i >= 0; i--) {
             auto target = seq[i];
             // next match in seq
@@ -698,7 +694,7 @@ public:
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
             if (khops[i] >= 0) {
-                if (!mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
+                if (!task_args->mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
                     tokenized_task_targets(i + 1, 0) = khops[i];
                 }
             }

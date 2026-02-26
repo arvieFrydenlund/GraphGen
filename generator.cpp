@@ -452,9 +452,6 @@ inline py::dict balanced_n(
 
 inline py::dict khops_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
-                            const bool right_side_connect=true,
-                            const bool permutation_version=false,
-                            const bool mask_to_vocab_size=false,
                             int min_vocab = -1, int max_vocab = -1,
                             const int batch_size = 256,
                             const int num_thinking_tokens = 0,
@@ -473,34 +470,16 @@ inline py::dict khops_n(const int min_khops, const int max_khops,
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
 
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
+    Args args("khops", scratchpad_type, "khops", min_vocab, max_vocab,
+              true, false, false, true, false, false, false,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
-    vector<int> fake_segment_lengths;
-    auto batched_instances = KHopsBatchedInstances("khops", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
-
+    auto batched_instances = BatchedInstances<boost::directedS>(args);
     for (int b = 0; b < batch_size; b++) {
-        int k;
-        int max_k;
-        if (task_sample_dist.has_value()){
-            k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
-            max_k = task_sample_dist.value()[task_sample_dist.value().size() - 1] + min_khops;
-        } else {
-            k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
-            max_k = max_khops + 1;
-        }
-        int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
-
-
-        auto instance = KHopsInstance(gen, dictionary, k, max_k , min_vocab, max_vocab,
-                                      "khops", scratchpad_type,
-                                      prefix_length, fake_segment_lengths,
-                                      right_side_connect, permutation_version, mask_to_vocab_size,
-                                      scratchpad_as_prefix);
+        auto graph = make_unique<GraphWrapper<boost::directedS> >(min_vocab, max_vocab);
+        graph->make_khops(gen, min_khops, max_khops, min_prefix_length, max_prefix_length, args.task->task_sample_dist);
+        auto instance = Instance<boost::directedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -509,7 +488,7 @@ inline py::dict khops_n(const int min_khops, const int max_khops,
 
 inline py::dict khops_gen_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
-                            const bool right_side_connect = true, const string &partition_method = "uniform",
+                            const string &partition_method = "uniform",
                             int min_vocab = -1, int max_vocab = -1,
                             const int batch_size = 256,
                             const int num_thinking_tokens = 0,
@@ -528,38 +507,17 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
 
-    optional<vector<float>> task_sample_dist = nullopt;
-    if (kwargs.contains("task_sample_dist")) {
-        if (!kwargs["task_sample_dist"].is_none() and !kwargs["task_sample_dist"].cast<py::list>().empty()) {
-            task_sample_dist = kwargs["task_sample_dist"].cast<vector<float> >();
-        }
-    }
+    Args args("khops_gen", scratchpad_type, "khops_gen", min_vocab, max_vocab,
+              true, false, false, true, false, false, false,
+              num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
+              kwargs);
 
-    auto batched_instances = KHopsBatchedInstances("khops_gen", min_vocab, max_vocab, num_thinking_tokens, is_flat_model, align_prefix_front_pad);
-
+    auto batched_instances = BatchedInstances<boost::directedS>(args);
     for (int b = 0; b < batch_size; b++) {
-        int k;
-        if (task_sample_dist.has_value()){
-            k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
-        } else {
-            k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
-        }
-        int prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
-        vector<int> segment_lengths;
-        if (partition_method == "uniform") {
-            segment_lengths = sample_int_partition.uniform_random_partition(prefix_length - k, k, gen, true);
-            if (static_cast<int>(segment_lengths.size()) != k) {
-                throw runtime_error("Error in uniform partitioning");
-                segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
-            }
-        } else {
-            segment_lengths = sample_int_partition.non_uniform_random_partition(prefix_length - k, k, gen, true);
-        }
-        auto instance = KHopsInstance(gen, dictionary, -1, -1,
-                                      min_vocab, max_vocab,
-                                      "khops_gen", scratchpad_type,
-                                      -1, segment_lengths, right_side_connect, false, false,
-                                      scratchpad_as_prefix);
+        auto graph = make_unique<GraphWrapper<boost::directedS> >(min_vocab, max_vocab);
+        graph->make_khops_gen(gen, min_khops, max_khops, min_prefix_length, max_prefix_length,
+                              partition_method, sample_int_partition, args.task->task_sample_dist);
+        auto instance = Instance<boost::directedS>(gen, std::move(graph), args, dictionary, pos_dictionary);
         batched_instances.add(instance);
     }
     return batched_instances.package_for_model(dictionary, pos_dictionary);
@@ -911,9 +869,6 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_khops"),
           py::arg("min_prefix_length"),
           py::arg("max_prefix_length"),
-          py::arg("right_side_connect") = true,
-          py::arg("permutation_version") = true,
-          py::arg("mask_to_vocab_size") = false,
           py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,
           py::arg("batch_size") = 256,
@@ -936,7 +891,6 @@ PYBIND11_MODULE(generator, m) {
           py::arg("max_khops"),
           py::arg("min_prefix_length"),
           py::arg("max_prefix_length"),
-          py::arg("right_side_connect") = true,
           py::arg("partition_method") = "uniform",
           py::arg("min_vocab") = -1,
           py::arg("max_vocab") = -1,

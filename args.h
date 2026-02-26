@@ -386,7 +386,7 @@ public:
             sp = new BFSScratchpadArgs(kwargs);
         } else if (task_type == "center" || task_type == "centroid"){
             task = new CenterCentroidTaskArgs(task_type, kwargs);
-        } else if (task_type == "khops"){
+        } else if (task_type == "khops" || task_type == "khops_gen"){
             task = new KhopsArgs(kwargs);
         } else if (task_type == "None"){
             task = new TaskArgs("none", kwargs);
@@ -409,7 +409,7 @@ public:
                                             num_thinking_token, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad, kwargs);
         pos = new PosArgs(kwargs);
 
-        if (print_args) {
+        if (print_args || (kwargs.contains("print_cpp_args") && kwargs["print_cpp_args"].cast<bool>())) {
             this->print();
         }
     }
