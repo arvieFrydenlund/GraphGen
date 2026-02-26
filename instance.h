@@ -141,19 +141,46 @@ public:
         }
     }
 
+    void copy_tok(Matrix<int> &to, Matrix<int> & from, int to_cur, int from_cur, bool repeat=false) {
+        if (repeat && from.shape()[1] == 1) {
+            for (size_t i = 0; i < to.shape()[1]; i++){
+                to(to_cur, i) = from(from_cur, 0);
+            }
+        } else {
+            for (size_t i = 0; i < from.shape()[1]; i++) {
+                to(to_cur, i) = from(from_cur, i);
+            }
+        }
+    }
+
+    void set_tok(Matrix<int> &to, int tok, bool repeat=false){
+        if (repeat) {
+            for (size_t i = 0; i < to.shape()[1]; i++){
+                to(0, i) = tok;
+            }
+        } else {
+            to(0, 0) = tok;
+        }
+    }
+
     void tokenize(
             /*
              * Creates the input sequence, the target sequence, and the positional embeddings
              */
             const map<std::string, int> &dictionary,
             const map<std::string, int> pos_dictionary) {
-        // set lengths
-        int num_tokens = 2; // +2 for start and end sequence tokens
+
+        // get length and size info before coping over tokenizations in correct places
+        int num_tokens = 2; //  seq_length +2 for start and end sequence tokens
+        auto max_labels = 1;  //  target size
+        auto max_input_struct = 1; // for structure input
+        auto max_pos_struct = 0;  // max position token id structure
         if (task) {
             query_length = static_cast<int>(task->tokenized_query_inputs.shape()[0]);
+            max_input_struct = max(max_input_struct, static_cast<int>(task->tokenized_query_inputs.shape()[1]));
             num_tokens += query_length;
+            max_labels = static_cast<int>(task->tokenized_task_targets.shape()[1]);
         }
-
         if (graph_tokenizer){
             graph_length = static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]);
             if (args.tok->include_nodes_in_graph_tokenization) {
@@ -161,17 +188,20 @@ public:
             }
             if (!args.tok->no_graph) {
                 num_tokens += graph_length;
+                max_input_struct = max(max_input_struct, static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[1]));
+                // has no target labels since those are done separately
             }
         }
 
         thinking_tokens_length = args.tok->num_thinking_tokens;
         num_tokens += thinking_tokens_length;
-        auto max_labels = 0;
+
         if (args.tok->is_flat_model) {
-            if (task) {
+            if (task) {  // we set values in task so it must come before scratch pad since it can affect task length
                 task_length = static_cast<int>(task->tokenized_task_inputs.shape()[0]);
                 true_task_length = task_length;
-                max_labels = static_cast<int>(task->tokenized_task_targets.shape()[1]);
+                max_input_struct = max(max_input_struct, static_cast<int>(task->tokenized_task_inputs.shape()[1]));
+                max_labels = max(max_labels, static_cast<int>(task->tokenized_task_targets.shape()[1]));
             }
             if (scratch_pad) {
                 scratch_pad_length = static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]);
@@ -180,43 +210,26 @@ public:
                 } else {
                     task_length += scratch_pad_length;
                 }
-                if (static_cast<int>(scratch_pad->tokenized_targets.shape()[1]) > max_labels) {
-                    max_labels = static_cast<int>(scratch_pad->tokenized_targets.shape()[1]);
-                }
+                max_input_struct = max(max_input_struct, static_cast<int>(scratch_pad->tokenized_inputs.shape()[1]));
+                max_labels = max(max_labels, max_labels = static_cast<int>(scratch_pad->tokenized_targets.shape()[1]));
             }
             num_tokens += task_length;
-        } else {
+        } else {  // the task is separate
             throw std::invalid_argument("Non-flat model tokenization not implemented yet");
         }
 
-        // init output matrices
-        if (args.tok->concat_edges && !args.tok->no_graph) {
-            tokenized_inputs = Matrix<int>(num_tokens, 2, dictionary.at("<pad>"));
-        } else {
-            tokenized_inputs = Matrix<int>(num_tokens, 1, dictionary.at("<pad>"));
-        }
+        tokenized_inputs = Matrix<int>(num_tokens, max_input_struct, dictionary.at("<pad>"));
         if (task) {
-            // + 1 for end of sequence token
             tokenized_targets = Matrix<int>(task_length + 1, max_labels, dictionary.at("<pad>"));
         }
-        if (args.pos->use_graph_structure) {  // TODO this needs fixing
-            tokenized_positions = Matrix<int>(num_tokens, 2, pos_dictionary.at("pad"));
-        } else {
-            tokenized_positions = Matrix<int>(num_tokens, 1, pos_dictionary.at("pad"));
-        }
+        tokenized_positions = Matrix<int>(num_tokens, max_pos_struct, pos_dictionary.at("pad"));
+
 
         // write in values
         auto cur = 0;
         // start of sequence
-        auto start_marker = dictionary.at("<s>");
-        tokenized_inputs(cur, 0) = start_marker;
-        if (args.tok->concat_edges) {
-            tokenized_inputs(cur, 1) = start_marker;
-        }
-        tokenized_positions(cur, 0) = pos_dictionary.at("misc_start");
-        if (args.pos->use_graph_structure) { // TODO this needs fixing
-            tokenized_positions(cur, 1) = pos_dictionary.at("misc_start");
-        }
+        set_tok(tokenized_inputs, dictionary.at("<s>"), true);
+        set_tok(tokenized_positions, pos_dictionary.at("start"), true);
         cur++;
 
         if (!args.tok->query_at_end and task) {

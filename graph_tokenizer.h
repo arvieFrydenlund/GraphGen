@@ -26,6 +26,8 @@ public:
     const vector<pair<int, int> > &edge_list;  // already shuffled
     const vector<int> &node_list;
 
+    int graph_nodes_start_idx = -1;
+
     GraphTokenizer(TokenizationArgs *tok_args, PosArgs *pos_args,
                    const vector<pair<int, int> > &edge_list, const vector<int> &node_list) :
                    tok_args(tok_args), pos_args(pos_args), edge_list(edge_list), node_list(node_list) {
@@ -115,6 +117,7 @@ public:
             }
         }
         if (tok_args->include_nodes_in_graph_tokenization) { // write in node list at end
+            graph_nodes_start_idx = cur;
             for (size_t i = 0; i < node_list.size(); i++, cur++) {
                 tokenized_inputs(cur, 0) = node_shuffle_map.at(node_list[i]);
                 if (tok_args->concat_edges) {  // duplicate node if concat edges in both dims
