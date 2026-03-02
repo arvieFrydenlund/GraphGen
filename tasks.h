@@ -10,6 +10,7 @@
 #include <queue>
 #include <map>
 #include "matrix.h"
+#include "args.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
 #include "scratch_pads.h"
@@ -27,6 +28,8 @@ using namespace py::literals;
 
 class Task {
 public:
+    const PosArgs *pos_args;
+
     /*
      A task is split into a query and a task component,
      with the query being part of the prompt and the task being the expected output
@@ -40,7 +43,7 @@ public:
     Matrix<int> tokenized_query_pos;
     // tokenized_task_pos; these get made in the instance due to scratchpad being part of task
 
-    bool use_query_invariance;
+    Task(const PosArgs *pos_args) : pos_args(pos_args) {}
 
     virtual ~Task() = default;  // Polymorphic base classes should declare virtual destructors
 
@@ -67,12 +70,15 @@ public:
             throw std::invalid_argument("Task size exceeds available position tokens.");
         }
 
-        tokenized_query_pos.resize(query_size);
+        tokenized_query_pos.resize(query_size, pos_args->use_full_structure ? 2 : 1);
         for (size_t i = 0; i < static_cast<size_t>(query_size); i++) {
-            if (use_query_invariance) {
-                tokenized_query_pos(i) = query_invariance_marker;
+            if (pos_args->use_query_invariance) {
+                tokenized_query_pos(i, 0) = query_invariance_marker;
             } else {
-                tokenized_query_pos(i) = query_start + static_cast<int>(i);
+                tokenized_query_pos(i, 0) = query_start + static_cast<int>(i);
+            }
+            if (pos_args->use_full_structure) {
+                tokenized_query_pos(i, 1) = query_start + static_cast<int>(i);
             }
         }
     }
@@ -169,16 +175,13 @@ public:
     ShortestPathTask(std::mt19937 &gen, TaskArgs *task_args_, const PosArgs *pos_args,
                      const unique_ptr<vector<vector<int> > > &distances_ptr,
                      int start = -1, int end = -1,
-                     const bool sample_path = true) : task_args(static_cast<ShortestPathTaskArgs *>(task_args_))
-                     , pos_args(pos_args) {
+                     const bool sample_path = true) : Task(pos_args), task_args(static_cast<ShortestPathTaskArgs *>(task_args_)){
         /*
          * A) This is hardcoded for integer path lengths
          * Uniform sample paths of length between min_path_length and max_path_length
          * return length as vector of node ids
          * B) This is hardcoded for checking for distances of 1 as a connection
          */
-
-        this->use_query_invariance = use_query_invariance;
 
         // define d1
         std::discrete_distribution<int> d1;
@@ -287,8 +290,8 @@ public:
         auto task_size = static_cast<int>(path.size()) + 2; // t_start, path nodes, t_end
 
 
-        tokenized_query_inputs.resize(query_size);
-        tokenized_task_inputs.resize(task_size);
+        tokenized_query_inputs.resize(query_size, 1);
+        tokenized_task_inputs.resize(task_size, 1);
         tokenized_task_targets.resize(task_size, max_num_labels, pad);
 
         // query tokenization
@@ -402,9 +405,9 @@ public:
             const vector<pair<int, int> > &edge_list,
             const unique_ptr<vector<vector<int> > > &distances_ptr,
             int start = -1, int end = -1):
+            Task(pos_args),
             task_args(static_cast<BFSTaskArgs *>(task_args_)),
-            sp_args(static_cast<BFSScratchpadArgs *>(sp_args_)),
-            pos_args(pos_args) {
+            sp_args(static_cast<BFSScratchpadArgs *>(sp_args_)) {
 
         // define d1
         std::discrete_distribution<int> d1;
@@ -458,7 +461,7 @@ public:
     }
 };
 
-
+/*
 class CenterTask : public Task {
 public:
     vector<int> new_query;
@@ -534,11 +537,10 @@ public:
             const map<std::string, int> pos_dictionary,
             std::mt19937 &gen) {
 
-        /* Ex if the query is 0,1,2 and the center is 3,4
-         * query : / 0 1 2 ?
-         * task input: = 3 4 .
-         * task target: = [3 4] [4] .
-         */
+        // Ex if the query is 0,1,2 and the center is 3,4
+         // query : / 0 1 2 ?
+         // task input: = 3 4 .
+         // task target: = [3 4] [4] .
 
         auto query_start_marker = dictionary.at("/");
         auto query_end_marker = dictionary.at("?");
@@ -548,8 +550,8 @@ public:
         auto query_size = static_cast<int>(new_query.size()) + 2; // q_start, num_nodes q_end
         auto task_size = static_cast<int>(outputs.size()) + 2; // t_start, path nodes, t_end
 
-        tokenized_query_inputs.resize(query_size);
-        tokenized_task_inputs.resize(task_size);
+        tokenized_query_inputs.resize(query_size, 1);
+        tokenized_task_inputs.resize(task_size, 1);
         tokenized_task_targets.resize(task_size, static_cast<int>(outputs.size()), dictionary.at("<pad>"));
 
         // query tokenization
@@ -575,6 +577,7 @@ public:
     }
 
 };
+*/
 
 class KHopsTask : public Task {
     /*
@@ -591,9 +594,8 @@ public:
     KHopsTask(std::mt19937 &gen, TaskArgs *task_args_, PosArgs *pos_args,
               const int min_value, const int max_value,
               const int k, const int max_k,const int length):
-              task_args(static_cast<KhopsArgs *>(task_args_)), pos_args(pos_args) {
+            Task(pos_args), task_args(static_cast<KhopsArgs *>(task_args_)) {
         assert (max_value - min_value > 2);
-        use_query_invariance = false;
 
         this->vocab_size = max_value - min_value + 1;
 
@@ -677,8 +679,8 @@ public:
 
         int prefix_size = 3; // q_start, k, q_end
         auto task_size = 2 + static_cast<int>(seq.size()); // t_start, ground truths, t_end
-        tokenized_query_inputs.resize(prefix_size);
-        tokenized_task_inputs.resize(task_size);
+        tokenized_query_inputs.resize(prefix_size, 1);
+        tokenized_task_inputs.resize(task_size, 1);
         tokenized_task_targets.resize(task_size, 1, pad);
 
         // need to tokenize k, which means k-values need to be in vocab, use depth markers for this as work around
@@ -713,7 +715,8 @@ public:
 
 class KHopsGenTask : public Task {
 public:
-    bool right_side_connect;
+    KhopsArgs *task_args;
+    PosArgs *pos_args;
 
     vector<vector<int>> segments;
     vector<int> ground_truths;
@@ -729,7 +732,7 @@ public:
             }
             segment[i] = rnd_value;
         }
-        if (is_last or right_side_connect) {  // then the new cur_value is at the last position
+        if (is_last or task_args->right_side_connect) {  // then the new cur_value is at the last position
             segment[static_cast<int>(segment.size()) - 1] = cur_value;
         } else {  // the new cur_value is the second last position
             segment[static_cast<int>(segment.size()) - 2] = cur_value;
@@ -737,12 +740,12 @@ public:
         return segment;
     }
 
-    KHopsGenTask(std::mt19937 &gen, const int min_value, const int max_value,
-                 const vector<int> &segment_lengths, const bool right_side_connect=true, const bool no_repeats=true){
-        use_query_invariance = false;
-        this->right_side_connect = right_side_connect;
+    KHopsGenTask(std::mt19937 &gen, TaskArgs *task_args_, PosArgs *pos_args,
+                 const int min_value, const int max_value,
+                 const vector<int> &segment_lengths):
+                 Task(pos_args), task_args(static_cast<KhopsArgs *>(task_args_)) {
 
-        if (no_repeats && segment_lengths.size() + 1 > static_cast<size_t>(max_value - min_value + 1)) {
+        if (task_args->khops_no_repeats && segment_lengths.size() + 1 > static_cast<size_t>(max_value - min_value + 1)) {
             throw std::invalid_argument("Not enough unique values to fill segments with no repeats.");
         }
 
@@ -750,7 +753,7 @@ public:
 
         int cur_value;
         vector<int> path(segment_lengths.size() + 1);
-        if (no_repeats) {  // sample a path with no repeats
+        if (task_args->khops_no_repeats) {  // sample a path with no repeats
             auto vocab = vector<int>(max_value - min_value + 1);
             std::iota(vocab.begin(), vocab.end(), min_value);
             std::shuffle(vocab.begin(), vocab.end(), gen);
@@ -767,13 +770,13 @@ public:
             auto is_last = (i == static_cast<int>(segment_lengths.size()) - 1);
             auto segment = get_segment(gen, min_value, max_value, cur_value,
                                        segment_lengths[i], is_last);
-            if (right_side_connect){
-                if (no_repeats) {
+            if (task_args->right_side_connect){
+                if (task_args->khops_no_repeats) {
                     segment[static_cast<int>(segment.size()) - 2] = path[i + 1];
                 }
                 cur_value = segment[static_cast<int>(segment.size()) - 2];
             } else {
-                if (no_repeats) {
+                if (task_args->khops_no_repeats) {
                     segment[static_cast<int>(segment.size()) - 1] = path[i + 1];
                 }
                 cur_value = segment[static_cast<int>(segment.size()) - 1];
@@ -782,7 +785,7 @@ public:
         }
     }
 
-    vector<vector<int>> get_multi_label_ground_truths(const bool no_repeats=true){  // TODO no repeats
+    vector<vector<int>> get_multi_label_ground_truths(){
         // The labels for at multi_label_ground_truths[:][0] are just the original ground truths
         vector<vector<int>> multi_label_ground_truths(ground_truths.size(), vector<int>());
         for (size_t i = 0; i < ground_truths.size(); i++) {
@@ -811,8 +814,8 @@ public:
         }
         auto task_size = 2 + static_cast<int>(ground_truths.size()); // t_start, ground truths, t_end
 
-        tokenized_query_inputs.resize(prefix_size);
-        tokenized_task_inputs.resize(task_size);
+        tokenized_query_inputs.resize(prefix_size, 1);
+        tokenized_task_inputs.resize(task_size, 1);
 
         auto multi_label_ground_truths = get_multi_label_ground_truths();
         int max_num_labels = 1;

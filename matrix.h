@@ -76,8 +76,33 @@ public:
         return data_[r * cols_ + c];
     }
 
+
     bool is1D() const { return cols_ == 1; }
     bool is2D() const { return cols_ > 1; }
+
+
+    void copy_tok(Matrix<T> & from, int to_cur, int from_cur, bool repeat=false) {
+        if (repeat && from.shape()[1] == 1) {
+            for (size_t i = 0; i < this->shape()[1]; i++){
+                (*this)(to_cur, i) = from(from_cur, 0);
+            }
+        } else {
+            for (size_t i = 0; i < from.shape()[1]; i++) {
+                (*this)(to_cur, i) = from(from_cur, i);
+            }
+        }
+    }
+
+    void set_tok(int to_cur, T tok, bool repeat=false){
+        if (repeat) {
+            for (size_t i = 0; i < this->shape()[1]; i++){
+                // cout << "Setting token at (" << to_cur << ", " << i << ") to " << static_cast<int>(tok) << endl;
+                (*this)(to_cur, i) = tok;
+            }
+        } else {
+            (*this)(to_cur, 0) = tok;
+        }
+    }
 
 private:
     size_t rows_, cols_;

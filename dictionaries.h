@@ -169,6 +169,13 @@ inline void set_pos_dictionary(py::dict &py_dictionary, const bool verbose = fal
     // verify that all keys are present
     vector<string> required_keys = {
             "pad",
+            "query_invariance",
+            "edge_invariance",
+            "node_invariance",
+            "graph_invariance",
+            "scratchpad_invariance",
+            "task_invariance",
+
             "misc_start",
             "misc_end",
             "query_start",

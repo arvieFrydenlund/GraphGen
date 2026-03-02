@@ -168,18 +168,20 @@ public:
     int min_prefix_length;
     int max_prefix_length;
     bool right_side_connect;
+    bool khops_no_repeats;
     bool permutation_version;
     bool mask_to_vocab_size;
     string partition_method;
 
     KhopsArgs(const py::kwargs &kwargs,
               int max_khops = 5, int min_khops = 2, int min_prefix_length = 3, int max_prefix_length = 20,
-              bool right_side_connect = true, bool permutation_version = false, bool mask_to_vocab_size = false,
+              bool right_side_connect = true, bool khops_no_repeats = true,
+              bool permutation_version = false, bool mask_to_vocab_size = false,
               const string &partition_method = "uniform") :
             TaskArgs("khops", kwargs), max_khops(max_khops), min_khops(min_khops),
             min_prefix_length(min_prefix_length), max_prefix_length(max_prefix_length),
-            right_side_connect(right_side_connect), permutation_version(permutation_version),
-            mask_to_vocab_size(mask_to_vocab_size), partition_method(partition_method) {
+            right_side_connect(right_side_connect), khops_no_repeats(khops_no_repeats),
+            permutation_version(permutation_version), mask_to_vocab_size(mask_to_vocab_size), partition_method(partition_method) {
         parse_and_set_arg(kwargs, "max_khops", this->max_khops, max_khops);
         parse_and_set_arg(kwargs, "min_khops", this->min_khops, min_khops);
         parse_and_set_arg(kwargs, "min_prefix_length", this->min_prefix_length, min_prefix_length);
