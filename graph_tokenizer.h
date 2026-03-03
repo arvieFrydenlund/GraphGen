@@ -77,11 +77,15 @@ public:
         } else {
             tokenized_inputs.resize(num_tokens, 1, dictionary.at("<pad>"));
         }
+        auto stuct_size = 1;
         if (pos_args->use_graph_structure) {
-            tokenized_pos.resize(num_tokens, 2, pos_dictionary.at("pad"));
-        } else {
-            tokenized_pos.resize(num_tokens, 1, pos_dictionary.at("pad"));
+            stuct_size += 1;
         }
+        if (pos_args->use_full_structure) {
+            stuct_size += 1;
+        }
+        tokenized_pos.resize(num_tokens, stuct_size, pos_dictionary.at("pad"));
+
 
         // write in new edge list
         if (!tok_args->concat_edges) {
@@ -102,6 +106,11 @@ public:
                     tokenized_pos(i * 3 + 1, 0) = graph_start + cur + 1;
                     tokenized_pos(i * 3 + 2, 0) = graph_start + cur + 2;
                 }
+                if (pos_args->use_full_structure) {
+                    tokenized_pos(i * 3, stuct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i * 3 + 1, stuct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i * 3 + 2, stuct_size - 1) = edge_invariance_marker;
+                }
             }
         } else {
             for (size_t i = 0; i < new_edge_list.size(); i++, cur++) {
@@ -113,6 +122,9 @@ public:
                     tokenized_pos(i, 0) = graph_invariance_marker;
                 } else {
                     tokenized_pos(i, 0) = graph_start + cur;
+                }
+                if (pos_args->use_full_structure) {
+                    tokenized_pos(i, stuct_size - 1) = edge_invariance_marker;
                 }
             }
         }
@@ -129,6 +141,9 @@ public:
                     tokenized_pos(cur, 0) = graph_invariance_marker;
                 } else {
                     tokenized_pos(cur, 0) = graph_start + cur;
+                }
+                if (pos_args->use_full_structure) {
+                    tokenized_pos(i, stuct_size - 1) = node_invariance_marker;
                 }
             }
         }

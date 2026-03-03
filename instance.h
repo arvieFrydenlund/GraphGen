@@ -77,12 +77,14 @@ public:
 
         // issue of when to convert these to node shuffle map order, it can not be before we make the task
         // since these need the original distance matrix in the original node order
-        if (args.tok->include_nodes_in_graph_tokenization) {
-            graph->get_distances();
-            graph->get_node_ground_truths(args.tok->is_direct_ranking);
-        } else {
-            // this also gets the distances due to legacy code
-            graph->get_edge_ground_truths(args.tok->is_causal);
+        if (graph->g_ptr) {
+            if (args.tok->include_nodes_in_graph_tokenization) {
+                graph->get_distances();
+                graph->get_node_ground_truths(args.tok->is_direct_ranking);
+            } else {
+                // this also gets the distances due to legacy code
+                graph->get_edge_ground_truths(args.tok->is_causal);
+            }
         }
 
         if (args.task->task_type == "shortest_path") {
@@ -283,6 +285,9 @@ public:
                                  should_repeat);  // tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
                         tokenized_positions.set_tok(cur, task_start +
                                                      static_cast<int>(cur_task_pos));  //  tokenized_positions(cur, 0) = task_start + static_cast<int>(i);
+                        if (args.pos->use_full_structure) {
+                            tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+                        }
                         if (!args.tok->scratchpad_as_prefix) {  // if part of targets
                             cur_task_pos++;
                         }
@@ -299,6 +304,9 @@ public:
                     tokenized_targets.copy_tok(task->tokenized_task_targets, cur_task_pos, i,
                              should_repeat); // tokenized_targets(cur_task_pos, 0) = task->tokenized_task_targets(i, 0);
                     tokenized_positions.set_tok(cur, task_start + cur_task_pos); // tokenized_positions(cur, 0) = task_start + cur_task_pos;
+                    if (args.pos->use_full_structure) {
+                        tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+                    }
                 }
                 // end of sequence
                 auto end_marker = dictionary.at("</s>");
@@ -307,6 +315,9 @@ public:
                         should_repeat); // tokenized_targets(cur_task_pos, 0) = end_marker; // target also end marker
                 tokenized_positions.set_tok(cur, task_start + cur_task_pos,
                         should_repeat); // tokenized_positions(cur, 0) = task_start + cur_task_pos;
+                if (args.pos->use_full_structure) {
+                    tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+                }
 
                 cur++;
                 cur_task_pos++;
@@ -408,7 +419,8 @@ public:
         return static_cast<int>(instances.size());
     }
 
-    void copy_to_numpy(py::array_t<int, py::array::c_style> &npm, Matrix<int> &mat, const int offset, const int batch_idx){
+    void copy_to_numpy(py::array_t<int, py::array::c_style> &npm, Matrix<int> &mat, const int offset, const int batch_idx) const {
+        return;
         auto npm_ar = npm.mutable_unchecked();
         for (size_t i = 0; i < mat.shape()[0]; i++) {
             for (size_t j = 0; j < mat.shape()[1]; j++) {
@@ -417,12 +429,12 @@ public:
         }
     }
 
-    void range_to_numpy(py::array_t<int, py::array::c_style> &npm, const int offset,
+    void range_to_numpy(py::array_t<int, py::array::c_style> &npm,
                         const int start, const int length, const int stride,
-                        const int batch_idx){
+                        const int batch_idx) const {
         auto npm_ar = npm.mutable_unchecked();
         for (size_t i = 0; i < length; i++) {
-            npm_ar(batch_idx, i + offset) = start + i * stride;
+            npm_ar(batch_idx, i) = start + i * stride;
         }
     }
 
@@ -459,6 +471,8 @@ public:
             if (instances[i].task) {
                 max_tokenized_targets_len = max(max_tokenized_targets_len,
                                                 static_cast<int>(instances[i].tokenized_targets.shape()[0]));
+                max_tokenized_true_targets_len = max(max_tokenized_true_targets_len,
+                                                     static_cast<int>(instances[i].true_task_length));
                 max_tokenized_targets_labels = max(max_tokenized_targets_labels,
                                                    static_cast<int>(instances[i].tokenized_targets.shape()[1]));
                 if (instances[i].scratch_pad) {
@@ -541,14 +555,11 @@ public:
         auto graph_node_gather_indices = py::array_t<int, py::array::c_style>({batch_size, max_num_nodes});
         graph_node_gather_indices[py::make_tuple(py::ellipsis())] = 0;
 
-
-
         // write into numpy arrays
         auto src_lengths_ar = src_lengths.mutable_unchecked();
         auto task_lengths_ar = task_lengths.mutable_unchecked();
         auto num_nodes_ar = num_nodes.mutable_unchecked();
         auto num_edges_ar = num_edges.mutable_unchecked();
-
         auto query_start_indices_ar = query_start_indices.mutable_unchecked();
         auto query_lengths_ar = query_lengths.mutable_unchecked();
         auto graph_start_indices_ar = graph_start_indices.mutable_unchecked();
@@ -565,13 +576,7 @@ public:
         auto true_task_start_indices_ar = true_task_start_indices.mutable_unchecked();
         auto true_task_lengths_ar = true_task_lengths.mutable_unchecked();
 
-        cout << "Copy in debug 1" << endl;
-
         for (size_t i = 0; i < instances.size(); i++) {
-
-
-            cout << "Instance " << i << endl;
-
             auto offset = 0;
             if (args.tok->align_prefix_front_pad and args.tok->is_flat_model) {
                 offset = max_prefix_size - instances[i].task_start_idx;
@@ -582,23 +587,21 @@ public:
 
             if (instances[i].task) {
                 copy_to_numpy(task_targets, instances[i].tokenized_targets, 0, i); // task_targets_ar(i, j, k) = instances[i].tokenized_targets(j, k);  // never any offset
-                range_to_numpy(task_gather_indices, 0, instances[i].task_start_idx + offset, instances[i].tokenized_targets.shape()[0], 1, i); // task_gather_indices_ar(i, j) = instances[i].task_start_idx + offset + j;
+                range_to_numpy(task_gather_indices, instances[i].task_start_idx + offset, instances[i].tokenized_targets.shape()[0], 1, i); // task_gather_indices_ar(i, j) = instances[i].task_start_idx + offset + j;
                 task_lengths_ar(i) = instances[i].task_length;
-                range_to_numpy(true_task_gather_indices, 0, instances[i].true_task_start_idx + offset, instances[i].true_task_length + 1, 1, i); //
+                range_to_numpy(true_task_gather_indices, instances[i].true_task_start_idx + offset, instances[i].true_task_length + 1, 1, i); //
                 if (instances[i].scratch_pad) {
-                    range_to_numpy(scratch_pad_gather_indices, 0, instances[i].scratch_pad_start_idx + offset, instances[i].scratch_pad_length, 1, i); // scratch_pad_gather_indices_ar(i, j) = instances[i].scratch_pad_start_idx + offset + j;
+                    range_to_numpy(scratch_pad_gather_indices, instances[i].scratch_pad_start_idx + offset, instances[i].scratch_pad_length, 1, i); // scratch_pad_gather_indices_ar(i, j) = instances[i].scratch_pad_start_idx + offset + j;
                 }
             }
             if (instances[0].graph_tokenizer) {
                 if (args.tok->concat_edges) {
-                    range_to_numpy(graph_edge_gather_indices, 0, instances[i].graph_start_idx + offset,
-                                   instances[i].graph_length, 1,
-                                   i); // graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
+                   range_to_numpy(graph_edge_gather_indices, instances[i].graph_start_idx + offset, instances[i].graph_length, 1, i); // graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + j;
                 } else { // need every third token since we just want the edge marker positions (which needs shift by 2)
-                    range_to_numpy(graph_edge_gather_indices, 0, instances[i].graph_start_idx + offset + 2, instances[i].graph_tokenizer->edge_list.size(), 3, i); // graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3) + 2;
+                    range_to_numpy(graph_edge_gather_indices, instances[i].graph_start_idx + offset + 2, instances[i].graph_tokenizer->edge_list.size(), 3, i); // graph_edge_gather_indices_ar(i, j) = instances[i].graph_start_idx + offset + (j * 3) + 2;
                 }
                 if (args.tok->include_nodes_in_graph_tokenization) {
-                    range_to_numpy(graph_node_gather_indices, 0, instances[i].graph_nodes_start_idx + offset, instances[i].graph_tokenizer->node_list.size(), 1, i); // graph_node_gather_indices_ar(i, j) = instances[i].graph_nodes_start_idx + offset + j;
+                   range_to_numpy(graph_node_gather_indices, instances[i].graph_nodes_start_idx + offset, instances[i].graph_tokenizer->node_list.size(), 1, i); // graph_node_gather_indices_ar(i, j) = instances[i].graph_nodes_start_idx + offset + j;
                 }
             }
 
@@ -621,8 +624,6 @@ public:
             scratch_pad_lengths_ar(i) = instances[i].scratch_pad_length;
             true_task_lengths_ar(i) = instances[i].true_task_length;
         }
-
-        cout << "Debug 2" << endl;
 
         d["num_nodes"] = num_nodes;
         d["num_edges"] = num_edges;
@@ -748,6 +749,7 @@ public:
     template<typename T>
     py::array_t<T, py::array::c_style> batch_distances(T cuttoff = 100000, T max_value = -1, T pad = -1) {
         auto batch_size = static_cast<int>(instances.size());
+
         py::array_t<T, py::array::c_style> arr({static_cast<int>(batch_size), this->args.max_vocab, this->args.max_vocab});
         arr[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
         auto ra = arr.mutable_unchecked();
