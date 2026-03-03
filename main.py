@@ -12,7 +12,7 @@ from graph_datasets import GeneratorParser, batch_pprint
 from get_generator_module import get_generator_module
 
 get_generator_module()
-import generator
+import generator  # ignore warnings, get_generator_module sets this up and it is needed for the rest of the code to work
 
 """
 Testing generation functions and pybind compile. 
@@ -23,8 +23,8 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='none', use_unique_depth_markers=True,
                  scratchpad_as_prefix=False, no_graph=False,
-                 align_prefix_front_pad=True, use_graph_invariance=True, use_task_structure=True,
-                 use_graph_structure=True,
+                 align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
+                 use_graph_structure=False, use_full_structure=False,
                  batch_size=3):
     args.task_type = task_type
     args.concat_edges = concat_edges
@@ -40,13 +40,14 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     args.use_graph_invariance = use_graph_invariance
     args.use_task_structure = use_task_structure
     args.use_graph_structure = use_graph_structure
+    args.use_full_structure = use_full_structure
 
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 # KHOPS
 
-def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=True, mask_to_vocab_size=True, batch_size=40):
+def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False, batch_size=3):
     args.task_type = "khops"
     args.right_side_connect = right_side_connect
     args.permutation_version = permutation_version
@@ -54,6 +55,8 @@ def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_ve
     args.batch_size = batch_size
 
     b_n = generator.khops_n(**vars(args))
+
+    print('KHOPS batch:')
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
@@ -368,7 +371,7 @@ def _t_bfs(args, d, batch_size=3):
             print(f'{k}: {v}, {type(v)}')
 
 
-def main(max_vocab_size=10):
+def main(max_vocab_size=5):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()

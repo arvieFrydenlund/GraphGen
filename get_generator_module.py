@@ -3,6 +3,7 @@ import sys
 import time
 import pydoc
 import numpy as np
+import torch
 
 try:
     import networkx as nx
@@ -38,21 +39,40 @@ def get_args_parser():
                         help='Min number of sampled edges to form a single connected component')  # for graphs with multiple connected components
     parser.add_argument('--c_max', type=int, default=125,
                         help='Max number of sampled edges to form a single connected component')
+    parser.add_argument('--shuffle_edges', action='store_true', default=True,
+                        help='Whether to shuffle edge list when generating the graph tokenization.')
+    parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
+    parser.add_argument('--shuffle_nodes', action='store_true', default=True,
+                        help='Whether to shuffle node ids when generating the graph tokenization.'
+                             'This randomly maps nodes across the whole spectrum of available vocab ids.')
+    parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
 
+    parser.add_argument('--min_vocab', type=int, default=-1,
+                        help='Minimum vocab id to use when shuffling nodes.'
+                             '-1 and -1 max_vocab means uses set dictionary values')
+    parser.add_argument('--max_vocab', type=int, default=-1,
+                        help='Maximum vocab id to use when shuffling nodes.'
+                             '-1 with a set minimum, will use the number of nodes.')
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--max_edges', type=int, default=512)
+    parser.add_argument('--max_attempts', type=int, default=1000)
+
+    # erdos_renyi graphs settings
     parser.add_argument('--p', type=float, default=-1.0,
                         help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
-
+    # euclidean graphs settings
     parser.add_argument('--dims', type=int, default=2,
                         help="Number of dimensions for euclidean graphs")
     parser.add_argument('--radius', type=float, default=-1.0,
                         help="Radius for euclidean graphs, -1.0 means random")
-
     # random tree graphs settings
     parser.add_argument('--max_degree', type=int, default=3)
     parser.add_argument('--max_depth', type=int, default=7)
     parser.add_argument('--bernoulli_p', type=float, default=0.5)
     parser.add_argument('--probs', type=float, nargs='+',
                         help="Probabilities for random tree graphs, should sum to 1.0")
+    parser.add_argument('--start_at_root', action='store_true', default=False,)
+    parser.add_argument('--end_at_leaf', action='store_true', default=False,)
 
     # path star graphs settings
     parser.add_argument('--min_num_arms', type=int, default=2,
@@ -76,6 +96,8 @@ def get_args_parser():
 
     # task settings
     parser.add_argument('--task_type', type=str, default='shortest_path')
+    parser.add_argument('--scratchpad_type', type=str, default='none') #'none' 'BFS'  # 'DFS'
+
     parser.add_argument('--min_path_length', type=int, default=3,
                         help='Minimum path length for shortest path tasks (inclusive)')
     parser.add_argument('--max_path_length', type=int, default=12,
@@ -84,14 +106,17 @@ def get_args_parser():
                         help='Whether to sort adjacency lists when generating BFS/DFS scratchpad.')
     parser.add_argument('--use_unique_depth_markers', action='store_true', default=False,
                         help='Whether to use unique depth markers when generating BFS/DFS scratchpad.')
+    parser.add_argument('--stop_once_found', action='store_true', default=True, help='')
     parser.add_argument('--task_sample_dist', nargs='*', default=None,
                         help='Optional sampling distribution for different task types.'
                              ' E.g. for shortest path tasks, [shortest_path, center, centroid].'
                              ' Should sum to 1.0.')
+
     parser.add_argument('--min_query_size', type=int, default=2,
                         help='Minimum query size for center/centroid tasks (inclusive)')
     parser.add_argument('--max_query_size', type=int, default=10,
                         help='Maximum query size for center/centroid tasks (inclusive)')
+
     parser.add_argument('--min_khops', type=int, default=1,
                         help='Minimum hops for khops path tasks (inclusive)')
     parser.add_argument('--max_khops', type=int, default=7)
@@ -99,6 +124,8 @@ def get_args_parser():
     parser.add_argument('--max_prefix_length', type=int, default=100)
     parser.add_argument('--right_side_connect', action='store_true', default=False,
                         help='The usual khops version, but not how I have BFS set up.')
+    parser.add_argument('--khops_no_repeats', action='store_true', default=False,
+                        help='for khops gen and MTP')
     parser.add_argument('--permutation_version', action='store_true', default=False,)
     parser.add_argument('--mask_to_vocab_size', action='store_true', default=False,)
     parser.add_argument('--partition_method', type=str, default='uniform')
@@ -111,22 +138,10 @@ def get_args_parser():
                         help='Whether to use direct ranking for graph distance ranking loss on node-list.'
                              'This assumes include_nodes_in_graph_tokenization'
                         )
-    parser.add_argument('--shuffle_edges', action='store_true', default=True,
-                        help='Whether to shuffle edge list when generating the graph tokenization.')
-    parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
-    parser.add_argument('--shuffle_nodes', action='store_true', default=True,
-                        help='Whether to shuffle node ids when generating the graph tokenization.'
-                             'This randomly maps nodes across the whole spectrum of available vocab ids.')
-    parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
-    parser.add_argument('--min_vocab', type=int, default=-1,
-                        help='Minimum vocab id to use when shuffling nodes.'
-                             '-1 and -1 max_vocab means uses set dictionary values')
-    parser.add_argument('--max_vocab', type=int, default=-1,
-                        help='Maximum vocab id to use when shuffling nodes.'
-                             '-1 with a set minimum, will use the number of nodes.')
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--max_edges', type=int, default=512)
-    parser.add_argument('--max_attempts', type=int, default=1000)
+    parser.add_argument('--query_at_end', action='store_true', default=False,
+                        help='Whether to place the query at the end of the graph or before.')
+    parser.add_argument('--no_graph', action='store_true', default=False,
+                        help='Used for scratchpad -> path without graph experiments')
     parser.add_argument('--concat_edges', action='store_true', default=True,
                         help='Whether to concatenate edge pairs into a single token or use separate tokens.'
                              'This happens in the model but produces a 2d tensor for src_tokens [seq_len, 2]')
@@ -138,11 +153,7 @@ def get_args_parser():
     parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=False,
                         help='Whether to include node tokens in the graph tokenization, after the edges, '
                              'i.e. edge list and then node list.')
-
-    parser.add_argument('--query_at_end', action='store_true', default=False,
-                        help='Whether to place the query at the end of the graph or before.')
     parser.add_argument('--num_thinking_tokens', type=int, default=0)
-    parser.add_argument('--scratchpad_type', type=str, default='none') #'none' 'BFS'  # 'DFS'
     parser.add_argument('--is_flat_model', action='store_true', default=True,
                         help='Whether the model is flat (i.e. single input tensor) or uses separate encoder/decoder inputs.')
     parser.add_argument('--align_prefix_front_pad', action='store_true', default=False,
@@ -156,6 +167,7 @@ def get_args_parser():
     parser.add_argument('--use_query_invariance', action='store_true', default=False,)
     parser.add_argument('--use_task_structure', action='store_true', default=False,)
     parser.add_argument('--use_graph_structure', action='store_true', default=False,)
+    parser.add_argument('--use_full_structure', action='store_true', default=False,)
 
     return parser
 
@@ -461,7 +473,7 @@ def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_
         print(d_out)
 
 def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
-                        print_dist=False, print_shapes=False):
+                        print_dist=False, print_shapes=True):
     """
     :param b_n: batched dict
     :param title:
@@ -474,12 +486,14 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     rev_token_dict = {v: k for k, v in token_dict.items()}
     # rev_pos_dict = {v: k for k, v in pos_dict.items()}  # just print the idxs because they are readable
     src_tokens = b_n['src_tokens']
-    graph_edge_gather_indices = b_n['graph_edge_gather_indices']
-    graph_node_gather_indices = b_n['graph_node_gather_indices']
+    graph_edge_gather_indices = edge_gather_ids(b_n)[0]
+    graph_node_gather_indices = node_gather_ids(b_n)[0]
     task_targets = b_n['prev_output_tokens']
-    true_task_gather_indices = b_n['true_task_gather_indices']
-    scratch_pad_gather_indices = b_n['scratch_pad_gather_indices']
+    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True)[0]
+    scratch_pad_gather_indices = scratchpad_gather_ids(b_n)[0]
     positions = b_n['positions']
+    if not positions:
+        positions = np.arange(src_tokens.shape[1])[None, :].repeat(src_tokens.shape[0], axis=0)
 
     if print_shapes:
         print('src_tokens shape:', src_tokens.shape)
@@ -570,11 +584,6 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
             s += f'TgtIdx:'
-
-            task_start_indices_name = 'true_task_start_indices'
-            if b_n["scratchpad_as_prefix"]: # sanity check that the task indicies do not include scratchpad now
-                task_start_indices_name = 'task_start_indices'
-
             s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
             if scratch_pad_gather_indices is not None:
                 s += f'SP Idx:'
@@ -609,8 +618,69 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
 
 
+def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):
+    bs = starts.shape[0]
+    if isinstance(starts, np.ndarray):
+        max_len = lengths.max()
+        gather_indices = np.arange(max_len)[None, :].repeat(bs, axis=0)  # [bs, max_len]
+        gather_indices = gather_indices * stride + offset  # apply stride and offset
+        gather_indices = gather_indices + starts[:, None]  # [bs, max_len]
+        mask = gather_indices < (starts + lengths)[:, None]  # [bs, max_len]
+        gather_indices = gather_indices * mask + pad_value * (~mask)  # [bs, max_len]
+    elif isinstance(starts, torch.Tensor):
+        max_len = lengths.max()
+        gather_indices = torch.arange(max_len)[None, :].expand(bs, -1)  # [bs, max_len]
+        gather_indices = gather_indices * stride + offset  # apply stride and offset
+        gather_indices = gather_indices + starts[:, None]  # [bs, max_len]
+        mask = gather_indices < (starts + lengths)[:, None]  # [bs, max_len]
+        gather_indices = gather_indices * mask + pad_value * (~mask)  # [bs, max_len]
+    else:
+        raise ValueError(f"Unexpected type for starts: {type(starts)}")
+    return gather_indices, mask
+
+
+def _gather_ids_helper(b_n, start_n, lengths_n, stride=1, offset=0, pad_value=0):
+    if start_n not in b_n or lengths_n not in b_n or b_n[start_n] is None or b_n[lengths_n] is None:
+        return None, None
+    starts = b_n[start_n]
+    lengths = b_n[lengths_n]
+    return _gather_ids(starts, lengths, stride=stride, offset=offset, pad_value=pad_value)
+
+
+def task_gather_ids(b_n, is_true_task, **kwargs):
+    if is_true_task:
+        start_n = 'true_task_start_indices'
+        lengths_n = 'true_task_lengths'
+    else:
+        start_n = 'task_start_indices'
+        lengths_n = 'task_lengths'
+    return _gather_ids_helper(b_n, start_n, lengths_n, **kwargs)
+
+
+def scratchpad_gather_ids(b_n, **kwargs):
+    return _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', **kwargs)
+
+
+def edge_gather_ids(b_n, *kwargs):
+    if 'graph_edge_start_indices' not in b_n or 'graph_edge_lengths' not in b_n or b_n['graph_edge_start_indices'] is None or b_n['graph_edge_lengths'] is None:
+        return None, None
+
+    start_n = 'graph_edge_start_indices'
+    lengths_n = 'graph_edge_lengths'
+    if b_n["concat_edges"]:
+        gather_indices, mask = _gather_ids_helper(b_n, start_n, lengths_n)
+    else:  # gather at edge markers
+        gather_indices, mask = _gather_ids_helper(b_n, start_n, lengths_n, stride=3, offset=2, pad_value=-1)
+    return gather_indices, mask
+
+
+def node_gather_ids(b_n, **kwargs):
+    return _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', **kwargs)
+
+
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',
-                                    'graph_tokenizer.h', 'tasks.h', 'scratch_pads.h', 'instance.h', 'generator.cpp'),
+                                    'args.h', 'graph_wrapper.h', 'graph_tokenizer.h', 'tasks.h', 'scratch_pads.h',
+                                    'instance.h', 'generator.cpp'),
                          cpp_path='',
                          boost_path='/usr/include/boost/graph/',):
     """
@@ -690,7 +760,14 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
             raise ValueError(f"Unknown graph type: {graph_type}")
         return b_n
 
+
     setattr(generator, "get_graph", get_graph)
+
+    setattr(generator, "task_gather_ids", task_gather_ids)
+    setattr(generator, "scratchpad_gather_ids", scratchpad_gather_ids)
+    setattr(generator, "edge_gather_ids", edge_gather_ids)
+    setattr(generator, "node_gather_ids", node_gather_ids)
+
     setattr(generator, "pprint_distance", pprint_distance)
     setattr(generator, "pprint_batched_dict", pprint_batched_dict)
     setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)

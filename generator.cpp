@@ -449,6 +449,24 @@ inline py::dict balanced_n(
     return batched_instances.package_for_model(dictionary, pos_dictionary);
 }
 
+void set_khop_kwargs(const int min_khops, const int max_khops,
+                     const int min_prefix_length, const int max_prefix_length,
+                     py::kwargs &kwargs) {
+    kwargs["min_khops"] = min_khops;
+    kwargs["max_khops"] = max_khops;
+    kwargs["min_prefix_length"] = min_prefix_length;
+    kwargs["max_prefix_length"] = max_prefix_length;
+
+    // then also set the positional to be off
+    kwargs["return_pos_ids"] = false;
+    kwargs["use_edges_invariance"] = false;
+    kwargs["use_node_invariance"] = false;
+    kwargs["use_graph_invariance"] = false;
+    kwargs["use_query_invariance"] = false;
+    kwargs["use_graph_structure"] = false;
+    kwargs["use_full_structure"] = false;
+}
+
 
 inline py::dict khops_n(const int min_khops, const int max_khops,
                             const int min_prefix_length, const int max_prefix_length,
@@ -470,6 +488,7 @@ inline py::dict khops_n(const int min_khops, const int max_khops,
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
 
+    set_khop_kwargs(min_khops, max_khops, min_prefix_length, max_prefix_length, const_cast<py::kwargs&>(kwargs));
     Args args("khops", scratchpad_type, "khops", min_vocab, max_vocab,
               true, false, false, true, false, false, false,
               num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
@@ -507,6 +526,7 @@ inline py::dict khops_gen_n(const int min_khops, const int max_khops,
         throw std::invalid_argument("Invalid arguments: max_vocab == -1 and min_vocab != -1");
     }
 
+    set_khop_kwargs(min_khops, max_khops, min_prefix_length, max_prefix_length, const_cast<py::kwargs&>(kwargs));
     Args args("khops_gen", scratchpad_type, "khops_gen", min_vocab, max_vocab,
               true, false, false, true, false, false, false,
               num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,

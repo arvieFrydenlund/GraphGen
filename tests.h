@@ -29,6 +29,8 @@ void test_khops(const int min_khops = 1, const int max_khops = 7,
             scratchpad_as_prefix,
             is_flat_model,
             align_prefix_front_pad);
+
+    // pprint_dict(d);
 }
 
 

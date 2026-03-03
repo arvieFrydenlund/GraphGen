@@ -92,7 +92,7 @@ int main() {
 
     auto t = time_before();
 
-    if (false) {  // khops
+    if (true) {  // khops
         t = time_before();
         test_khops();
         time_after(t, "Final test_khops");

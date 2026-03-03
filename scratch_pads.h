@@ -12,6 +12,7 @@
 #include <map>
 #include <unordered_set>
 #include "matrix.h"
+#include "args.h"
 #include "undirected_graphs.h"
 #include "directed_graphs.h"
 #include "dictionaries.h"
