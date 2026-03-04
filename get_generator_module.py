@@ -486,13 +486,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     rev_token_dict = {v: k for k, v in token_dict.items()}
     # rev_pos_dict = {v: k for k, v in pos_dict.items()}  # just print the idxs because they are readable
     src_tokens = b_n['src_tokens']
-    graph_edge_gather_indices = edge_gather_ids(b_n)[0]
-    graph_node_gather_indices = node_gather_ids(b_n)[0]
+    graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)[0]
+    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
     task_targets = b_n['prev_output_tokens']
-    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True)[0]
-    scratch_pad_gather_indices = scratchpad_gather_ids(b_n)[0]
+    true_task_gather_indices = task_gather_ids(b_n, is_true_task=False, pad_value=-1)[0]
+    scratch_pad_gather_indices = scratchpad_gather_ids(b_n, pad_value=-1)[0]
     positions = b_n['positions']
-    if not positions:
+    if positions is None:
         positions = np.arange(src_tokens.shape[1])[None, :].repeat(src_tokens.shape[0], axis=0)
 
     if print_shapes:
@@ -647,35 +647,43 @@ def _gather_ids_helper(b_n, start_n, lengths_n, stride=1, offset=0, pad_value=0)
     return _gather_ids(starts, lengths, stride=stride, offset=offset, pad_value=pad_value)
 
 
-def task_gather_ids(b_n, is_true_task, **kwargs):
+def task_gather_ids(b_n, is_true_task, pad_value=0, **kwargs):
     if is_true_task:
         start_n = 'true_task_start_indices'
         lengths_n = 'true_task_lengths'
     else:
         start_n = 'task_start_indices'
         lengths_n = 'task_lengths'
-    return _gather_ids_helper(b_n, start_n, lengths_n, **kwargs)
+    return _gather_ids_helper(b_n, start_n, lengths_n, pad_value=pad_value, **kwargs)
 
 
-def scratchpad_gather_ids(b_n, **kwargs):
-    return _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', **kwargs)
+def scratchpad_gather_ids(b_n, pad_value=0, **kwargs):
+    return _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', pad_value=pad_value, **kwargs)
 
 
-def edge_gather_ids(b_n, *kwargs):
+def edge_gather_ids(b_n, pad_value=0, *kwargs):
     if 'graph_edge_start_indices' not in b_n or 'graph_edge_lengths' not in b_n or b_n['graph_edge_start_indices'] is None or b_n['graph_edge_lengths'] is None:
         return None, None
 
-    start_n = 'graph_edge_start_indices'
-    lengths_n = 'graph_edge_lengths'
+    starts = b_n['graph_edge_start_indices']
+    lengths = b_n['graph_edge_lengths']
+    if 'graph_node_lengths' in b_n and b_n['graph_node_lengths'] is not None:
+        node_lengths = b_n['graph_node_lengths']
+        lengths -= node_lengths  # adjust edge lengths to account for node tokens if they are included in the graph tokenization
+
     if b_n["concat_edges"]:
-        gather_indices, mask = _gather_ids_helper(b_n, start_n, lengths_n)
+        gather_indices, mask = _gather_ids(starts, lengths, pad_value=pad_value)
     else:  # gather at edge markers
-        gather_indices, mask = _gather_ids_helper(b_n, start_n, lengths_n, stride=3, offset=2, pad_value=-1)
+        gather_indices, mask = _gather_ids(starts, lengths, stride=3, offset=2, pad_value=pad_value)
     return gather_indices, mask
 
 
-def node_gather_ids(b_n, **kwargs):
-    return _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', **kwargs)
+def node_gather_ids(b_n, pad_value=0, **kwargs):
+    return _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', pad_value=pad_value, **kwargs)
+
+
+def create_task_pos_for_inference():
+    pass  # TODO
 
 
 def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',

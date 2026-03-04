@@ -77,14 +77,8 @@ public:
         } else {
             tokenized_inputs.resize(num_tokens, 1, dictionary.at("<pad>"));
         }
-        auto stuct_size = 1;
-        if (pos_args->use_graph_structure) {
-            stuct_size += 1;
-        }
-        if (pos_args->use_full_structure) {
-            stuct_size += 1;
-        }
-        tokenized_pos.resize(num_tokens, stuct_size, pos_dictionary.at("pad"));
+        auto struct_size = pos_args->get_size();
+        tokenized_pos.resize(num_tokens, struct_size, pos_dictionary.at("pad"));
 
 
         // write in new edge list
@@ -107,9 +101,9 @@ public:
                     tokenized_pos(i * 3 + 2, 0) = graph_start + cur + 2;
                 }
                 if (pos_args->use_full_structure) {
-                    tokenized_pos(i * 3, stuct_size - 1) = edge_invariance_marker;
-                    tokenized_pos(i * 3 + 1, stuct_size - 1) = edge_invariance_marker;
-                    tokenized_pos(i * 3 + 2, stuct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i * 3, struct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i * 3 + 1, struct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i * 3 + 2, struct_size - 1) = edge_invariance_marker;
                 }
             }
         } else {
@@ -124,7 +118,7 @@ public:
                     tokenized_pos(i, 0) = graph_start + cur;
                 }
                 if (pos_args->use_full_structure) {
-                    tokenized_pos(i, stuct_size - 1) = edge_invariance_marker;
+                    tokenized_pos(i, struct_size - 1) = edge_invariance_marker;
                 }
             }
         }
@@ -142,8 +136,8 @@ public:
                 } else {
                     tokenized_pos(cur, 0) = graph_start + cur;
                 }
-                if (pos_args->use_full_structure) {
-                    tokenized_pos(i, stuct_size - 1) = node_invariance_marker;
+                for (size_t j = 1; j < tokenized_pos.shape()[1]; j++) {
+                    tokenized_pos(cur, j) = node_invariance_marker;
                 }
             }
         }

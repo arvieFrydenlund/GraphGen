@@ -340,6 +340,17 @@ public:
 
     virtual ~PosArgs() = default;
 
+    int get_size() const {
+        int count = 1;
+        if (use_graph_structure){
+            count += 1;
+        }
+        if (use_full_structure){
+            count += 1;
+        }
+        return count;
+    }
+
     virtual void print() const {
         cout << "PosArgs: return_pos_ids=" << return_pos_ids
              << ", use_edges_invariance=" << use_edges_invariance

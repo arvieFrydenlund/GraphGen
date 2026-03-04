@@ -291,10 +291,9 @@ public:
                     for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++) {
                         tokenized_inputs.copy_tok(scratch_pad->tokenized_inputs, cur, i,
                                  should_repeat);  // tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
-                        tokenized_positions.set_tok(cur, task_start +
-                                                     static_cast<int>(cur_task_pos));  //  tokenized_positions(cur, 0) = task_start + static_cast<int>(i);
-                        if (args.pos->use_full_structure) {
-                            tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+                        tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                        for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
+                            tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                         }
                         if (!args.tok->scratchpad_as_prefix) {  // if part of targets
                             cur_task_pos++;
@@ -311,9 +310,10 @@ public:
                              should_repeat);  // tokenized_inputs(cur, 0) = task->tokenized_task_inputs(i);
                     tokenized_targets.copy_tok(task->tokenized_task_targets, cur_task_pos, i,
                              should_repeat); // tokenized_targets(cur_task_pos, 0) = task->tokenized_task_targets(i, 0);
-                    tokenized_positions.set_tok(cur, task_start + cur_task_pos); // tokenized_positions(cur, 0) = task_start + cur_task_pos;
-                    if (args.pos->use_full_structure) {
-                        tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+
+                    tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                    for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
+                        tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                     }
                 }
                 // end of sequence
@@ -321,10 +321,9 @@ public:
                 tokenized_inputs.set_tok(cur,end_marker, should_repeat);  // tokenized_inputs(cur, 0) = end_marker;
                 tokenized_targets.set_tok(cur_task_pos,end_marker,
                         should_repeat); // tokenized_targets(cur_task_pos, 0) = end_marker; // target also end marker
-                tokenized_positions.set_tok(cur, task_start + cur_task_pos,
-                        should_repeat); // tokenized_positions(cur, 0) = task_start + cur_task_pos;
-                if (args.pos->use_full_structure) {
-                    tokenized_positions(cur, tokenized_positions.shape()[1] - 1) = pos_dictionary.at("task_invariance");
+                tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
+                    tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                 }
 
                 cur++;

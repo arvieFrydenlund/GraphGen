@@ -19,12 +19,12 @@ Testing generation functions and pybind compile.
 """
 
 
-def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=False, duplicate_edges=False,
+def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
-                 scratchpad_type='none', use_unique_depth_markers=True,
+                 scratchpad_type='bfs', use_unique_depth_markers=True,
                  scratchpad_as_prefix=False, no_graph=False,
                  align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
-                 use_graph_structure=False, use_full_structure=False,
+                 use_graph_structure=True, use_full_structure=True,
                  batch_size=3):
     args.task_type = task_type
     args.concat_edges = concat_edges
@@ -43,10 +43,10 @@ def _graph_print(args, token_dict, pos_dict, task_type ='bfs', concat_edges=Fals
     args.use_full_structure = use_full_structure
 
     b_n = generator.get_graph(args, batch_size=batch_size)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
 
 # KHOPS
-
 def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False, batch_size=3):
     args.task_type = "khops"
     args.right_side_connect = right_side_connect
@@ -160,219 +160,7 @@ def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
 
 
 
-# old
-def _t_single_graph():
-    # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
-    d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
-
-    for k, v in d.items():
-        print(f'{k}: {type(v)}')
-        if isinstance(v, np.ndarray):
-            print(f'\t {k}: {v.shape}, {v.dtype}')
-            print(v)
-        print()
-    print('\n\nTesting N generator')
-    print(f'Test size is {generator.get_test_size()}')
-
-
-def _t_batched_verify_paths():
-    # todo
-    pass
-
-
-def _t_batched_graphs_for_plotting_and_hashes():
-    d_n = generator.euclidean_n(50, 56, 2, -1, is_causal=True,
-                                shuffle_nodes=True, min_vocab=4, max_vocab=60, shuffle_edges=True, batch_size=8,
-                                for_plotting=True)
-
-    batch_pprint(d_n)
-
-    print(f'Settings hashes')
-    hashes = d_n['hashes']
-    generator.set_test_hashes(hashes)
-    print(f'Test size is {generator.get_test_size()}')
-    print(f'Is in same: {generator.is_in_test(hashes)}')
-    hashes[1] = 0  # fake a different hash
-    print(f'Is in with 2nd faked: {generator.is_in_test(hashes)}')
-
-    d_n = generator.euclidean_n(50, 55, 2, -1, is_causal=True, min_vocab=4, max_vocab=59, shuffle_edges=True,
-                                batch_size=8,
-                                for_plotting=True)
-    print(f"Is in with new hashes: {generator.is_in_test(d_n['hashes'])}")
-
-    print('\n\nSetting dictionary')
-    fake_dict = {str(i): i for i in range(12)}
-    generator.set_dictionary(fake_dict, verbose=True)
-
-
-def _t_batched_graphs_flat_model():
-    print('\n\nSetting default dictionary')
-    generator.set_default_dictionary()
-
-    min_num_nodes = 25
-    max_num_nodes = 30
-    num_special_tokens = 25
-
-    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
-                                is_causal=True, shuffle_nodes=True,
-                                min_vocab=num_special_tokens, max_vocab=max_num_nodes + num_special_tokens,
-                                shuffle_edges=True,
-                                batch_size=3,
-                                is_flat_model=True, concat_edges=True, query_at_end=False)
-    batch_pprint(d_n, title='Flat model with concat edges and query at start')
-
-    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
-                                is_causal=True, shuffle_nodes=True,
-                                min_vocab=num_special_tokens, max_vocab=max_num_nodes + num_special_tokens,
-                                shuffle_edges=True,
-                                batch_size=3,
-                                is_flat_model=True, concat_edges=False, query_at_end=False)
-    batch_pprint(d_n, title='Flat model without concat edges and query at start')
-
-    d_n = generator.euclidean_n(min_num_nodes, max_num_nodes,
-                                is_causal=True, shuffle_nodes=True,
-                                min_vocab=num_special_tokens, max_vocab=max_num_nodes + num_special_tokens,
-                                shuffle_edges=True,
-                                batch_size=3,
-                                is_flat_model=True, concat_edges=True, query_at_end=True)
-    batch_pprint(d_n, title='Flat model with concat edges and query at end')
-
-
-def _t_reconstruct(args, d, batch_size=20, plot=True):
-    np.set_printoptions(threshold=np.inf)
-
-    args.task_type = 'shortest_path'
-    d_n = get_batch(args, batch_size)
-
-    for k, v in d_n.items():
-        if isinstance(v, np.ndarray):
-            print(f'{k}: {v.shape}, {v.dtype}')
-        else:
-            print(f'{k}: {v}, {type(v)}')
-
-    reconstructions = generator.create_reconstruct_graphs(d_n, d)
-    for r in reconstructions:
-        if plot:
-            r.plot()
-
-
-
-def _t_verify_paths(args, d, batch_size=20):
-    args.task_type = 'shortest_path'
-    # given distance matrices, make fake paths and verify them
-    d_n = get_batch(args, batch_size)
-    distances = d_n['distances']
-    print(distances.shape)
-
-    src_tokens = d_n['src_tokens']
-    task_start_indices = d_n['task_start_indices'] + 1
-    task_lengths = d_n['task_lengths'] - 2
-
-    query_start_indices = d_n['query_start_indices'] + 1
-
-    gt_paths = np.ones((src_tokens.shape[0], max(task_lengths)), dtype=np.int32)
-    queries = np.ones((src_tokens.shape[0], 2), dtype=np.int32)
-    for b in range(src_tokens.shape[0]):
-        gt_paths[b, :task_lengths[b]] = src_tokens[b, task_start_indices[b]:task_start_indices[b] + task_lengths[b], 0]
-        queries[b, 0] = src_tokens[b, query_start_indices[b], 0]
-        queries[b, 1] = src_tokens[b, query_start_indices[b] + 1, 0]
-
-    print('First example, distances')
-    pretty_distance_print(distances[0], gt_paths[0, :task_lengths[0]].min(), gt_paths[0, :task_lengths[0]].max())
-    print('query and path', queries[0], gt_paths[0, :task_lengths[0]])
-    print()
-
-    print(gt_paths)
-    print('should be all ones')
-    verify = generator.verify_paths(distances, queries, gt_paths, task_lengths)
-    print(verify)
-
-    # generate incorrect paths
-
-
-def _concat(first, second):
-    a = np.arange(first.shape[0])
-    if first.ndim == 1:
-        return np.stack([first, second, a], axis=-1).transpose(1, 0)
-    else:
-        return np.concatenate([first, np.stack([second, a], axis=-1)], axis=-1).transpose(1, 0)
-
-
-def _t_positions(args, d, batch_size=7):
-    args.align_prefix_front_pad = True
-    args.concat_edges = False  # True # False
-    d_n = get_batch(args, batch_size)
-    generator.set_default_pos_dictionary()
-    src_tokens = d_n['src_tokens']
-    graph_start_indices = d_n['graph_start_indices']
-    graph_lengths = d_n['graph_lengths']
-    query_start_indices = d_n['query_start_indices']
-    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=False,
-                                                         use_graph_structure=False)
-    print('Regular position ids:')
-    for b in range(pos_ids.shape[0]):
-        print(f'Batch {b} position ids:')
-        print(src_tokens[b, :, 0])
-        print(pos_ids[b])
-
-    print('Masking edges')
-    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=True, use_task_structure=False,
-                                                         use_graph_structure=False)
-    for b in range(pos_ids.shape[0]):
-        print(f'Batch {b} position ids:')
-        print(_concat(src_tokens[b, :, 0], pos_ids[b]))
-        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
-
-    print('Using task structure')
-    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True,
-                                                         use_graph_structure=False)
-    for b in range(pos_ids.shape[0]):
-        print(f'Batch {b} position ids:')
-        print(_concat(src_tokens[b, :, 0], pos_ids[b]))
-        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
-
-    print('Using graph structure')
-    pos_ids, task_start_pos = generator.get_position_ids(**d_n, mask_edges=False, use_task_structure=True,
-                                                         use_graph_structure=True)
-    for b in range(pos_ids.shape[0]):
-        print(f'Batch {b} position ids:')
-        print(src_tokens[b, :, 0]),
-        print(pos_ids[b].transpose(1, 0))
-        print(graph_start_indices[b], graph_lengths[b], query_start_indices[b])
-        print(task_start_pos[b])
-
-
-def _t_positions2(args, d, batch_size=7):
-    args.align_prefix_front_pad = True
-    args.concat_edges = True  # True # False
-    args.include_nodes_in_graph_tokenization = True
-
-    d_n = get_batch(args, batch_size)
-    generator.set_default_pos_dictionary()
-    src_tokens = d_n['src_tokens']
-    graph_start_indices = d_n['graph_start_indices']
-    graph_lengths = d_n['graph_lengths']
-    query_start_indices = d_n['query_start_indices']
-    pos_ids, task_start_pos = generator.get_position_ids(**d_n, use_edges_invariance=True, use_node_invariance=True,
-                                                         use_graph_invariance=True,
-                                                         use_task_structure=True, use_graph_structure=False)
-    for b in range(pos_ids.shape[0]):
-        print(f'Batch {b} position ids:')
-        print(_concat(src_tokens[b], pos_ids[b]))
-
-
-def _t_bfs(args, d, batch_size=3):
-    args.scratchpad_type = 'bfs'
-    d_n = get_batch(args, batch_size)
-
-    for k, v in d_n.items():
-        if isinstance(v, np.ndarray):
-            print(f'{k}: {v.shape}, {v.dtype}')
-        else:
-            print(f'{k}: {v}, {type(v)}')
-
-
-def main(max_vocab_size=10):
+def main(max_vocab_size=100):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -401,11 +189,11 @@ def main(max_vocab_size=10):
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
-    # _graph_print(args, token_dict, pos_dict, batch_size=3)
+    _graph_print(args, token_dict, pos_dict, batch_size=3)
 
     # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    _t_khops_gen(args, token_dict, pos_dict)
+    # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
@@ -414,22 +202,6 @@ def main(max_vocab_size=10):
 
 
 
-
-
-
-
-    # _t_batched_graphs_for_plotting_and_hashes()
-    # _t_batched_graphs_flat_model()
-
-    # args.graph_type = 'random_tree'
-    # args.start_at_root = True
-    # args.align_prefix_front_pad = True
-    # _t_reconstruct(args, d)
-    # _t_verify_paths(args, d)
-
-    # _t_positions2(args, d, batch_size=20)
-
-    # _t_bfs(args, d, batch_size=7)
 
     print('\n\nDone Testing')
 

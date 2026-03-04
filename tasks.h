@@ -8,6 +8,7 @@
 #include <iostream>
 #include <random>
 #include <queue>
+#include <utility>
 #include <map>
 #include "matrix.h"
 #include "args.h"
@@ -70,19 +71,38 @@ public:
             throw std::invalid_argument("Task size exceeds available position tokens.");
         }
 
-        tokenized_query_pos.resize(query_size, pos_args->use_full_structure ? 2 : 1);
+        tokenized_query_pos.resize(query_size, pos_args->get_size());
         for (size_t i = 0; i < static_cast<size_t>(query_size); i++) {
             if (pos_args->use_query_invariance) {
                 tokenized_query_pos(i, 0) = query_invariance_marker;
             } else {
                 tokenized_query_pos(i, 0) = query_start + static_cast<int>(i);
             }
-            if (pos_args->use_full_structure) {
-                tokenized_query_pos(i, 1) = query_start + static_cast<int>(i);
+            for (size_t j = 1; j < static_cast<size_t>(pos_args->get_size()); j++) {
+                tokenized_query_pos(i, j) = query_invariance_marker;
             }
         }
     }
 
+};
+
+
+struct PathPriority {
+    int path_length_count;
+    int degree_choice_nodes;  // number of choice nodes in the path, where a choice node is a node with degree >= 2
+    int id1;
+    int id2;
+    // For initializing variables of the structure
+    PathPriority(int path_length_count, int degree_choice_nodes, int id1, int id2) :
+    path_length_count(path_length_count), degree_choice_nodes(degree_choice_nodes), id1(id1), id2(id2) {}
+};
+
+struct ComparePathPriority {
+    bool operator()(const PathPriority& t1, const PathPriority& t2) {
+        // // path length count is the most important factor, then degree of choice nodes, then random tie break
+        return t1.path_length_count < t2.path_length_count ||
+               (t1.path_length_count == t2.path_length_count && t1.degree_choice_nodes < t2.degree_choice_nodes);
+    }
 };
 
 
@@ -111,7 +131,7 @@ public:
             auto sampled_path_length = d1(gen) + min_path_length;
             // get all paths of that length
             auto set_of_paths = vector<pair<int, int> >();
-            auto set_of_choice_paths = vector<pair<int, int> >();
+            auto set_of_choice_paths = std::priority_queue<PathPriority, vector<PathPriority>, ComparePathPriority>();
             if (start != -1) {  // known start
                 for (int j = 0; j < static_cast<int>((*distances_ptr)[start].size()); j++) {
                     // + 1 because distance is path length - 1
@@ -127,13 +147,17 @@ public:
                             set_of_paths.push_back(make_pair(i, j));
                             // if i has degree >= 2, add to choice path, making start node a choice node
                             int degree = 0;
+                            int path_length_count = 0;
                             for (int k = 0; k < static_cast<int>((*distances_ptr)[i].size()); k++) {
                                 if ((*distances_ptr)[i][k] == 1) {
                                     degree += 1;
                                 }
+                                if ((*distances_ptr)[k][j] + 1 == sampled_path_length) {
+                                    path_length_count += 1;
+                                }
                             }
                             if (degree >= 2) {
-                                set_of_choice_paths.push_back(make_pair(i, j));
+                                set_of_choice_paths.push(PathPriority(path_length_count, degree, i, j));
                             }
                         }
                     }
@@ -141,8 +165,9 @@ public:
             }
             if (!set_of_paths.empty()) { // sample a path from the set
                 if (!set_of_choice_paths.empty() && sample_choice_node > 0 && std::uniform_real_distribution<float>(0.0, 1.0)(gen) < sample_choice_node) {
-                    uniform_int_distribution<int> d2(0, static_cast<int>(set_of_choice_paths.size()) - 1);
-                    start_end = set_of_choice_paths[d2(gen)];
+                    // get the top choice path
+                    auto top = set_of_choice_paths.top();
+                    start_end = make_pair(top.id1, top.id2);
                 } else {
                     uniform_int_distribution<int> d2(0, static_cast<int>(set_of_paths.size()) - 1);
                     start_end = set_of_paths[d2(gen)];
