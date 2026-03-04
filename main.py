@@ -67,16 +67,17 @@ def _t_int_partition(Q=200, N=9, num=10000):
         print(f'Partition of {Q} into {N} parts: {partition}, sum: {sum(partition)}')
 
 
-def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, batch_size=40):
+def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, khops_no_repeats=True, batch_size=20):
     args.task_type = "khops_gen"
     args.right_side_connect = right_side_connect
+    args.khops_no_repeats = khops_no_repeats
     args.batch_size = batch_size
 
     b_n = generator.khops_gen_n(**vars(args))
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
     # verify
-    src = b_n['src_tokens']
+    src = b_n['src_tokens'].squeeze(-1)
     task_start_indices = b_n['task_start_indices']
     task_lengths = b_n['task_lengths']
     max_prefix = np.max(task_start_indices)
@@ -371,7 +372,7 @@ def _t_bfs(args, d, batch_size=3):
             print(f'{k}: {v}, {type(v)}')
 
 
-def main(max_vocab_size=5):
+def main(max_vocab_size=10):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -402,9 +403,9 @@ def main(max_vocab_size=5):
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
-    _t_khops(args, token_dict, pos_dict)
+    # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    # _t_khops_gen(args, token_dict, pos_dict)
+    _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
