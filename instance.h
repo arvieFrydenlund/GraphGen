@@ -213,7 +213,7 @@ public:
 
         tokenized_inputs = Matrix<int>(num_tokens, max_input_struct, dictionary.at("<pad>"));
         if (task) {
-            tokenized_targets = Matrix<int>(task_length + 1, max_labels, dictionary.at("<pad>"));
+            tokenized_targets = Matrix<int>(task_length + 1, max_labels, dictionary.at("<pad>")); // +1 for end token
         }
         tokenized_positions = Matrix<int>(num_tokens, max_pos_struct, pos_dictionary.at("pad"));
 
@@ -272,10 +272,8 @@ public:
             }
         }
 
-        if (!args.tok->scratchpad_as_prefix) {  // the task
-            task_start_idx = cur; // this gets defined regardless since it is also prefix end index
-        }
         if (task) {
+            task_start_idx = cur; // this gets defined regardless since it is also prefix end index
             if (args.tok->is_flat_model) {
                 // write in task and scratchpad
                 auto cur_task_pos = 0;
@@ -299,9 +297,9 @@ public:
                             cur_task_pos++;
                         }
                     }
-                }
-                if (args.tok->scratchpad_as_prefix) {
-                    task_start_idx = cur;
+                    if (args.tok->scratchpad_as_prefix) {  // match it with true task start if sp is prefix, otherwise it is part of task
+                        task_start_idx = cur;
+                    }
                 }
                 // write in task
                 true_task_start_idx = cur;
@@ -325,6 +323,8 @@ public:
                 for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
                     tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                 }
+                task_length += 1;  // for end marker
+                true_task_length += 1;
 
                 cur++;
                 cur_task_pos++;

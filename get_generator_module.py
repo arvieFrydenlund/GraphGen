@@ -489,7 +489,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)[0]
     graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
     task_targets = b_n['prev_output_tokens']
-    true_task_gather_indices = task_gather_ids(b_n, is_true_task=False, pad_value=-1)[0]
+    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True, pad_value=-1)[0]
     scratch_pad_gather_indices = scratchpad_gather_ids(b_n, pad_value=-1)[0]
     positions = b_n['positions']
     if positions is None:
