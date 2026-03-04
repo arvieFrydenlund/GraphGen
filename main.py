@@ -22,7 +22,7 @@ Testing generation functions and pybind compile.
 def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='bfs', use_unique_depth_markers=True,
-                 scratchpad_as_prefix=False, no_graph=False,
+                 scratchpad_as_prefix=False, no_graph=True,
                  align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
                  use_graph_structure=True, use_full_structure=True,
                  batch_size=3):
@@ -160,7 +160,7 @@ def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
 
 
 
-def main(max_vocab_size=100):
+def main(max_vocab_size=10):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -189,11 +189,11 @@ def main(max_vocab_size=100):
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
-    _graph_print(args, token_dict, pos_dict, batch_size=3)
+    # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
     # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    # _t_khops_gen(args, token_dict, pos_dict)
+    _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)

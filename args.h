@@ -319,6 +319,8 @@ public:
     bool use_graph_structure;
     bool use_full_structure;
 
+    bool no_graph;  // duplicate
+
     PosArgs(const py::kwargs &kwargs = py::kwargs(),
             bool return_pos_ids = true, // otherwise model will just make normal range pos ids
             bool use_edges_invariance = false,  // same pos token across edges
@@ -326,7 +328,8 @@ public:
             bool use_graph_invariance = false, // same pos token across whole graph (overrides edge and node invariance)
             bool use_query_invariance = false, // same pos token across whole query
             bool use_graph_structure = false, // adds sub ids for 'u v |'  i.e. none concat edges
-            bool use_full_structure = false  // adds invariant sub ids for all [Q E N S T]
+            bool use_full_structure = false,  // adds invariant sub ids for all [Q E N S T]
+            bool no_graph = false
             ){
         parse_and_set_arg(kwargs, "return_pos_ids", this->return_pos_ids, return_pos_ids);
         parse_and_set_arg(kwargs, "use_edges_invariance", this->use_edges_invariance, use_edges_invariance);
@@ -335,6 +338,7 @@ public:
         parse_and_set_arg(kwargs, "use_query_invariance", this->use_query_invariance, use_query_invariance);
         parse_and_set_arg(kwargs, "use_graph_structure", this->use_graph_structure, use_graph_structure);
         parse_and_set_arg(kwargs, "use_full_structure", this->use_full_structure, use_full_structure);
+        parse_and_set_arg(kwargs, "no_graph", this->no_graph, no_graph);
 
     }
 
@@ -342,6 +346,9 @@ public:
 
     int get_size() const {
         int count = 1;
+        if (no_graph){
+            return count;
+        }
         if (use_graph_structure){
             count += 1;
         }
@@ -435,6 +442,7 @@ public:
                                             concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
                                             num_thinking_token, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad, kwargs);
         pos = new PosArgs(kwargs);
+        pos->no_graph = no_graph;  // duplicate but easier to access from pos args  TODO this is poorly done.
 
         if (print_args || (kwargs.contains("print_cpp_args") && kwargs["print_cpp_args"].cast<bool>())) {
             this->print();
