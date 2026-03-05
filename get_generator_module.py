@@ -71,8 +71,8 @@ def get_args_parser():
     parser.add_argument('--bernoulli_p', type=float, default=0.5)
     parser.add_argument('--probs', type=float, nargs='+',
                         help="Probabilities for random tree graphs, should sum to 1.0")
-    parser.add_argument('--start_at_root', action='store_true', default=False,)
-    parser.add_argument('--end_at_leaf', action='store_true', default=False,)
+    parser.add_argument('--start_at_root', action='store_true', default=True,)
+    parser.add_argument('--end_at_leaf', action='store_true', default=True,)
 
     # path star graphs settings
     parser.add_argument('--min_num_arms', type=int, default=2,

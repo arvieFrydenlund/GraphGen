@@ -167,12 +167,11 @@ py::array_t<int, py::array::c_style> uniform_random_int_partition(int Q, int N, 
 void checks_and_sets(int &min_num_nodes, int &max_num_nodes,
                      int &min_vocab, int &max_vocab,
                      const int batch_size) {
-    if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
 
+    if (batch_size <= 0) { throw std::invalid_argument("Invalid arguments: batch_size <= 0"); }
     if (dictionary.empty()) {
         throw std::invalid_argument("Invalid arguments: dictionary is empty.  Please set it first.");
     }
-
     if (min_num_nodes <= 0) { throw std::invalid_argument("Invalid arguments: min_num_nodes <= 0"); }
     if (max_num_nodes == -1) {
         max_num_nodes = min_num_nodes;
@@ -303,6 +302,7 @@ inline py::dict random_tree_n(
         const bool align_prefix_front_pad = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
+    if (max_degree < 2) { throw std::invalid_argument("Invalid arguments: max_degree < 2"); }
     checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
     Args args(task_type, scratchpad_type, "random_tree", min_vocab, max_vocab,
@@ -310,7 +310,6 @@ inline py::dict random_tree_n(
               concat_edges, duplicate_edges, include_nodes_in_graph_tokenization,
               num_thinking_tokens, scratchpad_as_prefix, is_flat_model, align_prefix_front_pad,
               kwargs);
-
 
     int attempts = 0;
     auto batched_instances = BatchedInstances<boost::undirectedS>(args);

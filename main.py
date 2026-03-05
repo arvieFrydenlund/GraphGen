@@ -160,7 +160,7 @@ def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
 
 
 
-def main(max_vocab_size=10):
+def main(max_vocab_size=150):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -193,12 +193,12 @@ def main(max_vocab_size=10):
 
     # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    _t_khops_gen(args, token_dict, pos_dict)
+    # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
 
-    # _t_random_trees(args, token_dict, pos_dict)
+    _t_random_trees(args, token_dict, pos_dict)
 
 
 

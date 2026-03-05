@@ -427,6 +427,9 @@ inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>
             if ( num_children == 0 && cur_depth < 3 ) {  // safety to avoid empty graphs
                 num_children = 1;  // ensure at least one child if we have not reached the max number of nodes
             }
+            if ( num_children == 1 && cur_depth < 1 ) {  // safety to avoid empty graphs
+                num_children = 2;  // ensure start is choice node
+            }
 
             for (int i = 0; i < num_children && node_check(cur_node + 1, num_nodes); i++) {
                 cur_node++;
