@@ -49,7 +49,7 @@ def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_
 
 
 def _graph_plot(args, token_dict, pos_dict,
-                 graph_type='path_star',
+                 graph_type='random_tree',  #'path_star',
                  task_type ='shortest_path', concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='none', use_unique_depth_markers=True,
@@ -78,7 +78,9 @@ def _graph_plot(args, token_dict, pos_dict,
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
     print('Creating reconstructed graph plots')
-    reconstructions = generator.create_reconstruct_graphs(b_n, token_dict, for_plotting=False, ids=None, verbose=True)
+    trees_to_left = False
+    reconstructions = generator.create_reconstruct_graphs(b_n, token_dict, for_plotting=False, ids=None,
+                                                          trees_to_left=trees_to_left, verbose=True)
     for i, recon in enumerate(reconstructions):
         recon.plot(verbose=True)
 

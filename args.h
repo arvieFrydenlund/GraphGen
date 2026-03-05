@@ -405,9 +405,12 @@ public:
          bool const print_args = true
     ): graph_type(graph_type), min_vocab(min_vocab), max_vocab(max_vocab) {
 
-        // if khops set no_graph to true
+        // deal with argument conflicts and dependencies
         if (task_type == "khops" || task_type == "khops_gen") {
             no_graph = true;
+        }
+        if (concat_edges){
+            kwargs["use_graph_structure"] = false;
         }
 
         for (auto item : kwargs) {

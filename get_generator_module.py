@@ -179,7 +179,7 @@ def get_args_parser():
 class ReconstructedGraph(object):
     def __init__(self, graph_type, task_type,
                  edge_list, query, task_input, task_targets, pos=None,
-                 spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
+                 spring_k=1.5, spring_scale=1.5, trees_to_left=False, verbose=False, **kwargs):
         """
 
         :param graph_type:
@@ -193,6 +193,8 @@ class ReconstructedGraph(object):
         self.query = query
         self.task_input = task_input
         self.task_targets = task_targets
+
+        self.root = None
 
         self.default_colour = '#1f78b4'  # matplotlib tab:blue
         self.query_colour = 'purple'  # matplotlib tab:purple
@@ -209,8 +211,7 @@ class ReconstructedGraph(object):
                 self.G.add_node(node, pos=node_pos)
         self.G.add_edges_from(edge_list)
         self.process_task()
-        print('verbose is', verbose)
-        self.set_plot_positions_for_layout(spring_k, spring_scale, verbose, **kwargs)
+        self.set_plot_positions_for_layout(spring_k, spring_scale, trees_to_left, verbose, **kwargs)
 
 
     def is_directed(self):
@@ -242,9 +243,9 @@ class ReconstructedGraph(object):
                 for i, node in enumerate(t):
                     target_nodes.append(node)
                     target_node_to_rank[node] = i
+            self.root = target_nodes[0]
             query = self.query[1:-1]  # cut special tokens
             for node in self.G:
-
                 if node in query:
                     self.colour_map.append(self.query_colour)
                     self.node_edge_colour_map.append(self.query_colour)
@@ -286,8 +287,6 @@ class ReconstructedGraph(object):
 
         # the edgecolors keyword argument (for setting the outline of nodes)
         # is different from the edge_color keyword argument (for setting the colour of lines)
-        print('pos', self.pos)
-
         nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, linewidths=2,
                 node_color=self.colour_map,
                 edgecolors=self.node_edge_colour_map)
@@ -305,16 +304,17 @@ class ReconstructedGraph(object):
             plt.savefig(save_path)
 
 
-    def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
+    def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, trees_to_left=False, verbose=False, **kwargs):
         if self.pos is None:
             if verbose:
                 print('No pos provided, using layout to compute positions.')
 
             try:
                 if self.graph_type in ('path_star', 'balanced', 'random_tree'):
-                    # pos = nx.nx_agraph.graphviz_layout(self.G, prog='dot', args='-Grankdir=LR')
-                    pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi")
-                    print(pos)
+                    if trees_to_left:
+                        pos = nx.nx_agraph.graphviz_layout(self.G, prog='dot', args='-Grankdir=LR -Groot={self.root}')
+                    else:
+                        pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi", args=f"-Groot={self.root}")
                 else:
                     pos = nx.nx_agraph.graphviz_layout(self.G, prog="neato")
             except Exception as e:
@@ -329,9 +329,6 @@ class ReconstructedGraph(object):
 
     def pprint(self):
         pass
-
-
-
 
 
 def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs):
@@ -440,7 +437,7 @@ def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs
             print(task_targets)
 
             if nx is not None:
-                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None, verbose=verbose)
+                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None, verbose=verbose, **kwargs)
                 reconstructions.append(r)
 
     return reconstructions
