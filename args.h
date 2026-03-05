@@ -405,6 +405,10 @@ public:
          bool const print_args = true
     ): graph_type(graph_type), min_vocab(min_vocab), max_vocab(max_vocab) {
 
+        // if khops set no_graph to true
+        if (task_type == "khops" || task_type == "khops_gen") {
+            no_graph = true;
+        }
 
         for (auto item : kwargs) {
             // item.first is the key, item.second is the value

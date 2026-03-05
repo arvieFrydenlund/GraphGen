@@ -46,6 +46,41 @@ def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
+def _graph_plot(args, token_dict, pos_dict,
+                 graph_type='random_tree',
+                 task_type ='shortest_path', concat_edges=True, duplicate_edges=False,
+                 include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
+                 scratchpad_type='none', use_unique_depth_markers=True,
+                 scratchpad_as_prefix=False,
+                 align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
+                 use_graph_structure=True, use_full_structure=True,
+                 batch_size=1):
+    args.graph_type = graph_type
+    args.task_type = task_type
+    args.concat_edges = concat_edges
+    args.duplicate_edges = duplicate_edges
+    args.include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization
+    args.query_at_end = query_at_end
+    args.num_thinking_tokens = num_thinking_tokens
+    args.scratchpad_type = scratchpad_type
+    args.scratchpad_as_prefix = scratchpad_as_prefix
+    args.no_graph = False
+    args.use_unique_depth_markers = use_unique_depth_markers
+    args.align_prefix_front_pad = align_prefix_front_pad
+    args.use_graph_invariance = use_graph_invariance
+    args.use_task_structure = use_task_structure
+    args.use_graph_structure = use_graph_structure
+    args.use_full_structure = use_full_structure
+
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+    print('Creating reconstructed graph plots')
+    reconstructions = generator.create_reconstruct_graphs(b_n, token_dict, for_plotting=False, ids=None)
+    for i, recon in enumerate(reconstructions):
+        recon.plot()
+
+
 # KHOPS
 def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False, batch_size=3):
     args.task_type = "khops"
@@ -198,9 +233,9 @@ def main(max_vocab_size=150):
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
 
-    _t_random_trees(args, token_dict, pos_dict)
+    # _t_random_trees(args, token_dict, pos_dict)
 
-
+    _graph_plot(args, token_dict, pos_dict, batch_size=3)
 
 
     print('\n\nDone Testing')

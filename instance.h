@@ -683,6 +683,7 @@ public:
         d["duplicate_edges"] = args.tok->duplicate_edges;
         d["is_flat_model"] = args.tok->is_flat_model;
         d["query_at_end"] = args.tok->query_at_end;
+        d["no_graph"] = args.tok->no_graph;
         d["scratchpad_as_prefix"] = args.tok->scratchpad_as_prefix;
         d["align_prefix_front_pad"] = args.tok->align_prefix_front_pad;
         d["min_vocab"] = args.min_vocab;

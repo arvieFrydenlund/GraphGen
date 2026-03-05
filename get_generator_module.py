@@ -172,8 +172,9 @@ def get_args_parser():
     return parser
 
 
-
-# Extra generator functions
+#############################
+# Extra Generator Functions #
+#############################
 
 class ReconstructedGraph(object):
     def __init__(self, graph_type, task_type,
@@ -304,7 +305,7 @@ class ReconstructedGraph(object):
     def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
         if self.pos is not None:
             try:
-                if self.graph_type in ('path_star', 'balanced'):
+                if self.graph_type in ('path_star', 'balanced', 'random_tree'):
                     pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi")
                 else:
                     pos = nx.nx_agraph.graphviz_layout(self.G, prog="neato")
@@ -322,119 +323,117 @@ class ReconstructedGraph(object):
         pass
 
 
-def create_reconstruct_graphs(batched_dict, symbol_to_id, for_plotting=False, ids=None):
+
+
+
+def create_reconstruct_graphs(b_n, token_dict, ids=None, **kwargs):
     """
     Take the c++ output and reconstruct the graphs for plotting and sanity checking.
 
-    :param batched_dict: c++ output dictionary
-    :param symbol_to_id: mapping from symbols to tokenized ids
-    :param for_plotting: bool
+    :param b_n: c++ output dictionary
+    :param token_dict: mapping from symbols to tokenized ids
     :param ids: batch ids to reconstruct, if None, reconstruct all
     :return:
     """
 
     reconstructions = []
 
-    id_to_symbol_ = {v: k for k, v in symbol_to_id.items()}
+    id_to_symbol_ = {v: k for k, v in token_dict.items()}
     def id_to_symbol(id):
         symbol = id_to_symbol_[id]
         if symbol.isdigit():
             return int(symbol)
         return symbol
 
-    pad = symbol_to_id.get('<pad>', -1)
+    pad = token_dict.get('<pad>', -1)
 
-    edge_list, query, task = None, None, None
-    if for_plotting:
-        raise NotImplementedError
-    else:
-        src_tokens = batched_dict['src_tokens']
-        src_lengths = batched_dict['src_lengths']
-        query_start_indices = batched_dict['query_start_indices']
-        query_lengths = batched_dict['query_lengths']
-        graph_start_indices = batched_dict['graph_start_indices']
-        graph_lengths = batched_dict['graph_lengths']
-        graph_gather_indices = batched_dict['graph_gather_indices']
-        task = batched_dict['prev_output_tokens']
-        task_start_indices = batched_dict['task_start_indices']
-        task_lengths = batched_dict['task_lengths']
-        task_gather_indices = batched_dict['task_gather_indices']
-        ground_truths_gather_indices = batched_dict["ground_truths_gather_indices"]
-        ground_truths_gather_distances = batched_dict["ground_truths_gather_distances"]
+    src_tokens = b_n['src_tokens']
+    prev_output_tokens = b_n['prev_output_tokens']  # task targets
+    num_nodes = b_n['num_nodes']
+    num_edges = b_n['num_edges']
+    true_task_length = b_n['true_task_lengths']
+    query_lengths = b_n['query_lengths']
 
-        print('is_flat_model', batched_dict['is_flat_model'])
+    graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)
+    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)
+    task_targets = b_n['prev_output_tokens']
+    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True, pad_value=-1)
+    query_gather_indices = query_gather_ids(b_n, pad_value=-1)
+    node_positions = None
+    if 'node_positions' in b_n and b_n['node_positions'] is not None:
+        node_positions = b_n['node_positions']
 
-        if ids is None:
-            ids = list(range(src_tokens.shape[0]))
+    concat_edges = b_n['concat_edges']
+    graph_type = b_n['graph_type']
+    task_type = b_n['task_type']
 
-        if src_tokens.shape[-1] == 1:  # not concat_edges
-            concat_edges = False
-        elif src_tokens.shape[-1] == 2:  # concat_edges
-            concat_edges = True
+    is_directed = graph_type in ('path_star', 'balanced', 'khops', 'khops_gen')
+
+    if ids is None:
+        ids = list(range(src_tokens.shape[0]))
+
+    def gather(tensor, gather_indices, id):
+        gather_indices, mask = gather_indices
+        if tensor is None or gather_indices is None:
+            raise ValueError("Tensor and gather_indices cannot be None")
+        if tensor.ndim == 2:
+            t = tensor[id, gather_indices[id], 0]
+        elif tensor.ndim == 3:
+            t = tensor[id, gather_indices[id], :]
         else:
-            raise ValueError(f"Unexpected src_tokens shape: {src_tokens.shape[-1]}")
+            raise ValueError(f"Unexpected tensor shape: {tensor.shape}")
+        # cut down to actual lengths
+        if mask is not None:
+            valid_length = mask[id].sum()
+            if tensor.ndim == 2:
+                t = t[:valid_length]
+            elif tensor.ndim == 3:
+                t = t[:valid_length, :]
+        return t
 
-        if batched_dict['task_type'] == 'shortest_path':
-            pass
-        elif batched_dict['task_type'] in ('center', 'centroid'):
-            pass
-
-        pos = None
-        if batched_dict['graph_type'] == 'euclidean':
-            pos = batched_dict['positions']
-
-        for id in ids:
-            print('\n\nID: ', id)
-            # print('src_tokens[id]', src_tokens[id, :, 0] if src_tokens.ndim > 2 else src_tokens[id, :])
-            print('range         \n',
-                  np.arange(src_tokens.shape[1]))
-            print('src_tokens[id]\n', src_tokens[id].transpose())
-            print('query_start_indices[id]',  query_start_indices[id], 'length ', query_lengths[id])
-            print('graph_start_indices[id]', graph_start_indices[id], 'length ', graph_lengths[id])
-            print('graph_gather_indices[id]', graph_gather_indices[id])
-            print('task[id]', task[id, :, 0] if task.ndim > 2 else task[id, :], 'tensor length', task.shape[1], 'task_lengths', task_lengths[id])
-            print('task_start_indices[id]', task_start_indices[id], 'length ', task_lengths[id])
-            print('task_gather_indices[id]', task_gather_indices[id], 'length', task_gather_indices.shape[1])
-            print('ground_truths_gather_indices[id]\n', ground_truths_gather_indices[id].transpose())
-            print('ground_truths_gather_distances[id]\n', ground_truths_gather_distances[id].transpose())
-
-            query = src_tokens[id, query_start_indices[id]: query_start_indices[id] + query_lengths[id], 0]
-            edge_list = src_tokens[id, graph_start_indices[id]: graph_start_indices[id] + graph_lengths[id], :]
-            if batched_dict['is_flat_model']:
-                task_input = src_tokens[id, task_start_indices[id]: task_start_indices[id] + task_lengths[id], 0]
-            else:
-                task_input = task[id, :task_lengths[id], 0]
-            prev_output_tokens = task[id, :task_lengths[id], :]
-            if not concat_edges:
-                edge_list = edge_list.reshape(-1, 3)[:, :2]  # remove the edge marker
-            edge_list = edge_list.tolist()
+    for id in ids:
+        if b_n["graph_type"] in ('khops', 'khops_gen'):  # these have no edge list
+            raise NotImplementedError
+        else:
+            assert not b_n['no_graph'], "No graph to reconstruct"
+            if concat_edges:
+                edges = gather(src_tokens, graph_edge_gather_indices, id)
+                edge_list = edges.reshape(-1, 2).tolist()
+            else:  # here we actually need to parse the src
+                graph_start = b_n['graph_edge_start_indices'][id]
+                assert src_tokens.shape[-1] == 1, 'src can not have structure if concat_edges is False'
+                edge_list = []
+                for i in range(num_edges[id]):
+                    edge_tokens = src_tokens[id, graph_start + (i * 3): graph_start + (i * 3) + 2, 1]
+                    edge_list.append(edge_tokens[:2].tolist())  # cut off edge marker if it exists
             for i in range(len(edge_list)):
                 edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
-            query = query.tolist()  # remove the tokenized ids
-            print('query', query)
-            query = [id_to_symbol(q) for q in query]
-            task_input = task_input.tolist()
-            task_input = [id_to_symbol(t) for t in task_input]
-            task_targets = [[id_to_symbol(j) for j in t if j != pad] for t in prev_output_tokens]
-            pos_i = {id_to_symbol(int(pos[id, i, 0])): (pos[id, i, 1], pos[id, i, 2])
-                     for i in range(pos.shape[1]) if pos[id, i, 0] > 0} if pos is not None else None
-            if pos_i is not None:
-                pos_i = dict(sorted(pos_i.items(), key=lambda item: item[0]))
 
-
-            def is_directed(graph_type):
-                return graph_type in ('path_star', 'balanced')
-
-            # sort edge list
-            edge_list = [sorted(e) if not is_directed(batched_dict['graph_type']) else e for e in edge_list]
+            edge_list = [sorted(e) if not is_directed else e for e in edge_list]
             edge_list = sorted(edge_list, key=lambda x: (x[0], x[1]))
 
-            print('edge_list', edge_list)
-            if nx is not None:
-                r = ReconstructedGraph(batched_dict['graph_type'], batched_dict['task_type'],
-                                       edge_list, query, task_input, task_targets, pos=pos_i)
-                reconstructions.append(r)
+        query, task_input, task_targets = None, None, None
+        if true_task_gather_indices is not None:
+            query = gather(src_tokens, query_gather_indices, id)[:, 0].tolist()
+            query = [id_to_symbol(q) for q in query]
+            task_input = gather(src_tokens, true_task_gather_indices, id)[:, 0].tolist()
+            task_input = [id_to_symbol(t) for t in task_input]
+            task_targets_t = prev_output_tokens[id, :true_task_length[id], :]
+            task_targets= []
+            for i in range(true_task_length[id]):
+                targets_at_i = []
+                for j in range(task_targets_t.shape[-1]):
+                    if task_targets_t[i, j] != pad:
+                        targets_at_i.append(id_to_symbol(task_targets_t[i, j]))
+                task_targets.append(targets_at_i)
 
+            print(edge_list)
+            print(query)
+            print(task_targets)
+
+            if nx is not None:
+                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None)
+                reconstructions.append(r)
 
     return reconstructions
 
@@ -628,7 +627,7 @@ def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):
         mask = gather_indices < (starts + lengths)[:, None]  # [bs, max_len]
         gather_indices = gather_indices * mask + pad_value * (~mask)  # [bs, max_len]
     elif isinstance(starts, torch.Tensor):
-        max_len = lengths.max()
+        max_len = lengths.max().item()
         gather_indices = torch.arange(max_len)[None, :].expand(bs, -1)  # [bs, max_len]
         gather_indices = gather_indices * stride + offset  # apply stride and offset
         gather_indices = gather_indices + starts[:, None]  # [bs, max_len]
@@ -638,7 +637,7 @@ def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):
         raise ValueError(f"Unexpected type for starts: {type(starts)}")
     return gather_indices, mask
 
-
+# these parse the output tensor to generate indicies for gathering the relevant tokens for each component of the input (graph, query, task, scratchpad)
 def _gather_ids_helper(b_n, start_n, lengths_n, stride=1, offset=0, pad_value=0):
     if start_n not in b_n or lengths_n not in b_n or b_n[start_n] is None or b_n[lengths_n] is None:
         return None, None
@@ -649,20 +648,31 @@ def _gather_ids_helper(b_n, start_n, lengths_n, stride=1, offset=0, pad_value=0)
 
 def task_gather_ids(b_n, is_true_task, pad_value=0, **kwargs):
     if is_true_task:
-        start_n = 'true_task_start_indices'
-        lengths_n = 'true_task_lengths'
+        if 'true_task_gather_ids' in b_n and b_n['true_task_gather_ids'] is not None:
+            return b_n['true_task_gather_ids']
+        out = _gather_ids_helper(b_n, 'true_task_start_indices', 'true_task_lengths', pad_value=pad_value, **kwargs)
+        b_n['true_task_gather_ids'] = out
     else:
-        start_n = 'task_start_indices'
-        lengths_n = 'task_lengths'
-    return _gather_ids_helper(b_n, start_n, lengths_n, pad_value=pad_value, **kwargs)
+        if 'task_gather_ids' in b_n and b_n['task_gather_ids'] is not None:
+            return b_n['task_gather_ids']
+        out = _gather_ids_helper(b_n, 'task_start_indices', 'task_lengths', pad_value=pad_value, **kwargs)
+        b_n['true_task_gather_ids'] = out
+    return out
 
 
 def scratchpad_gather_ids(b_n, pad_value=0, **kwargs):
-    return _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', pad_value=pad_value, **kwargs)
+    if 'scratchpad_gather_ids' in b_n and b_n['scratchpad_gather_ids'] is not None:
+        return b_n['scratchpad_gather_ids']
+    out = _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', pad_value=pad_value, **kwargs)
+    b_n['scratchpad_gather_ids'] = out
+    return out
 
 
 def edge_gather_ids(b_n, pad_value=0, *kwargs):
-    if 'graph_edge_start_indices' not in b_n or 'graph_edge_lengths' not in b_n or b_n['graph_edge_start_indices'] is None or b_n['graph_edge_lengths'] is None:
+    if 'graph_edge_gather_ids' in b_n and b_n['graph_edge_gather_ids'] is not None:
+        return b_n['graph_edge_gather_ids']
+
+    if 'graph_edge_start_indices' not in b_n or 'graph_edge_lengths' not in b_n or b_n['graph_edge_start_indices'] is None or b_n['graph_edge_lengths'] is None or b_n['no_graph']:
         return None, None
 
     starts = b_n['graph_edge_start_indices']
@@ -672,14 +682,27 @@ def edge_gather_ids(b_n, pad_value=0, *kwargs):
         lengths -= node_lengths  # adjust edge lengths to account for node tokens if they are included in the graph tokenization
 
     if b_n["concat_edges"]:
-        gather_indices, mask = _gather_ids(starts, lengths, pad_value=pad_value)
+        out = _gather_ids(starts, lengths, pad_value=pad_value)
     else:  # gather at edge markers
-        gather_indices, mask = _gather_ids(starts, lengths, stride=3, offset=2, pad_value=pad_value)
-    return gather_indices, mask
+        out = _gather_ids(starts, lengths, stride=3, offset=2, pad_value=pad_value)
+    b_n['graph_edge_gather_ids'] = out
+    return out
 
 
 def node_gather_ids(b_n, pad_value=0, **kwargs):
-    return _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', pad_value=pad_value, **kwargs)
+    if 'graph_node_gather_ids' in b_n and b_n['graph_node_gather_ids'] is not None:
+        return b_n['graph_node_gather_ids']
+    out = _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', pad_value=pad_value, **kwargs)
+    b_n['graph_node_gather_ids'] = out
+    return out
+
+
+def query_gather_ids(b_n, pad_value=0, **kwargs):
+    if 'query_gather_ids' in b_n and b_n['query_gather_ids'] is not None:
+        return b_n['query_gather_ids']
+    out = _gather_ids_helper(b_n, 'query_start_indices', 'query_lengths', pad_value=pad_value, **kwargs)
+    b_n['query_gather_ids'] = out
+    return out
 
 
 def create_task_pos_for_inference():
