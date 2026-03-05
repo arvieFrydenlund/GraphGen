@@ -209,6 +209,7 @@ class ReconstructedGraph(object):
                 self.G.add_node(node, pos=node_pos)
         self.G.add_edges_from(edge_list)
         self.process_task()
+        print('verbose is', verbose)
         self.set_plot_positions_for_layout(spring_k, spring_scale, verbose, **kwargs)
 
 
@@ -285,6 +286,8 @@ class ReconstructedGraph(object):
 
         # the edgecolors keyword argument (for setting the outline of nodes)
         # is different from the edge_color keyword argument (for setting the colour of lines)
+        print('pos', self.pos)
+
         nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, linewidths=2,
                 node_color=self.colour_map,
                 edgecolors=self.node_edge_colour_map)
@@ -303,10 +306,15 @@ class ReconstructedGraph(object):
 
 
     def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, verbose=False, **kwargs):
-        if self.pos is not None:
+        if self.pos is None:
+            if verbose:
+                print('No pos provided, using layout to compute positions.')
+
             try:
                 if self.graph_type in ('path_star', 'balanced', 'random_tree'):
+                    # pos = nx.nx_agraph.graphviz_layout(self.G, prog='dot', args='-Grankdir=LR')
                     pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi")
+                    print(pos)
                 else:
                     pos = nx.nx_agraph.graphviz_layout(self.G, prog="neato")
             except Exception as e:
@@ -326,7 +334,7 @@ class ReconstructedGraph(object):
 
 
 
-def create_reconstruct_graphs(b_n, token_dict, ids=None, **kwargs):
+def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs):
     """
     Take the c++ output and reconstruct the graphs for plotting and sanity checking.
 
@@ -432,7 +440,7 @@ def create_reconstruct_graphs(b_n, token_dict, ids=None, **kwargs):
             print(task_targets)
 
             if nx is not None:
-                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None)
+                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None, verbose=verbose)
                 reconstructions.append(r)
 
     return reconstructions
