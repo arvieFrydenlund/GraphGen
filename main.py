@@ -21,13 +21,20 @@ Testing generation functions and pybind compile.
 """
 
 
-def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
+def _graph_print(args, token_dict, pos_dict,
+                 graph_type='path_star', # 'random_tree',  #'erdos_renyi',  #'path_star',
+                 task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='bfs', use_unique_depth_markers=True,
                  scratchpad_as_prefix=False, no_graph=True,
                  align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
                  use_graph_structure=True, use_full_structure=True,
                  batch_size=3):
+    args.min_num_nodes = 25
+    args.max_num_nodes = 25
+    args.min_path_length = 3
+    args.max_path_length = 5
+    args.graph_type = graph_type
     args.task_type = task_type
     args.concat_edges = concat_edges
     args.duplicate_edges = duplicate_edges
@@ -45,7 +52,7 @@ def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_
     args.use_full_structure = use_full_structure
 
     b_n = generator.get_graph(args, batch_size=batch_size)
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
 
 
 def _graph_plot(args, token_dict, pos_dict,
@@ -199,11 +206,115 @@ def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
+def _distance_scores(args, token_dict, pos_dict,
+                 graph_type='random_tree', # 'random_tree',  #'erdos_renyi',  #'path_star',
+                 task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
+                 include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
+                 scratchpad_type='none', use_unique_depth_markers=True,
+                 scratchpad_as_prefix=False, no_graph=False,
+                 align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
+                 use_graph_structure=True, use_full_structure=True,
+                 batch_size=3):
+    """
+    The outcome of this is that the only valid score is dot product with a one-hot vector
+    This literally selects the true distance element and doesn't really test anything about the geometry of the space.
+    """
+
+    args.min_num_nodes = 25
+    args.max_num_nodes = 25
+    args.min_path_length = 3
+    args.max_path_length = 5
+    args.graph_type = graph_type
+    args.task_type = task_type
+    args.concat_edges = concat_edges
+    args.duplicate_edges = duplicate_edges
+    args.include_nodes_in_graph_tokenization = include_nodes_in_graph_tokenization
+    args.query_at_end = query_at_end
+    args.num_thinking_tokens = num_thinking_tokens
+    args.scratchpad_type = scratchpad_type
+    args.scratchpad_as_prefix = scratchpad_as_prefix
+    args.no_graph = no_graph
+    args.use_unique_depth_markers = use_unique_depth_markers
+    args.align_prefix_front_pad = align_prefix_front_pad
+    args.use_graph_invariance = use_graph_invariance
+    args.use_task_structure = use_task_structure
+    args.use_graph_structure = use_graph_structure
+    args.use_full_structure = use_full_structure
+
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=True)
+
+    dist = b_n['distances'][0, ...]
+    mask = dist < 0
+    dist = np.where(mask, 0, dist)
+    print(dist)
+
+    start_node = b_n['src_tokens'][0, b_n['query_start_indices'][0]+1, 0]
+    print(f'Start node: {start_node}')
+
+    # order nodes by distance from start node
+    start_column = dist[start_node, :]
+    print(f'Start column: {start_column}')
+    order = np.argsort(start_column, axis=-1)
+    print(order)
+
+    def euclidean_dist(u, v):
+        return -np.sqrt(np.sum((u - v) ** 2))
+
+    def manhattan_dist(u, v):
+        return -np.sum(np.abs(u - v))
+
+    def cosine_sim(u, v):
+        return 1-np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v))
+
+    def dot_product(u, v):
+        return -np.dot(u, v)
+
+    invert_map = {v: k for k, v in token_dict.items()}
+
+    distance_orders = {'euclidean': [], 'manhattan': [], 'dot_product': [], 'cosine': []}
+
+    for other in order:
+        if not mask[start_node, other]:
+            s = invert_map[start_node]
+            o = invert_map[other]
+            su = start_column
+            if True:  # one hot, this just selects the true distance, which is actually correct
+                su = np.zeros_like(start_column)
+                su[start_node] = 1
+            du = dist[other, :]
+
+            print(f'Node {o} is at distance {start_column[other]} from start node {s}')
+            print(f'Node {o} is at euclidean distance {euclidean_dist(su, du):.2f} in embedding space from start node {s}')
+            print(f'Node {o} is at manhattan distance {manhattan_dist(su, du):.2f} in embedding space from start node {s}')
+            print(f'Node {o} is at dot product {dot_product(su, du):.2f} in embedding space from start node {s}')
+            print(f'Node {o} is at cosine similarity {cosine_sim(su, du):.2f} in embedding space from start node {s}')
+            print()
+
+            distance_orders['euclidean'].append((start_column[other], euclidean_dist(su, du)))
+            distance_orders['manhattan'].append((start_column[other], manhattan_dist(su, du)))
+            distance_orders['dot_product'].append((start_column[other], dot_product(su, du)))
+            distance_orders['cosine'].append((start_column[other], cosine_sim(su, du)))
+
+    for key in distance_orders:
+        # make sure the order respects the true distance, that is if dist(u, v) < dist(u, w) then sim(u, v) > sim(u, w)
+        print(f'Checking order for {key}')
+        pairs = distance_orders[key]
+        for i in range(len(pairs)):
+            for j in range(i+1, len(pairs)):
+                d_i, s_i = pairs[i]
+                d_j, s_j = pairs[j]
+                if d_i < d_j and not s_i > s_j:
+                    print(s_i > s_j, f'Order violation for {key}: node with true distance {d_i} has similarity {s_i} which is not greater than similarity {s_j} of node with true distance {d_j}')
+
+        print()
+
+    reconstructions = generator.create_reconstruct_graphs(b_n, token_dict, for_plotting=False, ids=None,
+                                                          trees_to_left=False, verbose=True)
+    reconstructions[0].plot(verbose=True)
 
 
-
-
-def main(max_vocab_size=250):
+def main(max_vocab_size=35):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -243,7 +354,11 @@ def main(max_vocab_size=250):
 
     # _t_random_trees(args, token_dict, pos_dict)
 
-    _graph_plot(args, token_dict, pos_dict, batch_size=3)
+    # _graph_plot(args, token_dict, pos_dict, batch_size=
+
+    _distance_scores(args, token_dict, pos_dict, batch_size=1)
+
+
 
 
     print('\n\nDone Testing')

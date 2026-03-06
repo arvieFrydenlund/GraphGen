@@ -377,6 +377,7 @@ def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs
     if ids is None:
         ids = list(range(src_tokens.shape[0]))
 
+
     def gather(tensor, gather_indices, id):
         gather_indices, mask = gather_indices
         if tensor is None or gather_indices is None:
@@ -409,7 +410,7 @@ def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs
                 assert src_tokens.shape[-1] == 1, 'src can not have structure if concat_edges is False'
                 edge_list = []
                 for i in range(num_edges[id]):
-                    edge_tokens = src_tokens[id, graph_start + (i * 3): graph_start + (i * 3) + 2, 1]
+                    edge_tokens = src_tokens[id, graph_start + (i * 3): graph_start + (i * 3) + 2, 0]
                     edge_list.append(edge_tokens[:2].tolist())  # cut off edge marker if it exists
             for i in range(len(edge_list)):
                 edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
