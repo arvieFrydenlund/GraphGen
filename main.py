@@ -49,7 +49,7 @@ def _graph_print(args, token_dict, pos_dict, task_type ='shortest_path', concat_
 
 
 def _graph_plot(args, token_dict, pos_dict,
-                 graph_type='random_tree',  #'path_star',
+                 graph_type='random_tree',  #'erdos_renyi',  #'path_star',
                  task_type ='shortest_path', concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='none', use_unique_depth_markers=True,
@@ -57,6 +57,10 @@ def _graph_plot(args, token_dict, pos_dict,
                  align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
                  use_graph_structure=True, use_full_structure=True,
                  batch_size=1):
+    args.min_num_nodes = 190
+    args.max_num_nodes = 190
+    args.min_path_length = 10
+    args.max_path_length = 15
     args.graph_type = graph_type
     args.task_type = task_type
     args.concat_edges = concat_edges
@@ -182,7 +186,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
 def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
     args.batch_size = batch_size
     args.min_num_nodes = 100
-    args.max_num_nodes = 150
+    args.max_num_nodes = 100
     args.task_type = 'shortest_path'
     args.graph_type = 'random_tree'
 
@@ -199,7 +203,7 @@ def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
 
 
 
-def main(max_vocab_size=150):
+def main(max_vocab_size=250):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()

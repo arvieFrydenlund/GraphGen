@@ -163,9 +163,6 @@ public:
             max_pos_struct = max(max_pos_struct, static_cast<int>(task->tokenized_query_pos.shape()[1]));
         }
         if (graph_tokenizer) {  // if graph
-
-            cout << "Here WTF" << endl;
-
             graph_length = static_cast<int>(graph_tokenizer->tokenized_inputs.shape()[0]);
             if (args.tok->include_nodes_in_graph_tokenization) {
                 graph_nodes_length = static_cast<int>(graph_tokenizer->node_list.size());

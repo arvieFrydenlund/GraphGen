@@ -209,17 +209,17 @@ inline void set_default_pos_dictionary() {
             {"task_invariance", 6},
 
             {"misc_start", 11},
-            {"misc_end", 99},
-            {"query_start", 100},
+            {"misc_end", 49},
+            {"query_start", 50},
             {"query_end", 199},
             {"graph_start", 200},
-            {"graph_end", 499},
-            {"graph_sub_start", 500},
-            {"graph_sub_end", 599},  // only really need 3
-            {"thinking_start", 600},
-            {"thinking_end", 699},
-            {"task_start", 700},
-            {"task_end", 999},
+            {"graph_end", 939},
+            {"graph_sub_start", 940},
+            {"graph_sub_end", 949},  // only really need 3
+            {"thinking_start", 950},
+            {"thinking_end", 999},
+            {"task_start", 1000},
+            {"task_end", 1500},
     };
 }
 

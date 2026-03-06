@@ -67,7 +67,7 @@ def get_args_parser():
                         help="Radius for euclidean graphs, -1.0 means random")
     # random tree graphs settings
     parser.add_argument('--max_degree', type=int, default=3)
-    parser.add_argument('--max_depth', type=int, default=7)
+    parser.add_argument('--max_depth', type=int, default=-1, help="-1 means it will be overridden by max_path_length")
     parser.add_argument('--bernoulli_p', type=float, default=0.5)
     parser.add_argument('--probs', type=float, nargs='+',
                         help="Probabilities for random tree graphs, should sum to 1.0")

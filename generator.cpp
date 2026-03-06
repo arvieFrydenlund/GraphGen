@@ -283,7 +283,7 @@ inline py::dict euclidean_n(
 
 
 inline py::dict random_tree_n(
-        int min_num_nodes, int max_num_nodes, const int max_degree, const int max_depth, const float bernoulli_p,
+        int min_num_nodes, int max_num_nodes, const int max_degree, int max_depth, const float bernoulli_p,
         const string &task_type = "shortest_path",
         const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
@@ -302,6 +302,10 @@ inline py::dict random_tree_n(
         const bool align_prefix_front_pad = false,
         const py::kwargs &kwargs = py::kwargs()) {
 
+    if (max_depth == -1 && kwargs.contains("max_path_length")) {
+        max_depth = kwargs["max_path_length"].cast<int>();  // since path length is number of edges and degree is number of children
+    }
+    if (max_depth < 2) { throw std::invalid_argument("Invalid arguments: max_depth < 2"); }
     if (max_degree < 2) { throw std::invalid_argument("Invalid arguments: max_degree < 2"); }
     checks_and_sets(min_num_nodes, max_num_nodes, min_vocab, max_vocab, batch_size);
 
