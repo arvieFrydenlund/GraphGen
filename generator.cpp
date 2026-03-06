@@ -341,7 +341,7 @@ inline py::dict random_tree_n(
 }
 
 inline py::dict path_star_n(
-        const int min_num_arms, const int max_num_arms, const int min_arm_length, const int max_arm_length,
+        const int min_num_arms, const int max_num_arms, int min_arm_length, int max_arm_length,
         const string &task_type = "shortest_path",
         const string &scratchpad_type = "none",
         const bool shuffle_edges = false, const bool shuffle_nodes = false,
@@ -359,6 +359,13 @@ inline py::dict path_star_n(
         const bool is_flat_model = true,
         const bool align_prefix_front_pad = false,
         const py::kwargs &kwargs = py::kwargs()) {
+
+    if (min_arm_length <= 0 && kwargs.contains("min_path_length")) {
+        min_arm_length = kwargs["min_path_length"].cast<int>();
+    }
+    if (max_arm_length <= 0 && kwargs.contains("max_path_length")) {
+        max_arm_length = kwargs["max_path_length"].cast<int>();
+    }
 
     int min_num_nodes = 1 + min_num_arms * min_arm_length;
     int max_num_nodes = 1 + max_num_arms * max_arm_length;

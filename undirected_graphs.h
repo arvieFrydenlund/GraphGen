@@ -400,7 +400,7 @@ inline start_end_pair random_tree_generator(unique_ptr<Graph<boost::undirectedS>
         sample_depth = max_depth;
     }
 
-    cout << "Generating random tree with num_nodes=" << num_nodes << " d=" << d << " sample_depth=" << sample_depth << " max_depth=" << max_depth << " bernoulli_p=" << bernoulli_p << endl;
+    // cout << "Generating random tree with num_nodes=" << num_nodes << " d=" << d << " sample_depth=" << sample_depth << " max_depth=" << max_depth << " bernoulli_p=" << bernoulli_p << endl;
 
     int start = 0;
     int end = -1;  // return a leaf node

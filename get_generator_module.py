@@ -79,10 +79,10 @@ def get_args_parser():
                         help="Minimum number of arms for star graphs")
     parser.add_argument('--max_num_arms', type=int, default=5,
                         help="Maximum number of arms for star graphs")
-    parser.add_argument('--min_arm_length', type=int, default=5,
-                        help="Minimum length of each arm in star graphs")
-    parser.add_argument('--max_arm_length', type=int, default=8,
-                        help="Maximum length of each arm in star graphs")
+    parser.add_argument('--min_arm_length', type=int, default=-1,
+                        help="Minimum length of each arm in star graphs.  -1 means it will be overridden by min_path_length")
+    parser.add_argument('--max_arm_length', type=int, default=-1,
+                        help="Maximum length of each arm in star graphs. -1 means it will be overridden by max_path_length")
 
     # balanced graphs settings
     parser.add_argument('--min_lookahead', type=int, default=3,
