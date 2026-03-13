@@ -37,6 +37,8 @@ public:
 
     unique_ptr<vector<vector<int> > > distances_ptr;
     unique_ptr<vector<vector<int> > > graph_ground_truths_ptr; // -1 for unreachable, either [E * N] or [N * N]
+    unique_ptr<vector<vector<vector<int> > > > node_ranks_ptr;
+    tuple<int, int, int> node_rank_size;
 
     // note these are temporary to get to shortest path
     int start = -1;
@@ -332,6 +334,52 @@ public:
                 }
             }
         }
+    }
+
+    void get_node_ranks() {
+        /*
+         * It is the node ground truths, but it is ordered by the distance, with ties in their own dim
+         * out: [num_nodes, max_distance i.e ranks, ties]
+         */
+        // get max distance to know how many ranks we need, and count of distances for each rank to know how many ties we need
+        // this is done per node
+        auto max_distance = 0;
+        auto max_ties = 0;
+        auto distance_counts = map<int, int>();
+        for (int i = 0; i < static_cast<int>(N); i++) {
+            distance_counts.clear();
+            for (int j = 0; j < static_cast<int>(N); j++) {
+                auto d = (*distances_ptr)[node_list[i]][j];
+                if (d >= 0 && d < inf) {  // only count reachable nodes
+                    if (distance_counts.find(d) == distance_counts.end()) {
+                        distance_counts[d] = 1;
+                    } else {
+                        distance_counts[d] += 1;
+                    }
+                }
+            }
+            for (auto & distance_count : distance_counts) {
+                if (distance_count.first > max_distance) {
+                    max_distance = distance_count.first;
+                }
+                if (distance_count.second > max_ties) {
+                    max_ties = distance_count.second;
+                }
+            }
+        }
+        // +1 because of zero distance is the first rank
+        // node_ranks_ptr = make_unique<vector<vector<vector<int> > > >(N, vector<vector<int> >(max_distance + 1, vector<int>(0)));
+        auto node_ranks = vector<vector<vector<int> > >(N, vector<vector<int> >(max_distance + 1, vector<int>(0)));
+        for (int i = 0; i < static_cast<int>(N); i++) {
+            for (int j = 0; j < static_cast<int>(N); j++) {
+                auto d = (*distances_ptr)[node_list[i]][j];
+                if (d >= 0 && d < inf) {  // only count reachable nodes
+                    node_ranks[i][d].push_back(j);
+                }
+            }
+        }
+        node_rank_size = make_tuple(N, max_distance + 1, max_ties);
+        node_ranks_ptr = make_unique<vector<vector<vector<int> > > >(node_ranks);
     }
 
 

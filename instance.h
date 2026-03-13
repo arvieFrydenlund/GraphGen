@@ -77,12 +77,19 @@ public:
             }
             // issue of when to convert these to node shuffle map order, it can not be before we make the task
             // since these need the original distance matrix in the original node order
+
+            /* old code
             if (args.tok->include_nodes_in_graph_tokenization) {
                 graph->get_distances();
                 graph->get_node_ground_truths(args.tok->is_direct_ranking);
             } else {
                 // this also gets the distances due to legacy code
                 graph->get_edge_ground_truths(args.tok->is_causal);
+            }
+             */
+            graph->get_distances();
+            if (args.tok->include_nodes_in_graph_tokenization) {
+                graph->get_node_ranks();
             }
         }
 
@@ -614,6 +621,7 @@ public:
                 d["graph_node_lengths"] = graph_node_lengths;
             }
         }
+
         d["thinking_tokens_start_idx"] = py::none();
         d["thinking_tokens_length"] = py::none();
         if (args.tok->num_thinking_tokens > 0) {
@@ -622,7 +630,6 @@ public:
         }
 
         d["prev_output_tokens"] = py::none();
-
         d["task_start_indices"] = py::none();
         d["task_lengths"] = py::none();
         d["scratch_pad_start_indices"] = py::none();
@@ -630,11 +637,9 @@ public:
         d["true_task_start_indices"] = py::none();
         d["true_task_lengths"] = py::none();
         d["scratchpad_type"] = py::none();
-
         d["scratch_pad_start_indices"] = py::none();
         d["scratch_pad_lengths"] = py::none();
         d["scratchpad_type"] = py::none();
-
         if (instances[0].task) {
             d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
 
@@ -650,22 +655,26 @@ public:
         }
 
         // distances and ground truths batching
+        d["distances"] = py::none();
+        d["ground_truths_gather_indices"] = py::none();
+        d["ground_truths_gather_distances"] = py::none();
+        d["node_ranks"] = py::none();
         if (instances[0].graph->g_ptr) {
             auto bd = batch_distances<int>();  // do node shuffling inside
             d["distances"] = bd;  // (B, max_vocab, max_vocab), where max_vocab is just up to node range (not extra symbols)
             d["hashes"] = hash_distance_matrix<int>(bd);
 
-            auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
-            if (args.tok->is_direct_ranking) {
+            if (instances[0].graph->graph_ground_truths_ptr) {
+                auto gt_gather_indices_and_distances = batch_ground_truth_gather_indices<int>();
                 d["ground_truths_gather_indices"] = gt_gather_indices_and_distances.first;
-            } else {
-                d["ground_truths_gather_indices"] = py::none();
+                d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
             }
-            d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
+            if (instances[0].graph->node_ranks_ptr){
+                auto node_ranks = batch_node_ranks<int>();
+                d["node_ranks"] = node_ranks;
+            }
         } else {
             d["hashes"] = hash_src_tokens(src_tokens);
-            d["distances"] = py::none();
-            d["ground_truths_gather_indices"] = py::none();
         }
 
         // if euclidean batch the node positions  TODO
@@ -673,7 +682,6 @@ public:
         // arguments
         d["graph_type"] = args.graph_type;
         d["task_type"] = args.task->task_type;
-
         d["is_causal"] = args.tok->is_causal;
         d["is_direct_ranking"] = args.tok->is_direct_ranking;
         d["concat_edges"] = args.tok->concat_edges;
@@ -759,6 +767,40 @@ public:
             }
         }
         return make_pair(arr_indices, arr_distances);
+    }
+
+    template<typename T>
+    py::array_t<T, py::array::c_style> batch_node_ranks(T pad = -1){
+        int max_d1 = 0;  // nodes
+        int max_d2 = 0;  // ranks
+        int max_d3 = 0;  // ties
+        auto batch_size = static_cast<int>(instances.size());
+        for (int b = 0; b < batch_size; b++) {
+            const auto node_rank_size = instances[b].graph->node_rank_size;  // tuple of (num nodes, num ranks, max ties)
+            if (get<0>(node_rank_size) > max_d1) {
+                max_d1 = get<0>(node_rank_size);
+            }
+            if (get<1>(node_rank_size) > max_d2) {
+                max_d2 = get<1>(node_rank_size);
+            }
+            if (get<2>(node_rank_size) > max_d3) {
+                max_d3 = get<2>(node_rank_size);
+            }
+        }
+        py::array_t<T, py::array::c_style> node_ranks({static_cast<int>(batch_size), max_d1, max_d2, max_d3});
+        node_ranks[py::make_tuple(py::ellipsis())] = static_cast<T>(pad); // initialize array
+        auto ra = node_ranks.mutable_unchecked();
+        for (int b = 0; b < batch_size; b++) {
+            const auto &node_ranks_ptr = instances[b].graph->node_ranks_ptr;
+            for (int j = 0; j < static_cast<int>((*node_ranks_ptr).size()); j++) {
+                for (int k = 0; k < static_cast<int>((*node_ranks_ptr)[j].size()); k++) {
+                    for (int l = 0; l < static_cast<int>((*node_ranks_ptr)[j][k].size()); l++) {
+                        ra(b, j, k, l) = (*node_ranks_ptr)[j][k][l];
+                    }
+                }
+            }
+        }
+        return node_ranks;
     }
 
     // Hashing

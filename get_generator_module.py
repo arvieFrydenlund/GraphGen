@@ -477,6 +477,10 @@ def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_
         d_out = np.concatenate([d_out, a2[:, None]], axis=1)
         print(d_out)
 
+
+def pprint_ranks():
+    pass
+
 def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
                         print_dist=False, print_shapes=True):
     """
@@ -619,8 +623,12 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     if b_n["distances"] is not None:
         distances = b_n["distances"]
         print(f'Distances shape: {distances.shape}')
+    if b_n["ground_truths_gather_distances"] is not None:
         ground_truths_gather_distances = b_n["ground_truths_gather_distances"]
         print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
+    if b_n["node_ranks"] is not None:
+        node_ranks = b_n["node_ranks"]
+        print(f'Node ranks shape: {node_ranks.shape}')
 
 
 def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):

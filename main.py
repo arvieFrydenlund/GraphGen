@@ -314,7 +314,7 @@ def _distance_scores(args, token_dict, pos_dict,
     reconstructions[0].plot(verbose=True)
 
 
-def main(max_vocab_size=35):
+def main(max_vocab_size=100):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -354,9 +354,9 @@ def main(max_vocab_size=35):
 
     # _t_random_trees(args, token_dict, pos_dict)
 
-    # _graph_plot(args, token_dict, pos_dict, batch_size=
+    _graph_plot(args, token_dict, pos_dict)
 
-    _distance_scores(args, token_dict, pos_dict, batch_size=1)
+    # _distance_scores(args, token_dict, pos_dict, batch_size=1)
 
 
 
