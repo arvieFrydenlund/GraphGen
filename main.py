@@ -56,7 +56,7 @@ def _graph_print(args, token_dict, pos_dict,
 
 
 def _graph_plot(args, token_dict, pos_dict,
-                 graph_type='path_star', # 'random_tree',  #'erdos_renyi',  #'path_star',
+                 graph_type='erdos_renyi', # 'random_tree',  #'erdos_renyi',  #'path_star',
                  task_type ='shortest_path', concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='none', use_unique_depth_markers=True,
@@ -87,6 +87,7 @@ def _graph_plot(args, token_dict, pos_dict,
 
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+    generator.pprint_ranks(b_n, token_dict, idxs=-1, map_ids_to_tokens=True)
 
     print('Creating reconstructed graph plots')
     trees_to_left = False
@@ -314,7 +315,7 @@ def _distance_scores(args, token_dict, pos_dict,
     reconstructions[0].plot(verbose=True)
 
 
-def main(max_vocab_size=100):
+def main(max_vocab_size=200):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()

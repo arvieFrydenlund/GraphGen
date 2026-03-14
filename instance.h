@@ -792,10 +792,11 @@ public:
         auto ra = node_ranks.mutable_unchecked();
         for (int b = 0; b < batch_size; b++) {
             const auto &node_ranks_ptr = instances[b].graph->node_ranks_ptr;
+            auto node_shuffle_map = instances[b].graph->node_shuffle_map;
             for (int j = 0; j < static_cast<int>((*node_ranks_ptr).size()); j++) {
                 for (int k = 0; k < static_cast<int>((*node_ranks_ptr)[j].size()); k++) {
                     for (int l = 0; l < static_cast<int>((*node_ranks_ptr)[j][k].size()); l++) {
-                        ra(b, j, k, l) = (*node_ranks_ptr)[j][k][l];
+                        ra(b, j, k, l) = node_shuffle_map[(*node_ranks_ptr)[j][k][l]];
                     }
                 }
             }

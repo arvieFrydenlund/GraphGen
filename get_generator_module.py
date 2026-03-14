@@ -478,8 +478,48 @@ def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_
         print(d_out)
 
 
-def pprint_ranks():
-    pass
+def pprint_ranks(b_n, token_dict, idxs=(0,1,2), map_ids_to_tokens=True):
+
+    src = b_n['src_tokens']
+    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
+    nodes = src[:, graph_node_gather_indices[0], 0]
+
+    rev_token_dict = {v: k for k, v in token_dict.items()}
+    rev_token_dict[-1] = -1
+
+    if isinstance(idxs, int):
+        if idxs > 0:
+            idxs = list(range(idxs))
+        else:
+            idxs = list(range(src.shape[0]))
+    elif len(idxs) == 0:
+        idxs = list(range(src.shape[0]))
+    else:
+        idxs = [b for b in idxs if b < src.shape[0]]
+
+    if b_n["node_ranks"] is not None:
+        node_ranks = b_n["node_ranks"]
+        print(f'Node ranks shape: {node_ranks.shape}')
+        for b in idxs:
+            print(f'BATCH INDEX: {b}\n')
+            ranks_out = node_ranks[b, ...]
+            nodes_out = nodes[b, ...].squeeze()
+            rlen = np.sum(ranks_out != -1, axis=-1)
+            if map_ids_to_tokens:
+                ranks_out = np.vectorize(lambda x: rev_token_dict.get(x, str(x)))(ranks_out)
+                nodes_out = np.vectorize(lambda x: rev_token_dict.get(x, str(x)))(nodes_out)
+
+            print(ranks_out.shape, nodes.shape)
+            for n in range(ranks_out.shape[0]):
+                print(f'Node: {nodes_out[n]}')
+                for i in range(ranks_out.shape[1]):
+                    if rlen[n, i] > 0:
+                        print(f'  Rank {i}: {ranks_out[n, i, :rlen[n, i]]}')
+                print()
+    else:
+        print("No node ranks to print.")
+
+
 
 def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
                         print_dist=False, print_shapes=True):
@@ -629,6 +669,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     if b_n["node_ranks"] is not None:
         node_ranks = b_n["node_ranks"]
         print(f'Node ranks shape: {node_ranks.shape}')
+    print()
 
 
 def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):
@@ -814,6 +855,7 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
     setattr(generator, "node_gather_ids", node_gather_ids)
 
     setattr(generator, "pprint_distance", pprint_distance)
+    setattr(generator, "pprint_ranks", pprint_ranks)
     setattr(generator, "pprint_batched_dict", pprint_batched_dict)
     setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
 
