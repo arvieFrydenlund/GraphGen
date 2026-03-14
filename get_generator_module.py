@@ -283,14 +283,16 @@ class ReconstructedGraph(object):
     # PLOTTING METHODS
     def plot(self, save_path=None, save_name=None, node_size=200,  with_labels=True, **kwargs):
         assert nx is not None, "NetworkX is required for plotting. Please install it with 'pip install networkx'."
-        import matplotlib.pyplot as plt
+        import matplotlib
+        # matplotlib.use('TkAgg')
+        matplotlib.use('Qt5Agg')
+        from matplotlib import pyplot as plt
 
         # the edgecolors keyword argument (for setting the outline of nodes)
         # is different from the edge_color keyword argument (for setting the colour of lines)
         nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, linewidths=2,
                 node_color=self.colour_map,
                 edgecolors=self.node_edge_colour_map)
-
         plt.show()
         if save_path is not None:
             #if graph.type not in save_path:
