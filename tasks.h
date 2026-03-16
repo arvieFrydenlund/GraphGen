@@ -43,6 +43,7 @@ public:
     Matrix<int> tokenized_task_targets;  // defines multi-label targets
     Matrix<int> tokenized_query_pos;
     // tokenized_task_pos; these get made in the instance due to scratchpad being part of task
+    int difficulty = -1;  // for curriculum learning
 
     Task(const PosArgs *pos_args) : pos_args(pos_args) {}
 
@@ -337,6 +338,8 @@ public:
         tokenized_task_inputs(static_cast<int>(tokenized_task_inputs.shape()[0] - 1)) = task_end_marker;
         tokenized_task_targets(static_cast<int>(tokenized_task_targets.shape()[0] - 1), 0) = task_end_marker;
         set_tokenized_pos(query_size, task_size, pos_dictionary);
+
+        difficulty = static_cast<int>(path.size());
     }
 
     template<typename T>
@@ -483,6 +486,8 @@ public:
         tokenized_query_inputs(2) = node_shuffle_map.at(path[path.size() - 1]); // end node
         tokenized_query_inputs(3) = query_end_marker;
         set_tokenized_pos(query_size, task_size, pos_dictionary);
+
+        difficulty = 0; // no hops
     }
 };
 
@@ -613,6 +618,7 @@ public:
     PosArgs *pos_args;
     int vocab_size;
 
+
     vector<int> seq;
     vector<vector<int>> hops;
 
@@ -623,6 +629,7 @@ public:
         assert (max_value - min_value > 2);
 
         this->vocab_size = max_value - min_value + 1;
+        this->difficulty = k;  // for curriculum learning
 
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
         if (task_args->permutation_version) {  // treat the sequence length as max_k permutations of vocab
@@ -734,6 +741,7 @@ public:
         for (size_t i = 0; i < static_cast<size_t>(prefix_size); i++) {
             tokenized_query_pos(i) = static_cast<int>(i);
         }
+        // difficulty set in constructor since it is based on k, which is determined at construction
     }
 };
 
@@ -773,6 +781,8 @@ public:
         if (task_args->khops_no_repeats && segment_lengths.size() + 1 > static_cast<size_t>(max_value - min_value + 1)) {
             throw std::invalid_argument("Not enough unique values to fill segments with no repeats.");
         }
+
+        this->difficulty = static_cast<int>(segment_lengths.size());  // for curriculum learning
 
         auto d = std::uniform_int_distribution<int>(min_value, max_value);
 
@@ -884,6 +894,7 @@ public:
         for (size_t i = 0; i < static_cast<size_t>(prefix_size); i++) {
             tokenized_query_pos(i) = static_cast<int>(i);
         }
+        // difficulty set in constructor since it is based on segment lengths, which are determined at construction
     }
 
     static bool verify_khop_gen(const vector<int> &prefix, const vector<int> &ground_truths,  const bool right_side_connect=true){

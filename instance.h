@@ -549,6 +549,9 @@ public:
         py::array_t<int, py::array::c_style> true_task_lengths(batch_size);
         auto true_task_lengths_ar = true_task_lengths.mutable_unchecked();
 
+        py::array_t<int, py::array::c_style> difficulty(batch_size);
+        auto difficulty_ar = difficulty.mutable_unchecked();
+
         // write into numpy arrays
         for (size_t i = 0; i < instances.size(); i++) {
             auto offset = 0;
@@ -586,6 +589,7 @@ public:
             graph_node_lengths_ar(i) = instances[i].graph_nodes_length;
             thinking_tokens_start_idx_ar(i) = instances[i].thinking_tokens_start_idx + offset;
             thinking_tokens_length_ar(i) = instances[i].thinking_tokens_length;
+            difficulty_ar(i) = instances[i].task ? instances[i].task->difficulty : 0;
         }
 
         d["num_nodes"] = num_nodes;
@@ -640,6 +644,7 @@ public:
         d["scratch_pad_start_indices"] = py::none();
         d["scratch_pad_lengths"] = py::none();
         d["scratchpad_type"] = py::none();
+        d["difficulty"] = py::none();
         if (instances[0].task) {
             d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
 
@@ -647,6 +652,7 @@ public:
             d["task_lengths"] = task_lengths;
             d["true_task_start_indices"] = true_task_start_indices;
             d["true_task_lengths"] = true_task_lengths;
+            d["difficulty"] = difficulty;
             if (instances[0].scratch_pad) {
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
@@ -693,7 +699,6 @@ public:
         d["align_prefix_front_pad"] = args.tok->align_prefix_front_pad;
         d["min_vocab"] = args.min_vocab;
         d["max_vocab"] = args.max_vocab;
-
         return d;
     }
 
