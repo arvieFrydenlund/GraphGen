@@ -538,8 +538,10 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)[0]
     graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
     task_targets = b_n['prev_output_tokens']
+    true_task_targets = b_n['true_task_targets']
     true_task_gather_indices = task_gather_ids(b_n, is_true_task=True, pad_value=-1)[0]
     scratch_pad_gather_indices = scratchpad_gather_ids(b_n, pad_value=-1)[0]
+    scratch_pad_targets = b_n['scratch_pad_targets']
     positions = b_n['positions']
     if positions is None:
         positions = np.arange(src_tokens.shape[1])[None, :].repeat(src_tokens.shape[0], axis=0)
@@ -622,8 +624,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         # print so all tokens line up
         s = f'BATCH INDEX: {b}\n'
         target_start_idx = 0
+        true_target_start_idx = 0
+        scratch_pad_start_idx = 0
         if task_targets is not None:
             target_start_idx = b_n['task_start_indices'][b]
+            true_target_start_idx = b_n['true_task_start_indices'][b]
+            if scratch_pad_targets is not None:
+                scratch_pad_start_idx = b_n['scratch_pad_start_indices'][b]
         if positions is not None:
             s += 'Pos:   '
             s += pprint_tensor(b, positions, None, pos_pad)
@@ -632,9 +639,13 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         if task_targets is not None:
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
+            s += 'Tr Tgt:'
+            s += pprint_tensor(b, true_task_targets, rev_token_dict, pad, offset1=true_target_start_idx)
             s += f'TgtIdx:'
             s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
             if scratch_pad_gather_indices is not None:
+                s += 'ScrPad:'
+                s += pprint_tensor(b, scratch_pad_targets, rev_token_dict, pad, offset1=scratch_pad_start_idx)
                 s += f'SP Idx:'
                 s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
         if graph_edge_gather_indices is not None:

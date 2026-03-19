@@ -183,9 +183,6 @@ public:
             right_side_connect(right_side_connect), khops_no_repeats(khops_no_repeats),
             permutation_version(permutation_version), mask_to_vocab_size(mask_to_vocab_size), partition_method(partition_method) {
 
-        cout << "Before parsing kwargs in KhopsArgs constructor: " << endl;
-        this->print();
-
         parse_and_set_arg(kwargs, "max_khops", this->max_khops, max_khops);
         parse_and_set_arg(kwargs, "min_khops", this->min_khops, min_khops);
         parse_and_set_arg(kwargs, "min_prefix_length", this->min_prefix_length, min_prefix_length);
@@ -402,7 +399,7 @@ public:
          bool is_flat_model=true,
          bool align_prefix_front_pad=false,
          const py::kwargs &kwargs = py::kwargs(),
-         bool const print_args = true
+         bool const print_args = false
     ): graph_type(graph_type), min_vocab(min_vocab), max_vocab(max_vocab) {
 
         // deal with argument conflicts and dependencies
@@ -413,12 +410,11 @@ public:
             kwargs["use_graph_structure"] = false;
         }
 
-        for (auto item : kwargs) {
+        //for (auto item : kwargs) {
             // item.first is the key, item.second is the value
-            py::print("Key:", item.first, "Value:", item.second);
-        }
-        cout << endl;
-
+        //    py::print("Key:", item.first, "Value:", item.second);
+        //}
+        //cout << endl;
 
         if (task_type == "shortest_path"){
             task = new ShortestPathTaskArgs(kwargs);
