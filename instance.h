@@ -336,9 +336,7 @@ public:
                     task_length += 1;  // for end marker
                     true_task_length += 1;
                     if (scratch_pad) {
-                        tokenized_scratch_pad_targets.set_tok(
-                                static_cast<int>(scratch_pad->tokenized_inputs.shape()[0]),
-                                task_start_marker, should_repeat);
+                        tokenized_scratch_pad_targets.set_tok(scratch_pad_length, task_start_marker, should_repeat);
                         scratch_pad_length += 1; // for start of task token in scratch pad targets
                     }
 
@@ -498,7 +496,7 @@ public:
                                                    static_cast<int>(instances[i].tokenized_targets.shape()[1]));
                 if (instances[i].scratch_pad) {
                     max_tokenized_scratchpad_len = max(max_tokenized_scratchpad_len,
-                                                       static_cast<int>(instances[i].scratch_pad->tokenized_inputs.shape()[0]));
+                                                       static_cast<int>(instances[i].scratch_pad_length));
                     max_tokenized_scratchpad_labels = max(max_tokenized_scratchpad_labels,
                                                           static_cast<int>(instances[i].tokenized_scratch_pad_targets.shape()[1]));
                 }
