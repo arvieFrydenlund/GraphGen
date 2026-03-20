@@ -674,7 +674,6 @@ public:
         d["scratchpad_type"] = py::none();
         d["scratch_pad_start_indices"] = py::none();
         d["scratch_pad_lengths"] = py::none();
-        d["scratchpad_type"] = py::none();
         d["difficulty"] = py::none();
         if (instances[0].task) {
             d["prev_output_tokens"] = task_targets;  // fairseq naming convention, yuck
