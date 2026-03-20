@@ -23,11 +23,11 @@ Testing generation functions and pybind compile.
 
 def _graph_print(args, token_dict, pos_dict,
                  graph_type='path_star', # 'random_tree',  #'erdos_renyi',  #'path_star',
-                 task_type ='shortest_path', concat_edges=False, duplicate_edges=False,
+                 task_type ='shortest_path', concat_edges=True, duplicate_edges=False,
                  include_nodes_in_graph_tokenization=True, query_at_end=False, num_thinking_tokens=0,
                  scratchpad_type='bfs', use_unique_depth_markers=True,
                  scratchpad_as_prefix=False, no_graph=False,
-                 align_prefix_front_pad=False, use_graph_invariance=False, use_task_structure=False,
+                 align_prefix_front_pad=True, use_graph_invariance=False, use_task_structure=False,
                  use_graph_structure=True, use_full_structure=True,
                  batch_size=3):
     args.min_num_nodes = 25
