@@ -344,14 +344,14 @@ def main(max_vocab_size=200):
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
-    _graph_print(args, token_dict, pos_dict, batch_size=3)
+    # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
     # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
-    # _t_scratchpad_validation(args, token_dict, pos_dict)
+    _t_scratchpad_validation(args, token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)
 

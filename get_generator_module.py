@@ -882,6 +882,7 @@ def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 
 
 
 if __name__ == "__main__":
+    # RUN ME TO CONFIRM COMPILE
     np.set_printoptions(threshold=np.inf, edgeitems=10, linewidth=np.inf, precision=2, suppress=True, )
 
     print(f'Running from CWD: {os.getcwd()}')
@@ -894,15 +895,4 @@ if __name__ == "__main__":
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print(generator.help_str())
-
-    # d = generator.erdos_renyi(15, -1.0, 75, 125, False, False, shuffle_edges=False)
-    d = generator.euclidean(15, 2, -1, False, False, shuffle_edges=False)
-
-    for k, v in d.items():
-        print(f'{k}: {type(v)}')
-        if isinstance(v, np.ndarray):
-            print(f'\t {k}: {v.shape}, {v.dtype}')
-            print(v)
-        print()
-
 
