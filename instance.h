@@ -708,7 +708,7 @@ public:
                 d["ground_truths_gather_distances"] = gt_gather_indices_and_distances.second;
             }
             if (instances[0].graph->node_ranks_ptr){
-                auto node_ranks = batch_node_ranks<int>();
+                auto node_ranks = batch_node_ranks<int>(dictionary.at("<pad>"));
                 d["node_ranks"] = node_ranks;
             }
         } else {
