@@ -315,7 +315,7 @@ def _distance_scores(args, token_dict, pos_dict,
     reconstructions[0].plot(verbose=True)
 
 
-def main(max_vocab_size=200):
+def main(max_vocab_size=15):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -333,14 +333,14 @@ def main(max_vocab_size=200):
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(max_vocab_size, 20, 'D')
+    generator.set_default_dictionary(max_vocab_size, 0, 'D')
     token_dict = generator.get_dictionary()
     # sort by value
     d = dict(sorted(token_dict.items(), key=lambda item: item[1]))
     s = 'Dictionary: '
     for k, v in d.items():
         s += f'{k}: {v} '
-    print(s)
+    print(s + f' with limits: {generator.get_dictionary_vocab_limits()}')
     generator.set_default_pos_dictionary()
     pos_dict = generator.get_pos_dictionary()
 
@@ -348,10 +348,10 @@ def main(max_vocab_size=200):
 
     # _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    # _t_khops_gen(args, token_dict, pos_dict)
+    _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
-    _t_scratchpad_validation(args, token_dict, pos_dict)
+    # _t_scratchpad_validation(args, token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)
 

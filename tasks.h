@@ -754,6 +754,8 @@ public:
     vector<vector<int>> segments;
     vector<int> ground_truths;
 
+    bool return_multi_label_ground_truths = false;  // done in python now
+
     vector<int> get_segment(std::mt19937 &gen, const int min_value, const int max_value,
                             const int cur_value, const int segment_len, const bool is_last) const{
         auto segment = vector<int>(segment_len + 1); // +1 for ground truth
@@ -852,14 +854,19 @@ public:
         tokenized_query_inputs.resize(prefix_size, 1);
         tokenized_task_inputs.resize(task_size, 1);
 
-        auto multi_label_ground_truths = get_multi_label_ground_truths();
-        int max_num_labels = 1;
-        for (size_t i = 0; i < multi_label_ground_truths.size(); i++) {
-            if (multi_label_ground_truths[i].size() > static_cast<size_t>(max_num_labels)) {
-                max_num_labels = static_cast<int>(multi_label_ground_truths[i].size());
+        vector<vector<int>> multi_label_ground_truths;
+        if (return_multi_label_ground_truths) {
+            multi_label_ground_truths = get_multi_label_ground_truths();
+            int max_num_labels = 1;
+            for (size_t i = 0; i < multi_label_ground_truths.size(); i++) {
+                if (multi_label_ground_truths[i].size() > static_cast<size_t>(max_num_labels)) {
+                    max_num_labels = static_cast<int>(multi_label_ground_truths[i].size());
+                }
             }
+            tokenized_task_targets.resize(task_size, max_num_labels, pad);
+        } else {
+            tokenized_task_targets.resize(task_size, 1, pad);
         }
-        tokenized_task_targets.resize(task_size, max_num_labels, pad);
 
         int cur_idx = 0;
         for (size_t i = 0; i < segments.size(); i++) {
@@ -883,8 +890,13 @@ public:
         for (size_t i = 0; i < ground_truths.size(); i++) {
             tokenized_task_inputs(i + 1) = ground_truths[i];
             // tokenized_task_targets(i + 1, 0) = ground_truths[i];
-            for (size_t j = 0; j < multi_label_ground_truths[i].size(); j++) {
-                tokenized_task_targets(i + 1, j) = multi_label_ground_truths[i][j];
+
+            if (return_multi_label_ground_truths) {
+                for (size_t j = 0; j < multi_label_ground_truths[i].size(); j++) {
+                    tokenized_task_targets(i + 1, j) = multi_label_ground_truths[i][j];
+                }
+            } else {
+                tokenized_task_targets(i + 1, 0) = ground_truths[i];
             }
         }
         tokenized_task_inputs(tokenized_task_inputs.shape()[0] - 1) = task_end_marker;
