@@ -10,6 +10,7 @@
 #include <queue>
 #include <utility>
 #include <map>
+#include <set>
 #include "matrix.h"
 #include "args.h"
 #include "undirected_graphs.h"
@@ -618,7 +619,6 @@ public:
     PosArgs *pos_args;
     int vocab_size;
 
-
     vector<int> seq;
     vector<vector<int>> hops;
 
@@ -691,7 +691,7 @@ public:
                 if (cur_back_pointer[i] == -1) {
                     continue;
                 }
-                // store all hops for future use i.e. supervise intra-model via Markovian supervision
+                // store all hops in case of intermediate supervision
                 hops[kp][i] = seq[cur_back_pointer[i]];
             }
         }
@@ -713,7 +713,12 @@ public:
         auto task_size = 2 + static_cast<int>(seq.size()); // t_start, ground truths, t_end
         tokenized_query_inputs.resize(prefix_size, 1);
         tokenized_task_inputs.resize(task_size, 1);
-        tokenized_task_targets.resize(task_size, 1, pad);
+
+        if (task_args->intermediate_labels){
+            tokenized_task_targets.resize(task_size, static_cast<int>(hops.size()), pad);
+        } else {
+            tokenized_task_targets.resize(task_size, 1, pad);
+        }
 
         // need to tokenize k, which means k-values need to be in vocab, use depth markers for this as work around
         tokenized_query_inputs(0) = query_start_marker;
@@ -725,11 +730,26 @@ public:
         tokenized_task_targets(0, 0) = task_start_marker;
 
         auto khops = hops[hops.size() - 1];
+        auto set_of_hops = set<int>();
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
             if (khops[i] >= 0) {
                 if (!task_args->mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
-                    tokenized_task_targets(i + 1, 0) = khops[i];
+                    if (task_args->intermediate_labels) {  // put in all hops backwards as targets for intermediate supervision
+                        // can not have repeats
+                        set_of_hops.clear();
+                        for (size_t j = 0; j < hops.size(); j++) {
+                            auto v = hops[hops.size() - 1 - j][i];
+                            // check if in set, if so break
+                            if (set_of_hops.find(v) != set_of_hops.end()) {
+                                break;
+                            }
+                            set_of_hops.insert(v);
+                            tokenized_task_targets(i + 1, j) = v;
+                        }
+                    } else {
+                        tokenized_task_targets(i + 1, 0) = khops[i];
+                    }
                 }
             }
         }
