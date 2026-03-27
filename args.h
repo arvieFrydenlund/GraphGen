@@ -207,6 +207,7 @@ public:
             << ", right_side_connect=" << right_side_connect
             << ", permutation_version=" << permutation_version
             << ", mask_to_vocab_size=" << mask_to_vocab_size
+            << ", intermediate_labels=" << intermediate_labels
             << ", partition_method=" << partition_method
             << endl;
     }
