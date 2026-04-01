@@ -163,8 +163,8 @@ public:
             khops_k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
             khops_max_k = task_sample_dist.value()[task_sample_dist.value().size() - 1] + min_khops;
         } else {
-            khops_k = uniform_int_distribution<int>(min_khops, max_khops)(gen) + 1;  // this is [min, max]
-            khops_max_k = max_khops + 1;
+            khops_k = uniform_int_distribution<int>(min_khops, max_khops)(gen);  // this is [min, max]
+            khops_max_k = max_khops;
         }
         khops_prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
     }

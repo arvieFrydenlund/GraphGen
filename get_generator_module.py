@@ -129,6 +129,7 @@ def get_args_parser():
     parser.add_argument('--permutation_version', action='store_true', default=False,)
     parser.add_argument('--mask_to_vocab_size', action='store_true', default=False,)
     parser.add_argument('--mask_to_size', type=int, default=-1,)
+    parser.add_argument('--intermediate_labels', action='store_true', default=False,)
     parser.add_argument('--partition_method', type=str, default='uniform')
 
     # tokenization settings
@@ -169,6 +170,10 @@ def get_args_parser():
     parser.add_argument('--use_task_structure', action='store_true', default=False,)
     parser.add_argument('--use_graph_structure', action='store_true', default=False,)
     parser.add_argument('--use_full_structure', action='store_true', default=False,)
+
+    # debugging settings
+    parser.add_argument('--print_cpp_args', action='store_true', default=False,
+                        help='Whether to print the arguments passed to the C++ code for debugging purposes.')
 
     return parser
 
@@ -548,6 +553,7 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     positions = b_n['positions']
     if positions is None:
         positions = np.arange(src_tokens.shape[1])[None, :].repeat(src_tokens.shape[0], axis=0)
+    difficulty = b_n['difficulty']
 
     if print_shapes:
         print('src_tokens shape:', src_tokens.shape)
@@ -625,7 +631,10 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
     pos_pad = pos_dict.get('pad', -1)
     for b in idxs_:
         # print so all tokens line up
-        s = f'BATCH INDEX: {b}\n'
+        diff_str = ''
+        if difficulty is not None:
+            diff_str = f'Difficulty: {difficulty[b]}'
+        s = f'BATCH INDEX: {b}  {diff_str}\n'
         target_start_idx = 0
         true_target_start_idx = 0
         scratch_pad_start_idx = 0
@@ -642,8 +651,9 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
         if task_targets is not None:
             s += 'Tgt:   '
             s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
-            s += 'Tr Tgt:'
-            s += pprint_tensor(b, true_task_targets, rev_token_dict, pad, offset1=true_target_start_idx)
+            if b_n['task_type'] not in ('khops', 'khops_gen'):
+                s += 'Tr Tgt:'
+                s += pprint_tensor(b, true_task_targets, rev_token_dict, pad, offset1=true_target_start_idx)
             s += f'TgtIdx:'
             s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
             if scratch_pad_gather_indices is not None:

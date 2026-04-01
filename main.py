@@ -99,6 +99,8 @@ def _graph_plot(args, token_dict, pos_dict,
 
 # KHOPS
 def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False,
+             intermediate_labels=True, batch_size=20):
+def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False,
              mask_to_size=20, batch_size=50):
     args.task_type = "khops"
     args.min_khops = 1
@@ -107,7 +109,9 @@ def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_ve
     args.permutation_version = permutation_version
     args.mask_to_vocab_size = mask_to_vocab_size
     args.mask_to_size = mask_to_size
+    args.intermediate_labels = intermediate_labels
     args.batch_size = batch_size
+    args.print_cpp_args = True
 
     b_n = generator.khops_n(**vars(args))
 
