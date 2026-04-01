@@ -178,15 +178,15 @@ public:
     KhopsArgs(const py::kwargs &kwargs,
               int max_khops = 5, int min_khops = 2, int min_prefix_length = 3, int max_prefix_length = 20,
               bool right_side_connect = true, bool khops_no_repeats = true,
-              bool permutation_version = false, bool mask_to_vocab_size = false, int mask_to_size = -1,
-              bool permutation_version = false, bool mask_to_vocab_size = false, bool intermediate_labels = false,
+              bool permutation_version = false,
+              bool mask_to_vocab_size = false, int mask_to_size = -1,
+              bool intermediate_labels = false,
               const string &partition_method = "uniform") :
             TaskArgs("khops", kwargs), max_khops(max_khops), min_khops(min_khops),
             min_prefix_length(min_prefix_length), max_prefix_length(max_prefix_length),
             right_side_connect(right_side_connect), khops_no_repeats(khops_no_repeats),
-            permutation_version(permutation_version), mask_to_vocab_size(mask_to_vocab_size), mask_to_size(mask_to_size),
-            partition_method(partition_method) {
-            permutation_version(permutation_version), mask_to_vocab_size(mask_to_vocab_size),
+            permutation_version(permutation_version),
+            mask_to_vocab_size(mask_to_vocab_size), mask_to_size(mask_to_size),
             intermediate_labels(intermediate_labels), partition_method(partition_method) {
 
         parse_and_set_arg(kwargs, "max_khops", this->max_khops, max_khops);
@@ -197,8 +197,8 @@ public:
         parse_and_set_arg(kwargs, "khops_no_repeats", this->khops_no_repeats, khops_no_repeats);
         parse_and_set_arg<bool>(kwargs, "permutation_version", this->permutation_version, permutation_version);
         parse_and_set_arg<bool>(kwargs, "mask_to_vocab_size", this->mask_to_vocab_size, mask_to_vocab_size);
-        parse_and_set_arg<bool>(kwargs, "intermediate_labels", this->intermediate_labels, intermediate_labels);
         parse_and_set_arg(kwargs, "mask_to_size", this->mask_to_size, mask_to_size);
+        parse_and_set_arg<bool>(kwargs, "intermediate_labels", this->intermediate_labels, intermediate_labels);
         parse_and_set_arg(kwargs, "partition_method", this->partition_method, partition_method);
     }
 
