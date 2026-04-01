@@ -98,11 +98,15 @@ def _graph_plot(args, token_dict, pos_dict,
 
 
 # KHOPS
-def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False, batch_size=3):
+def _t_khops(args, token_dict, pos_dict, right_side_connect=True, permutation_version=False, mask_to_vocab_size=False,
+             mask_to_size=20, batch_size=50):
     args.task_type = "khops"
+    args.min_khops = 1
+    args.max_khops = 1
     args.right_side_connect = right_side_connect
     args.permutation_version = permutation_version
     args.mask_to_vocab_size = mask_to_vocab_size
+    args.mask_to_size = mask_to_size
     args.batch_size = batch_size
 
     b_n = generator.khops_n(**vars(args))
@@ -333,7 +337,7 @@ def main(max_vocab_size=15):
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
     print("Setting dictionary")
-    generator.set_default_dictionary(max_vocab_size, 0, 'D')
+    generator.set_default_dictionary(max_vocab_size, 15, 'D')
     token_dict = generator.get_dictionary()
     # sort by value
     d = dict(sorted(token_dict.items(), key=lambda item: item[1]))
@@ -346,9 +350,9 @@ def main(max_vocab_size=15):
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
-    # _t_khops(args, token_dict, pos_dict)
+    _t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    _t_khops_gen(args, token_dict, pos_dict)
+    # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)

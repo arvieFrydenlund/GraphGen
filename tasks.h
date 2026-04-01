@@ -728,7 +728,11 @@ public:
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
             if (khops[i] >= 0) {
-                if (!task_args->mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
+                if (task_args->mask_to_size > 0 && i > task_args->mask_to_size) {
+                    tokenized_task_targets(i + 1, 0) = khops[i];
+                } else if (task_args->mask_to_vocab_size &&  i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
+                    tokenized_task_targets(i + 1, 0) = khops[i];
+                } else if (task_args->mask_to_size < 0 && !task_args->mask_to_vocab_size) {
                     tokenized_task_targets(i + 1, 0) = khops[i];
                 }
             }
