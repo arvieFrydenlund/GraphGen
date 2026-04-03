@@ -331,12 +331,12 @@ public:
                 tokenized_inputs.set_tok(cur,end_marker, should_repeat);  // tokenized_inputs(cur, 0) = end_marker;
                 if (task) {
                     tokenized_targets.set_tok(cur_task_pos, end_marker,
-                                              should_repeat); // tokenized_targets(cur_task_pos, 0) = end_marker; // target also end marker
-                    tokenized_true_targets.set_tok(true_task_length, end_marker, should_repeat);
+                                              false); // tokenized_targets(cur_task_pos, 0) = end_marker; // target also end marker
+                    tokenized_true_targets.set_tok(true_task_length, end_marker, false);
                     task_length += 1;  // for end marker
                     true_task_length += 1;
                     if (scratch_pad) {
-                        tokenized_scratch_pad_targets.set_tok(scratch_pad_length, task_start_marker, should_repeat);
+                        tokenized_scratch_pad_targets.set_tok(scratch_pad_length, task_start_marker, false);
                         scratch_pad_length += 1; // for start of task token in scratch pad targets
                     }
 
