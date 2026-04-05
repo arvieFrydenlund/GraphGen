@@ -158,13 +158,17 @@ public:
 
 
     void make_khops(std::mt19937 &gen, const int min_khops, const int max_khops,
-                    const int min_prefix_length, const int max_prefix_length, optional<vector<float>> task_sample_dist) {
+                    int min_prefix_length, const int max_prefix_length, optional<vector<float>> task_sample_dist) {
         if (task_sample_dist.has_value()){
             khops_k = std::discrete_distribution<int>(task_sample_dist->begin(), task_sample_dist->end())(gen) + min_khops;
             khops_max_k = task_sample_dist.value()[task_sample_dist.value().size() - 1] + min_khops;
         } else {
             khops_k = uniform_int_distribution<int>(min_khops, max_khops)(gen);  // this is [min, max]
             khops_max_k = max_khops;
+        }
+
+        if (min_prefix_length < khops_k * 3){
+            min_prefix_length = khops_k * 3;  // this is the absolute minimum to have a valid khops graph, but we will usually want more than this
         }
         khops_prefix_length = uniform_int_distribution<int>(min_prefix_length, max_prefix_length)(gen);
     }

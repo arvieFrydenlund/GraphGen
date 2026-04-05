@@ -125,6 +125,10 @@ def _t_int_partition(Q=200, N=9, num=10000):
 
 def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, khops_no_repeats=True, batch_size=20):
     args.task_type = "khops_gen"
+    args.min_khops = 1
+    args.max_khops = 5
+    args.min_prefix_length = 1
+    args.max_prefix_length = 20
     args.right_side_connect = right_side_connect
     args.khops_no_repeats = khops_no_repeats
     args.batch_size = batch_size
@@ -351,9 +355,9 @@ def main(max_vocab_size=15):
 
     # _graph_print(args, token_dict, pos_dict, batch_size=3)
 
-    _t_khops(args, token_dict, pos_dict)
+    #_t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    # _t_khops_gen(args, token_dict, pos_dict)
+    _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)

@@ -462,6 +462,11 @@ inline py::dict balanced_n(
 void set_khop_kwargs(const int min_khops, const int max_khops,
                      const int min_prefix_length, const int max_prefix_length,
                      py::kwargs &kwargs) {
+
+    if ( max_prefix_length < max_khops * 3){
+        throw std::invalid_argument("Invalid arguments: max_prefix_length < max_khops * 3.  This is because the prefix needs to be long enough to encode the k-hop structure.");
+    }
+
     kwargs["min_khops"] = min_khops;
     kwargs["max_khops"] = max_khops;
     kwargs["min_prefix_length"] = min_prefix_length;
