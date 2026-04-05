@@ -126,10 +126,10 @@ def _t_int_partition(Q=200, N=9, num=10000):
 
 def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, khops_no_repeats=True, batch_size=20):
     args.task_type = "khops_gen"
-    args.min_khops = 1
-    args.max_khops = 5
+    args.min_khops = 2
+    args.max_khops = 6
     args.min_prefix_length = 1
-    args.max_prefix_length = 20
+    args.max_prefix_length = 30
     args.right_side_connect = right_side_connect
     args.khops_no_repeats = khops_no_repeats
     args.batch_size = batch_size
