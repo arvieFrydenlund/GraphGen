@@ -128,6 +128,7 @@ def get_args_parser():
                         help='for khops gen and MTP')
     parser.add_argument('--permutation_version', action='store_true', default=False,)
     parser.add_argument('--mask_to_vocab_size', action='store_true', default=False,)
+    parser.add_argument('--mask_to_size', type=int, default=-1,)
     parser.add_argument('--intermediate_labels', action='store_true', default=False,)
     parser.add_argument('--partition_method', type=str, default='uniform')
 

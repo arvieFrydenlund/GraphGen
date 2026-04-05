@@ -697,6 +697,24 @@ public:
         }
     }
 
+    void _set_targets(set<int> &set_of_hops, const size_t i) {
+        if (task_args->intermediate_labels) {  // put in all hops backwards as targets for intermediate supervision
+            // can not have repeats
+            set_of_hops.clear();
+            for (size_t j = 0; j < hops.size(); j++) {
+                auto v = hops[hops.size() - 1 - j][i];
+                // check if in set, if so break
+                if (set_of_hops.find(v) != set_of_hops.end()) {
+                    break;
+                }
+                set_of_hops.insert(v);
+                tokenized_task_targets(i + 1, j) = v;
+            }
+        } else {
+            tokenized_task_targets(i + 1, 0) = hops[hops.size() - 1][i];
+        }
+    }
+
     void tokenize(
             const map<std::string, int> &dictionary,
             const vector<int> &node_shuffle_map,  // not really nodes but whatever the vocab is
@@ -729,27 +747,16 @@ public:
         tokenized_task_inputs(0) = task_start_marker;
         tokenized_task_targets(0, 0) = task_start_marker;
 
-        auto khops = hops[hops.size() - 1];
         auto set_of_hops = set<int>();
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
-            if (khops[i] >= 0) {
-                if (!task_args->mask_to_vocab_size || i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
-                    if (task_args->intermediate_labels) {  // put in all hops backwards as targets for intermediate supervision
-                        // can not have repeats
-                        set_of_hops.clear();
-                        for (size_t j = 0; j < hops.size(); j++) {
-                            auto v = hops[hops.size() - 1 - j][i];
-                            // check if in set, if so break
-                            if (set_of_hops.find(v) != set_of_hops.end()) {
-                                break;
-                            }
-                            set_of_hops.insert(v);
-                            tokenized_task_targets(i + 1, j) = v;
-                        }
-                    } else {
-                        tokenized_task_targets(i + 1, 0) = khops[i];
-                    }
+            if (hops[hops.size() - 1][i] >= 0) {
+                if (task_args->mask_to_size > 0 && i > task_args->mask_to_size) {
+                    this->_set_targets(set_of_hops, i);
+                } else if (task_args->mask_to_vocab_size &&  i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
+                    this->_set_targets(set_of_hops, i);
+                } else if (task_args->mask_to_size < 0 && !task_args->mask_to_vocab_size) {
+                    this->_set_targets(set_of_hops, i);
                 }
             }
         }
