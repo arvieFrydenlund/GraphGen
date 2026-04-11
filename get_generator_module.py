@@ -156,6 +156,7 @@ def get_args_parser():
                         help='Whether to include node tokens in the graph tokenization, after the edges, '
                              'i.e. edge list and then node list.')
     parser.add_argument('--num_thinking_tokens', type=int, default=0)
+    parser.add_argument('--scratchpad_as_prefix', action='store_true', default=False)
     parser.add_argument('--is_flat_model', action='store_true', default=True,
                         help='Whether the model is flat (i.e. single input tensor) or uses separate encoder/decoder inputs.')
     parser.add_argument('--align_prefix_front_pad', action='store_true', default=False,
@@ -657,8 +658,9 @@ def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=Fal
             s += f'TgtIdx:'
             s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
             if scratch_pad_gather_indices is not None:
-                s += 'ScrPad:'
-                s += pprint_tensor(b, scratch_pad_targets, rev_token_dict, pad, offset1=scratch_pad_start_idx)
+                if scratch_pad_targets is not None:
+                    s += 'ScrPad:'
+                    s += pprint_tensor(b, scratch_pad_targets, rev_token_dict, pad, offset1=scratch_pad_start_idx)
                 s += f'SP Idx:'
                 s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
         if graph_edge_gather_indices is not None:

@@ -766,7 +766,7 @@ public:
         for (size_t i = 0; i < seq.size(); i++) {
             tokenized_task_inputs(i + 1) = seq[i];
             if (hops[hops.size() - 1][i] >= 0) {
-                if (task_args->mask_to_size > 0 && i > task_args->mask_to_size) {
+                if (task_args->mask_to_size > 0 && i > static_cast<size_t>(task_args->mask_to_size)) {
                     this->_set_targets(set_of_hops, i);
                 } else if (task_args->mask_to_vocab_size &&  i >= seq.size() - vocab_size) {  // mask all but last vocab_size tokens
                     this->_set_targets(set_of_hops, i);

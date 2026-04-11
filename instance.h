@@ -296,13 +296,13 @@ public:
                     for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++) {
                         tokenized_inputs.copy_tok(scratch_pad->tokenized_inputs, cur, i,
                                  should_repeat);  // tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
-                        tokenized_scratch_pad_targets.copy_tok(scratch_pad->tokenized_targets, i, i,
-                                                   should_repeat);  // tokenized_scratch_pad_targets(cur_task_pos, 0) = scratch_pad->tokenized_targets(i, 0);
                         tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
                         for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
                             tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                         }
                         if (!args.tok->scratchpad_as_prefix) {  // if part of targets
+                            tokenized_scratch_pad_targets.copy_tok(scratch_pad->tokenized_targets, i, i,
+                                                                   should_repeat);  // tokenized_scratch_pad_targets(cur_task_pos, 0) = scratch_pad->tokenized_targets(i, 0);
                             tokenized_targets.copy_tok(scratch_pad->tokenized_targets, cur_task_pos, i,
                                                        should_repeat);
                             cur_task_pos++;
@@ -336,10 +336,11 @@ public:
                     task_length += 1;  // for end marker
                     true_task_length += 1;
                     if (scratch_pad) {
-                        tokenized_scratch_pad_targets.set_tok(scratch_pad_length, task_start_marker, false);
+                        if (!args.tok->scratchpad_as_prefix) {
+                            tokenized_scratch_pad_targets.set_tok(scratch_pad_length, task_start_marker, false);
+                        }
                         scratch_pad_length += 1; // for start of task token in scratch pad targets
                     }
-
                 }
                 tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
                 for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
@@ -468,8 +469,8 @@ public:
         int max_tokenized_targets_len = 0;
         int max_tokenized_targets_labels = 0;
         int max_tokenized_true_targets_len = 0;
-        int max_tokenized_scratchpad_len = 0;
-        int max_tokenized_scratchpad_labels = 0;
+        int max_tokenized_scratchpad_len = 1;  // issue with scratch pad as prefix and init empty matrix
+        int max_tokenized_scratchpad_labels = 1;
         int max_tokenized_positions_len = 0;
         int max_tokenized_positions_struct = 0;
         int max_prefix_size = 0;
@@ -497,8 +498,10 @@ public:
                 if (instances[i].scratch_pad) {
                     max_tokenized_scratchpad_len = max(max_tokenized_scratchpad_len,
                                                        static_cast<int>(instances[i].scratch_pad_length));
-                    max_tokenized_scratchpad_labels = max(max_tokenized_scratchpad_labels,
-                                                          static_cast<int>(instances[i].tokenized_scratch_pad_targets.shape()[1]));
+                    if (!args.tok->scratchpad_as_prefix) {
+                        max_tokenized_scratchpad_labels = max(max_tokenized_scratchpad_labels,
+                                                              static_cast<int>(instances[i].tokenized_scratch_pad_targets.shape()[1]));
+                    }
                 }
             }
 
@@ -597,8 +600,10 @@ public:
                 true_task_lengths_ar(i) = instances[i].true_task_length;
 
                 if (instances[i].scratch_pad) {
-                    copy_to_numpy(scratch_pad_targets, instances[i].tokenized_scratch_pad_targets, 0, i); // scratch_pad_targets_ar(i, j, k) = instances[i].tokenized_scratch_pad_targets(j, k);  // never any offset
-
+                    if (!args.tok->scratchpad_as_prefix) {
+                        copy_to_numpy(scratch_pad_targets, instances[i].tokenized_scratch_pad_targets, 0,
+                                      i); // scratch_pad_targets_ar(i, j, k) = instances[i].tokenized_scratch_pad_targets(j, k);  // never any offset
+                    }
                     scratch_pad_start_indices_ar(i) = instances[i].scratch_pad_start_idx + offset;
                     scratch_pad_lengths_ar(i) = instances[i].scratch_pad_length;
                 }
@@ -683,11 +688,14 @@ public:
             d["true_task_start_indices"] = true_task_start_indices;
             d["true_task_lengths"] = true_task_lengths;
             d["difficulty"] = difficulty;
+
             if (instances[0].scratch_pad) {
-                d["scratch_pad_targets"] = scratch_pad_targets;
+                if (!args.tok->scratchpad_as_prefix) {
+                    d["scratch_pad_targets"] = scratch_pad_targets;
+                }
+                d["scratchpad_type"] = args.sp->scratchpad_type;
                 d["scratch_pad_start_indices"] = scratch_pad_start_indices;
                 d["scratch_pad_lengths"] = scratch_pad_lengths;
-                d["scratchpad_type"] = args.sp->scratchpad_type;
             }
         }
 

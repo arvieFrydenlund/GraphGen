@@ -169,6 +169,8 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
     args.use_unique_depth_markers = use_unique_depth_markers
+    args.scratchpad_as_prefix = True
+    args.no_graph = True
     b_n = generator.get_graph(args, batch_size=batch_size)
     # generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
@@ -199,6 +201,17 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         #out = generator.verify_dfs_gens(distances, queries, gens, lengths, use_unique_depth_markers=use_unique_depth_markers)
         # print(f'DFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
         pass
+
+
+def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='bfs'):
+    args.batch_size = batch_size
+    args.task_type = 'shortest_path'
+    args.scratchpad_type = scratchpad_type
+    # args.scratchpad_as_prefix = True
+    # args.no_graph = True
+    args.use_unique_depth_markers = use_unique_depth_markers
+    b_n = generator.get_graph(args, batch_size=batch_size)
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
 def _t_random_trees(args, token_dict, pos_dict, batch_size=20):
@@ -325,7 +338,7 @@ def _distance_scores(args, token_dict, pos_dict,
     reconstructions[0].plot(verbose=True)
 
 
-def main(max_vocab_size=15):
+def main(max_vocab_size=50):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -358,10 +371,11 @@ def main(max_vocab_size=15):
 
     #_t_khops(args, token_dict, pos_dict)
     # _t_int_partition()
-    _t_khops_gen(args, token_dict, pos_dict)
+    # _t_khops_gen(args, token_dict, pos_dict)
 
     # _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
+    _t_given_scratchpad_validation(args,  token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)
 
