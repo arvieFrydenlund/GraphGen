@@ -389,7 +389,7 @@ public:
             auto start = queries.at(b, 0); //paths.at(b, 0);
             auto end = queries.at(b, 1); //paths.at(b, lengths.at(b) - 1);
             // check start and end of path match query
-            if (start != paths.at(b, 0) || end != paths.at(b, lengths.at(b) - 1)) {
+            if (lengths.at(b) < 1 || start != paths.at(b, 0) || end != paths.at(b, lengths.at(b) - 1)) {
                 ra(b) = -1;
                 continue;
             }

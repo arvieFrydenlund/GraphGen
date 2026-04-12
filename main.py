@@ -204,7 +204,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         pass
 
 
-def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='bfs'):
+def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=False, batch_size=20, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
