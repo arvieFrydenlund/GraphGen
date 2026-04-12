@@ -394,13 +394,13 @@ public:
                 continue;
             }
             // check there exists a path between start and end
-            if (start >= distances.shape(0) || end >= distances.shape(1)) {
-                ra(b) = -1;
+            if (start >= distances.shape(1) || end >= distances.shape(2)) {
+                ra(b) = -2;
                 continue;
             }
             auto shortest_distance = distances.at(b, start, end);
             if (shortest_distance < 0 || shortest_distance > inf - 1) {
-                ra(b) = -1;
+                ra(b) = -3;
                 break;
             }
             // validate path
@@ -408,13 +408,13 @@ public:
             auto cur = start;
             for (int j = 1; j < lengths.at(b); j++) {
                 auto next = paths.at(b, j);
-                if (cur >= distances.shape(0) || next >= distances.shape(1)) {
-                    ra(b) = -1;
+                if (cur >= distances.shape(1) || next >= distances.shape(2)) {
+                    ra(b) = -4;
                     break;
                 }
                 auto cur_d = distances.at(b, cur, next);
                 if (cur_d <= 0.0 || shortest_distance > inf - 1) {
-                    ra(b) = -1;
+                    ra(b) = -5;
                     break;
                 }
                 path_dist += cur_d;

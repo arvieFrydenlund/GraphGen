@@ -171,6 +171,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
     args.use_unique_depth_markers = use_unique_depth_markers
     args.scratchpad_as_prefix = True
     args.no_graph = True
+    args.align_prefix_front_pad = True
     b_n = generator.get_graph(args, batch_size=batch_size)
     # generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
@@ -207,8 +208,9 @@ def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
-    # args.scratchpad_as_prefix = True
-    # args.no_graph = True
+    args.scratchpad_as_prefix = True
+    args.no_graph = True
+    args.align_prefix_front_pad = True
     args.use_unique_depth_markers = use_unique_depth_markers
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
