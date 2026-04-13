@@ -233,7 +233,8 @@ public:
     template<typename T>
     static int verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
                               const int start, const int end, const vector<int> &gen,
-                              const bool check_special_tokens = true) {
+                              const bool check_special_tokens = true,
+                              const bool include_queue = false) {
         /* This should work regardless of order of adjacency list
          *
          * -1 if special tokens are wrong, 0 if not a valid BFS gen, 1 if valid BFS gen

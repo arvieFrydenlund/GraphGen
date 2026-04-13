@@ -237,14 +237,20 @@ public:
     bool sort_adjacency_lists;  // doesn't do anything anymore
     bool use_unique_depth_markers;
     bool stop_once_found;
+    bool include_queue;
+    bool reverse_adjacency_lists;
 
     BFSScratchpadArgs(const py::kwargs &kwargs,
-                      bool sort_adjacency_lists=true, bool use_unique_depth_markers=true, bool stop_once_found=true) :
+                      bool sort_adjacency_lists=true, bool use_unique_depth_markers=true, bool stop_once_found=true,
+                      bool include_queue=false, bool reverse_adjacency_lists=false) :
             ScratchpadArgs("bfs", kwargs), sort_adjacency_lists(sort_adjacency_lists),
-            use_unique_depth_markers(use_unique_depth_markers), stop_once_found(stop_once_found) {
+            use_unique_depth_markers(use_unique_depth_markers), stop_once_found(stop_once_found),
+            include_queue(include_queue), reverse_adjacency_lists(reverse_adjacency_lists) {
         parse_and_set_arg(kwargs, "sort_adjacency_lists", this->sort_adjacency_lists, sort_adjacency_lists);
         parse_and_set_arg(kwargs, "use_unique_depth_markers", this->use_unique_depth_markers, use_unique_depth_markers);
         parse_and_set_arg(kwargs, "stop_once_found", this->stop_once_found, stop_once_found);
+        parse_and_set_arg(kwargs, "include_queue", this->include_queue, include_queue);
+        parse_and_set_arg(kwargs, "reverse_adjacency_lists", this->reverse_adjacency_lists, reverse_adjacency_lists);
     }
 
     virtual void print() const {
