@@ -503,7 +503,7 @@ public:
         tokenized_query_inputs(3) = query_end_marker;
         set_tokenized_pos(query_size, task_size, pos_dictionary);
 
-        difficulty = 0; // no hops
+        difficulty = static_cast<int>(path.size());  //  not multihop difficulty but does control depth
     }
 };
 

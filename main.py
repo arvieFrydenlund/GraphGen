@@ -155,16 +155,20 @@ def _t_khops_gen(args, token_dict, pos_dict, right_side_connect=True, khops_no_r
 
 
 # Scratchpads
-def _t_bfs_task(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20):
+def _t_bfs_task(args, token_dict, pos_dict, use_unique_depth_markers=True, include_queue=False, reverse_adjacency_lists=False, duplicate_adjacency_lists=True, batch_size=20):
     args.batch_size = batch_size
     args.task_type = 'bfs'
     args.scratchpad_type = 'none'
     args.use_unique_depth_markers = use_unique_depth_markers
+    args.include_queue = include_queue
+    args.reverse_adjacency_lists = reverse_adjacency_lists
+    args.duplicate_adjacency_lists = duplicate_adjacency_lists
+    args.align_prefix_front_pad = True
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
-def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=20, scratchpad_type='bfs'):
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=250, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
@@ -204,7 +208,7 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         pass
 
 
-def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=False, batch_size=20, scratchpad_type='bfs'):
+def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=1000, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
@@ -212,6 +216,10 @@ def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_
     args.no_graph = True
     args.align_prefix_front_pad = True
     args.use_unique_depth_markers = use_unique_depth_markers
+    args.min_num_nodes = 100
+    args.max_num_nodes = 100
+    args.min_path_length = 10
+    args.max_path_length = 10
     b_n = generator.get_graph(args, batch_size=batch_size)
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
@@ -340,7 +348,7 @@ def _distance_scores(args, token_dict, pos_dict,
     reconstructions[0].plot(verbose=True)
 
 
-def main(max_vocab_size=50):
+def main(max_vocab_size=100):
 
     parser = generator.get_args_parser()
     args = parser.parse_args()
@@ -353,7 +361,7 @@ def main(max_vocab_size=50):
 
     print(f'Random seed is {generator.get_seed()}')
 
-    generator.set_seed(42)
+    generator.set_seed(11723)
     # generator.set_seed(3172477368)
     print(f'Random seed is {generator.get_seed()} after setting to 42')
 
@@ -375,9 +383,9 @@ def main(max_vocab_size=50):
     # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
 
-    # _t_bfs_task(args, token_dict, pos_dict)
+    _t_bfs_task(args, token_dict, pos_dict)
     # _t_scratchpad_validation(args, token_dict, pos_dict)
-    _t_given_scratchpad_validation(args,  token_dict, pos_dict)
+    # _t_given_scratchpad_validation(args,  token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)
 

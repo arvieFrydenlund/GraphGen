@@ -107,6 +107,8 @@ def get_args_parser():
     parser.add_argument('--use_unique_depth_markers', action='store_true', default=False,
                         help='Whether to use unique depth markers when generating BFS/DFS scratchpad.')
     parser.add_argument('--stop_once_found', action='store_true', default=True, help='')
+    parser.add_argument('--include_queue', action='store_true', default=False)
+    parser.add_argument('--reverse_adjacency_lists', action='store_true', default=False)
     parser.add_argument('--task_sample_dist', nargs='*', default=None,
                         help='Optional sampling distribution for different task types.'
                              ' E.g. for shortest path tasks, [shortest_path, center, centroid].'

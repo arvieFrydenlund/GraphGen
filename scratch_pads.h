@@ -162,23 +162,40 @@ public:
 
         int num_tokens = 1;  // start of scratchpad
         int max_targets = 1;  // if we want to do label smoothing over the adjacency list
+        int prior_count = 1;
+        int new_prior_count = 0;
         for (size_t i = 0; i < levels.size(); i++) {
             num_tokens += 1; // depth marker
-            for (auto &p: levels[i]) {
+            int j = 0;
+            for (auto &p: levels[i]) {  // [ ]
                 auto nbrs = p.second;
-                num_tokens += 1 + 2 + nbrs.size(); //head node + both [ ] + nbrs
+                num_tokens += 1 + 2 + static_cast<int>(nbrs.size()); //head node + both [ ] + nbrs
+                new_prior_count += static_cast<int>(nbrs.size());
+                if (sp_args->duplicate_adjacency_lists){
+                    num_tokens += 2 + static_cast<int>(nbrs.size()); //  { } + nbrs, note we are using queue braces incase
+                }
+                if (sp_args->include_queue) {  // { }
+                    num_tokens += 2 + prior_count - j;  //  current queue size + both { }
+                }
+                j++;
+
                 if (nbrs.size() > static_cast<size_t>(max_targets)) {
                     max_targets = static_cast<int>(nbrs.size());
                 }
+
             }
+            prior_count = new_prior_count;
+            new_prior_count = 0;
+
         }
+
         tokenized_inputs = Matrix<int>(num_tokens, 1);
         // tokenized_targets = Matrix<int>(num_tokens, max_targets, dictionary.at("<pad>"));  // if we want to do label smoothing over the adjacency list
         tokenized_targets = Matrix<int>(num_tokens, 1, dictionary.at("<pad>"));
         int cur = 0;
         tokenized_inputs(cur, 0) = dictionary.at("#");
         tokenized_targets(cur, 0) = dictionary.at("#");
-        cur += 1;
+        cur++;
 
         // Get the initial adjacency list order
         // start node as only item in new_levels[0]
@@ -190,13 +207,54 @@ public:
             }
             tokenized_inputs(cur, 0) = dictionary.at(marker);
             tokenized_targets(cur, 0) = dictionary.at(marker);
-            cur += 1;
+            cur++;
 
             auto next_adj_orders = vector<int>{};
             // cur < num_tokens needed for when stop_once_found is true
             for (size_t j = 0; j < prior_adj_orders.size() and cur < num_tokens; j++) {  // process each node in level
                 auto node = prior_adj_orders[j];
                 auto nbrs = levels[i][node];
+                auto write_nbrs = nbrs;
+                if (sp_args->reverse_adjacency_lists) {  // reverse nbrs
+                    write_nbrs = vector<int>(nbrs);  // copy and reverse
+                    std::reverse(write_nbrs.begin(), write_nbrs.end());
+                }
+                cout << "Processing node " << node << " with neighbors: ";
+                for (auto n: nbrs) {
+                    cout << n << " ";
+                }
+                cout << endl;
+                cout << "\tWith Q: ";
+                for (size_t k = j; k < prior_adj_orders.size(); k++) {
+                    cout << prior_adj_orders[k] << " ";
+                }
+                cout << endl;
+                cout << "\tThis has levels[i].size = " << levels[i].size() << " and j = " << j << endl;
+
+                if (sp_args->include_queue) {
+
+
+
+                    // write in queue tokens with current queue order
+                    tokenized_inputs(cur, 0) = dictionary.at("{");
+                    tokenized_targets(cur, 0) = dictionary.at("{");
+                    cur++;
+                    if(sp_args->reverse_adjacency_lists){
+                        for (size_t k = prior_adj_orders.size(); k > j; k--, cur++) {
+                            tokenized_inputs(cur, 0) = node_shuffle_map[prior_adj_orders[k-1]];
+                            tokenized_targets(cur, 0) = node_shuffle_map[prior_adj_orders[k-1]];
+                        }
+                    } else {
+                        for (size_t k = j; k < prior_adj_orders.size(); k++, cur++) {
+                            tokenized_inputs(cur, 0) = node_shuffle_map[prior_adj_orders[k]];
+                            tokenized_targets(cur, 0) = node_shuffle_map[prior_adj_orders[k]];
+                        }
+                    }
+                    tokenized_inputs(cur, 0) = dictionary.at("}");
+                    tokenized_targets(cur, 0) = dictionary.at("}");
+                    cur++;
+                }
+
                 // write in node
                 tokenized_inputs(cur, 0) = node_shuffle_map[node];
                 tokenized_targets(cur, 0) = node_shuffle_map[node];
@@ -205,20 +263,36 @@ public:
                 tokenized_targets(cur, 0) = dictionary.at("[");
                 cur++;
                 for (size_t k = 0; k < nbrs.size(); k++, cur++) {
-                    tokenized_inputs(cur, 0) = node_shuffle_map[nbrs[k]];
+                    tokenized_inputs(cur, 0) = node_shuffle_map[write_nbrs[k]];
                     // if we want to do label smoothing over the adjacency list
                     // for (size_t t = k; t < nbrs.size(); t++) {
                     //     tokenized_targets(cur, t - k) = node_shuffle_map[nbrs[t]];
                     // }
-                    tokenized_targets(cur, 0) = node_shuffle_map[nbrs[k]];
+                    tokenized_targets(cur, 0) = node_shuffle_map[write_nbrs[k]];
                     next_adj_orders.push_back(nbrs[k]);
                 }
                 tokenized_inputs(cur, 0) = dictionary.at("]");
                 tokenized_targets(cur, 0) = dictionary.at("]");
                 cur++;
+
+                if(sp_args->duplicate_adjacency_lists){
+                    tokenized_inputs(cur, 0) = dictionary.at("{");
+                    tokenized_targets(cur, 0) = dictionary.at("{");
+                    cur++;
+                    // reverse the order
+                    std::reverse(write_nbrs.begin(), write_nbrs.end());
+                    for (size_t k = 0; k < nbrs.size(); k++, cur++) {
+                        tokenized_inputs(cur, 0) = node_shuffle_map[write_nbrs[k]];
+                        tokenized_targets(cur, 0) = node_shuffle_map[write_nbrs[k]];
+                    }
+                    tokenized_inputs(cur, 0) = dictionary.at("}");
+                    tokenized_targets(cur, 0) = dictionary.at("}");
+                    cur++;
+                }
             }
             prior_adj_orders = next_adj_orders;
         }
+        cout << "Finished tokenizing BFS scratchpad with " << num_tokens << " tokens and max targets " << max_targets << endl;
     }
 
     static bool depth_check(const int id, const int cut_depth, const map<int, std::string> reverse_dict){
@@ -309,7 +383,8 @@ public:
                                                                 py::array_t<T, py::array::c_style> &queries,
                                                                 py::array_t<T, py::array::c_style> &gens,
                                                                 py::array_t<T, py::array::c_style> &lengths,
-                                                                const bool check_special_tokens = true) {
+                                                                const bool check_special_tokens = true,
+                                                                const bool include_queue = false) {
         auto batch_size = gens.shape(0);
         auto out = py::array_t<int, py::array::c_style>(static_cast<int>(batch_size));
         out[py::make_tuple(py::ellipsis())] = -5; // initialize array
@@ -330,7 +405,7 @@ public:
                     rd(i, j) = bd(b, i, j);
                 }
             }
-            auto res = verify_bfs_gen(distances_slice, start, end, gen, check_special_tokens);
+            auto res = verify_bfs_gen(distances_slice, start, end, gen, check_special_tokens, include_queue);
             ra(b) = res;
         }
         return out;
