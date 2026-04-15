@@ -219,22 +219,8 @@ public:
                     write_nbrs = vector<int>(nbrs);  // copy and reverse
                     std::reverse(write_nbrs.begin(), write_nbrs.end());
                 }
-                cout << "Processing node " << node << " with neighbors: ";
-                for (auto n: nbrs) {
-                    cout << n << " ";
-                }
-                cout << endl;
-                cout << "\tWith Q: ";
-                for (size_t k = j; k < prior_adj_orders.size(); k++) {
-                    cout << prior_adj_orders[k] << " ";
-                }
-                cout << endl;
-                cout << "\tThis has levels[i].size = " << levels[i].size() << " and j = " << j << endl;
 
                 if (sp_args->include_queue) {
-
-
-
                     // write in queue tokens with current queue order
                     tokenized_inputs(cur, 0) = dictionary.at("{");
                     tokenized_targets(cur, 0) = dictionary.at("{");
@@ -292,34 +278,238 @@ public:
             }
             prior_adj_orders = next_adj_orders;
         }
-        cout << "Finished tokenizing BFS scratchpad with " << num_tokens << " tokens and max targets " << max_targets << endl;
     }
 
-    static bool depth_check(const int id, const int cut_depth, const map<int, std::string> reverse_dict){
+    static bool depth_check(const int id, const int cur_depth, const map<int, std::string> reverse_dict){
         const auto &pred = reverse_dict.at(id);
         const auto &extra_after_symbol = get_dictionary_extra_after_symbol();
-        if (pred == extra_after_symbol || pred == extra_after_symbol + std::to_string(cut_depth)){
+        if (pred == extra_after_symbol || pred == extra_after_symbol + std::to_string(cur_depth)){
             return true;
         }
         return false;
     }
 
+
+    static pair<int, int> find_depth_span(const int cur_s,  const int cur_depth, const vector<int> &gen, const map<int, std::string> reverse_dict){
+        /*
+         * 1) confirms that cur_s is a depth marker, and gets the depth
+         * 2) finds the span of the gen that corresponds either the next depth marker or, if end of gen, the end of the gen
+         * 3) returns the depth and the span
+         *
+         * return (depth error = -1, span_start) if start is not a depth marker, else (no error = 2, span_end)
+         */
+        if (not depth_check(gen[cur_s], cur_depth, reverse_dict)){
+            return make_pair(-1, cur_s);  // not a depth marker
+        } else {
+            for (size_t i = cur_s + 1; i < gen.size(); i++) {
+                if (depth_check(gen[i], cur_depth + 1, reverse_dict)){
+                    return make_pair(2, i);  // next depth marker found, return span
+                }
+            }
+        }
+        return make_pair(2, static_cast<int>(gen.size()));  // no next depth marker found, return span to end of gen
+    }
+
     template<typename T>
     static int verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
                               const int start, const int end, const vector<int> &gen,
-                              const bool check_special_tokens = true,
-                              const bool include_queue = false) {
-        /* This should work regardless of order of adjacency list
+                              const bool include_queue = false,
+                              const bool duplicate_adjacency_lists = false){
+        /* This should work regardless of the internal order of adjacency list and the search order!
+         * Which is why you can not verify directly against the ground-truth
          *
-         * -1 if special tokens are wrong, 0 if not a valid BFS gen, 1 if valid BFS gen
+         * -5 invalid distance index of start and end nodes
+         * -4 can not recreate the shortest path from the gen (cant parse the gen into levels or path is wrong),
+         * -3 format is wrong (cant parse the gen into levels),
+         * -2 if brackets are wrong (cant parse the gen into levels),
+         * -1 if depth markers are wrong (cant parse the gen into levels or depth is wrong),
+         * 0 if valid BFS gen is invalid but gives valid shortest path,
+         * 1 if valid BFS gen that gives correct shortest path
          *
-         * D0    7     [     24    20    ]     D1    24    [     16    ]     20    [     5     ]
-         * D2    16    [     ]     5     [     1     15    ]     D3    1     [     14    ]     15    [     6     ]
-         * D4    14    [     12    ]     6     [     18    ]     D5    12    [     23    ]     18    [     3     ]
-         * D6    23    [     10    ]     3     [     ]     D7    10    [     2     ]     D8    2     [     11    ]
-         * D9    11    [     17    8     ]     D10   17    [     9     22    ]     8     [     ]
+         * D0    7     [     24    20    ]
+         * D1    24    [     16    ]           20    [     5     ]
+         * D2    16    [     ]                 5     [     1     15    ]
+         * D3    1     [     14    ]           15    [     6     ]
+         * D4    14    [     12    ]           6     [     18    ]
+         * D5    12    [     23    ]           18    [     3     ]
+         * D6    23    [     10    ]           3     [     ]
+         * D7    10    [     2     ]
+         * D8    2     [     11    ]
+         * D9    11    [     17    8     ]
+         * D10   17    [     9     22    ]     8     [     ]
+         *
+         * or if  include_queue:
+         *
+         * D0    { 7 }       7     [     24    20    ]
+         * D1    { 24 20 }  24     [     16    ]        { 24 }     20    [     5     ]
+         * D2    { 16 5 }   16     [     ]              { 5 }      5     [     1     15    ]
+         * D3    { 1 15 }    1     [     14    ]        { 1 }      15    [     6     ]
+         * D4    { 14 6 }   14     [     12    ]        { 6 }      6     [     18    ]
+         * D5    { 12 18 }  12     [     23    ]        { 18 }     18    [     3     ]
+         * D6    { 23 3 }   23     [     10    ]        { 3 }      3     [     ]
+         * D7    { 10 }     10    [     2     ]
+         * D8    { 2 }      2     [     11    ]
+         * D9    { 11 }     11    [     17    8     ]
+         * D10   { 17 9 }   17    [     9     22    ]   { 9 }      9     [     ]
          */
 
+        // this parses the entire gen, then checks traversal
+
+        auto dict = get_dictionary();
+        map<int, std::string> reverse_dict;
+        for (const auto &item : dict) {
+            reverse_dict[item.second] = item.first;
+        }
+
+        bool has_invalid_adjacency_list = false;
+
+        int cur = 0;
+        int cur_depth = 0;
+        vector<map<int, vector<int> > > gen_levels;
+
+        /*
+         * for each level we need to use find_depth_span, then parse the span
+         * each span may have multiple nodes.
+         * The format is optional queue { multiple nodes } if include_queue
+         * Then node [ multiple neighbors ] ie. node then adjacency list
+         * Then  { multiple nodes  } if duplicate_adjacency_lists
+         *
+         * We will verify that the queue brackets open and close while ignoring the contents
+         * Then we get the node and verify that the adjacency list brackets open and close and get the adjacency list
+         * Then if duplicate_adjacency_lists we verify that the brackets open and close and get that second adjacency list
+         */
+
+        while (cur < static_cast<int>(gen.size())) {
+            auto [depth_error, span_end] = find_depth_span(cur, cur_depth, gen, reverse_dict);
+            if (depth_error == -1) {
+                return -1;  // depth marker error
+            }
+            auto level_nodes = map<int, vector<int> >();
+            int i = cur + 1;
+            while (i < span_end) {
+                if (include_queue) {
+                    if (gen[i] != dict.at("{")) {
+                        return -2;  // queue start bracket error
+                    }
+                    i++;
+                    while (i < span_end and gen[i] != dict.at("}")) {
+                        i++;
+                    }
+                    if (i >= span_end or gen[i] != dict.at("}")) {
+                        return -2;  // queue end bracket error
+                    }
+                    i++;
+                }
+                if (i >= span_end) {
+                    return -3;  // unexpected end of gen
+                }
+                auto node = gen[i];
+                i++;
+                if (i >= span_end or gen[i] != dict.at("[")) {
+                    return -2;  // adjacency start bracket error
+                }
+                i++;
+                auto nbrs = vector<int>();
+                auto nbrs_alt = vector<int>();
+                while (i < span_end and gen[i] != dict.at("]")) {
+                    nbrs.push_back(gen[i]);
+                    i++;
+                }
+                if (i >= span_end or gen[i] != dict.at("]")) {
+                    return -2;  // adjacency end bracket error
+                }
+                i++;
+                if (duplicate_adjacency_lists) {
+                    if (i >= span_end or gen[i] != dict.at("{")) {
+                        return -2;  // duplicate adjacency list start bracket error
+                    }
+                    i++;
+                    while (i < span_end and gen[i] != dict.at("}")) {
+                        nbrs_alt.push_back(gen[i]);
+                        i++;
+                    }
+                    if (i >= span_end or gen[i] != dict.at("}")) {
+                        return -2;  // duplicate adjacency list end bracket error
+                    }
+                    i++;
+                }
+                // check that nbrs are adjacent to node
+                bool adjacency_list_valid = true;
+                for (auto nbr: nbrs) {
+                    if (node >= distances.shape(0) || nbr >= distances.shape(1) ||
+                        distances.at(node, nbr) != 1) {
+                        adjacency_list_valid = false;
+                        break;
+                    }
+                    if (duplicate_adjacency_lists){
+                        bool alt_adjacency_list_valid = true;
+                        if (std::find(nbrs_alt.begin(), nbrs_alt.end(), nbr) == nbrs_alt.end()) {
+                            alt_adjacency_list_valid = false;
+                            break;
+                        }
+                        if (! alt_adjacency_list_valid && !adjacency_list_valid) {
+                            has_invalid_adjacency_list = true;
+                        } else if (alt_adjacency_list_valid){
+                            level_nodes[node] = nbrs_alt;
+                        } else if (adjacency_list_valid) {
+                            level_nodes[node] = nbrs;
+                        }
+                    } else {
+                        if (!adjacency_list_valid) {
+                            has_invalid_adjacency_list = true;
+                        }
+                        level_nodes[node] = nbrs;
+                    }
+                }
+
+
+            }
+            gen_levels.push_back(level_nodes);
+            cur = span_end;
+            cur_depth++;
+        }
+
+        // attempt to recreate the shortest path
+        auto path = vector<int>{end};
+        for (int i = static_cast<int>(gen_levels.size()) - 1; i >= 0; i--) {
+            auto &level_nodes = gen_levels[i];
+            bool found = false;
+            for (const auto &pair: level_nodes) {
+                auto node = pair.first;
+                auto nbrs = pair.second;
+                if (std::find(nbrs.begin(), nbrs.end(), path.back()) != nbrs.end()) {
+                    path.push_back(node);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return -4;  // valid BFS gen but could not find path to end node
+            }
+        }
+        if (path.back() != start) {  // because we made the path backwards
+            return -4;  // valid BFS gen but path does not start with start node
+        }
+        auto dist = distances.at(start, end);
+        // check shape
+        if (start >= distances.shape(0) || end >= distances.shape(1)) {
+            return -5;  // distance shape error
+        }
+        if (dist != static_cast<int>(path.size() - 1)) {
+            return -4;  // valid BFS gen but path is not shortest path
+        }
+        if (has_invalid_adjacency_list) {
+            return 0;  // valid BFS gen but at least one adjacency list is invalid
+        }
+        return 1;
+    }
+
+
+    template<typename T>
+    static int old_verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
+                              const int start, const int end, const vector<int> &gen,
+                              const bool check_special_tokens = true,
+                              const bool include_queue = false) {
         map<int, std::string> reverse_dict;
         int adjacency_start_idx = -1;
         int adjacency_end_idx = -1;
@@ -377,6 +567,7 @@ public:
         }
         return static_cast<int>(found);  // 0 not found, 1 found
     }
+
 
     template<typename T>
     static py::array_t<int, py::array::c_style> verify_bfs_gens(py::array_t<T, py::array::c_style> &distances,
