@@ -504,7 +504,6 @@ public:
         return 1;
     }
 
-
     template<typename T>
     static int old_verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
                               const int start, const int end, const vector<int> &gen,
@@ -574,8 +573,8 @@ public:
                                                                 py::array_t<T, py::array::c_style> &queries,
                                                                 py::array_t<T, py::array::c_style> &gens,
                                                                 py::array_t<T, py::array::c_style> &lengths,
-                                                                const bool check_special_tokens = true,
-                                                                const bool include_queue = false) {
+                                                                const bool include_queue = false,
+                                                                const bool duplicate_adjacency_lists = false) {
         auto batch_size = gens.shape(0);
         auto out = py::array_t<int, py::array::c_style>(static_cast<int>(batch_size));
         out[py::make_tuple(py::ellipsis())] = -5; // initialize array
@@ -596,7 +595,7 @@ public:
                     rd(i, j) = bd(b, i, j);
                 }
             }
-            auto res = verify_bfs_gen(distances_slice, start, end, gen, check_special_tokens, include_queue);
+            auto res = verify_bfs_gen(distances_slice, start, end, gen, include_queue, duplicate_adjacency_lists);
             ra(b) = res;
         }
         return out;
