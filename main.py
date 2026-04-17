@@ -168,21 +168,32 @@ def _t_bfs_task(args, token_dict, pos_dict, use_unique_depth_markers=True, inclu
     generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
 
 
-def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=250, scratchpad_type='bfs'):
+def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=False,
+                             include_queue=True, reverse_adjacency_lists=False, duplicate_adjacency_lists=False,
+                             batch_size=200, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
     args.use_unique_depth_markers = use_unique_depth_markers
     args.scratchpad_as_prefix = True
     args.no_graph = True
-    args.align_prefix_front_pad = True
+    args.align_prefix_front_pad = False
+    args.reverse_adjacency_lists = reverse_adjacency_lists
+    args.include_queue = include_queue
+    args.duplicate_adjacency_lists = duplicate_adjacency_lists
+    args.use_unique_depth_markers = use_unique_depth_markers
     b_n = generator.get_graph(args, batch_size=batch_size)
-    # generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_dist=False)
+
+    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_shapes=True, print_dist=False)
+
+    if scratchpad_type == 'none':
+        print('No scratchpad to validate')
+        return
 
     # construct inputs to verify_bfs_gens
     distances = b_n['distances']
     queries = np.zeros((batch_size, 2), dtype=np.int32)
-    lengths = b_n['scratch_pad_lengths']  # add noise?
+    lengths = b_n['scratch_pad_lengths'] - 2  # exclude start and end of scatchpad
     gens = np.zeros((batch_size, lengths.max()), dtype=np.int32)
     for b in range(batch_size):
         query_start = b_n['query_start_indices'][b] + 1
@@ -190,31 +201,171 @@ def _t_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_marker
         queries[b, 1] = b_n['src_tokens'][b, query_start + 1, 0]
 
         scratchpad_start = b_n['scratch_pad_start_indices'][b] + 1
-        scratchpad_length = b_n['scratch_pad_lengths'][b] - 1 # exclude start of scatchpad
-        gens[b, :scratchpad_length] = b_n['src_tokens'][b,
-                                        scratchpad_start:scratchpad_start + scratchpad_length, 0]
+        gens[b, :lengths[b]] = b_n['src_tokens'][b, scratchpad_start : scratchpad_start + lengths[b], 0]
         if b >= batch_size // 2:
             # add some errors
-            r = np.random.randint(0, scratchpad_length)
-            gens[b, r] = gens[b, r] + 1  # wrong node id
+            r = np.random.randint(0, lengths[b] - 1)
+            # gens[b, r] = gens[b, r] + 1  # id error
+            gens[b, r] = gens[b, r + 1]  # duplicate error
+            # gens[b, r], gens[b, r + 1] = gens[b, r + 1], gens[b, r]  # order error
+            # lengths[b] = lengths[b] - 1  # missing node error
+            # print(queries)
+    # print(gens)
 
-    generator.pprint_batched_dict(b_n, token_dict, pos_dict, idxs=-1, print_shapes=True)
     if scratchpad_type in ('bfs', ):
-        out = generator.verify_bfs_gens(distances, queries, gens, lengths, check_special_tokens=True)
-        print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+        try:
+            out = generator.verify_bfs_gens(distances, queries, gens, lengths, include_queue=include_queue, duplicate_adjacency_lists=duplicate_adjacency_lists)
+            print(f'BFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
+            print(out)
+        except Exception as e:
+            print(f'Error during BFS verification: {e}')
+
+        out = _python_verify_bfs_gens(token_dict, distances, queries, gens, lengths, include_queue=include_queue, duplicate_adjacency_lists=duplicate_adjacency_lists)
+        print(out)
+
     elif scratchpad_type in ('dfs',):
-        #out = generator.verify_dfs_gens(distances, queries, gens, lengths, use_unique_depth_markers=use_unique_depth_markers)
-        # print(f'DFS verify output: {out[:batch_size//2]} should be all 1s and {out[batch_size//2:]} should be < 1s')
         pass
 
+    print('DONE!')
 
-def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True, batch_size=1000, scratchpad_type='bfs'):
+
+def _python_verify_bfs_gens(dict, distances_b, queries_b, gens_b, lengths_b, include_queue=False, duplicate_adjacency_lists=False,):
+
+    reverse_dict = {v: k for k, v in generator.get_dictionary().items()}
+
+    def _depth_check(tok, cur_depth):
+        extra_after_symbol = 'D'
+        pred = reverse_dict[tok]
+        if pred == extra_after_symbol or pred == extra_after_symbol + str(cur_depth):
+            return True
+        return False
+
+    def _find_depth_span(cur_s, cur_depth, gen):
+        if not _depth_check(gen[cur_s], cur_depth):
+            return -1
+        else:
+            for i in range(cur_s + 1, gen.shape[0]):
+                if _depth_check(gen[i], cur_depth + 1):
+                    return i
+        return gen.shape[0]
+
+    def _python_verify_bfs_gen(distance, query, gen, include_queue=False, duplicate_adjacency_lists=False):
+        span_start = 0
+        cur_depth = 0
+        gen_levels = []
+        has_invalid_adjacency_list = False
+
+        # print('\n', np.stack([np.arange(gen.shape[0]), gen], axis=0), '\n')
+        while(span_start < gen.shape[0]):
+            span_end = _find_depth_span(span_start, cur_depth, gen)
+            if span_end < 0:
+                return -1
+            i = span_start + 1
+            level_nodes = {}
+            while i < span_end:
+                if include_queue:
+                    if gen[i] != dict['{']:
+                        return -2
+                    i += 1
+                    while i < span_end and gen[i] != dict['}']:
+                        i += 1
+                    if i >= span_end or gen[i] != dict['}']:
+                        return -22
+                    i += 1
+                if i >= span_end:
+                    return -3
+                node = gen[i]
+                i += 1
+                if i >= span_end or gen[i] != dict['[']:
+                    return -4
+                i += 1
+                nbrs = []
+                nbrs_alt = []
+                while i < span_end and gen[i] != dict[']']:
+                    nbrs.append(gen[i])
+                    i += 1
+                if i >= span_end or gen[i] != dict[']']:
+                    return -44
+                i += 1
+                if duplicate_adjacency_lists:
+                    if i >= span_end or gen[i] != dict['{']:
+                        print(span_start, i, span_end)
+                        return -444
+                    i += 1
+                    while i < span_end and gen[i] != dict['}']:
+                        nbrs_alt.append(gen[i])
+                        i += 1
+                    if i >= span_end or gen[i] != dict['}']:
+                        return -4444
+                    i += 1
+
+                adjacency_list_valid = True
+                for nbr in nbrs:
+                    if node >= distance.shape[0] or nbr >= distance.shape[0]:
+                        return -5
+                    # check all neighbors are actually 1 hop away in the distance matrix
+                    if distance[node, nbr] != 1:
+                        adjacency_list_valid = False
+                level_nodes[node] = nbrs
+
+                if duplicate_adjacency_lists and not adjacency_list_valid:
+                    alt_adjacency_list_valid = True
+                    for nbr in nbrs_alt:
+                        if node >= distance.shape[0] or nbr >= distance.shape[0]:
+                            return -6
+                        if distance[node, nbr] != 1:
+                            alt_adjacency_list_valid = False
+                    if alt_adjacency_list_valid:
+                        level_nodes[node] = nbrs_alt
+                    else:
+                        has_invalid_adjacency_list = True
+                elif not adjacency_list_valid:
+                    has_invalid_adjacency_list = True
+            span_start = span_end
+            cur_depth += 1
+            gen_levels.append(level_nodes)
+
+        path = [query[1]]
+        for i, level_nodes in enumerate(reversed(gen_levels)):
+            found = False
+            for node, nbrs in level_nodes.items():
+                if path[-1] in nbrs:
+                    path.append(node)
+                    found = True
+                    break
+            if not found:
+                return -7
+
+        if query[0] >= distance.shape[0] or query[1] >= distance.shape[0]:
+            return -8
+        if distance[query[0], query[1]] != len(path) - 1:
+            return -9
+        if has_invalid_adjacency_list:
+            return 0
+        return 1
+
+
+    out = np.zeros((distances_b.shape[0],), dtype=np.int32)
+    for b in range(distances_b.shape[0]):
+        out[b] = _python_verify_bfs_gen(distances_b[b], queries_b[b], gens_b[b, :lengths_b[b]], include_queue=include_queue, duplicate_adjacency_lists=duplicate_adjacency_lists)
+    return out
+
+
+
+
+
+def _t_given_scratchpad_validation(args, token_dict, pos_dict, use_unique_depth_markers=True,
+                                   include_queue=False, reverse_adjacency_lists=False, duplicate_adjacency_lists=True,
+                                   batch_size=1000, scratchpad_type='bfs'):
     args.batch_size = batch_size
     args.task_type = 'shortest_path'
     args.scratchpad_type = scratchpad_type
     args.scratchpad_as_prefix = True
     args.no_graph = True
     args.align_prefix_front_pad = True
+    args.include_queue = include_queue
+    args.reverse_adjacency_lists = reverse_adjacency_lists
+    args.duplicate_adjacency_lists = duplicate_adjacency_lists
     args.use_unique_depth_markers = use_unique_depth_markers
     args.min_num_nodes = 100
     args.max_num_nodes = 100
@@ -383,8 +534,8 @@ def main(max_vocab_size=100):
     # _t_int_partition()
     # _t_khops_gen(args, token_dict, pos_dict)
 
-    _t_bfs_task(args, token_dict, pos_dict)
-    # _t_scratchpad_validation(args, token_dict, pos_dict)
+    # _t_bfs_task(args, token_dict, pos_dict)
+    _t_scratchpad_validation(args, token_dict, pos_dict)
     # _t_given_scratchpad_validation(args,  token_dict, pos_dict)
 
     # _t_random_trees(args, token_dict, pos_dict)

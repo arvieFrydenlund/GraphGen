@@ -690,7 +690,7 @@ PYBIND11_MODULE(generator, m) {
           "is_valid bool, int,"
           " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
           py::arg("distance"), py::arg("start"), py::arg("end"), py::arg("gen"),
-          py::arg("check_special_tokens") = true, py::arg("include_queue") = false);
+          py::arg("include_queue") = false, py::arg("duplicate_adjacency_lists") = false);
 
     m.def("verify_bfs_gens", &BFSScratchPad::verify_bfs_gens<int>,
           "Batch version. "
@@ -704,7 +704,7 @@ PYBIND11_MODULE(generator, m) {
           "is_valid [batch_size], int, "
           " -1 if not valid due to special tokens, 0 if not valid due bfs, 1 if valid and bfs.\n",
           py::arg("distances"), py::arg("queries"), py::arg("gens"), py::arg("path_lengths"),
-          py::arg("check_special_tokens") = true, py::arg("include_queue") = false);
+          py::arg("include_queue") = false, py::arg("duplicate_adjacency_lists") = false);
 
     m.def("set_int_partition_cache_size", &set_int_partition_cache_size,
           "Sets the integer partition cache size used in balanced graph generation.\n"
