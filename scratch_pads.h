@@ -290,24 +290,22 @@ public:
     }
 
 
-    static pair<int, int> find_depth_span(const int cur_s,  const int cur_depth, const vector<int> &gen, const map<int, std::string> reverse_dict){
+    static int find_depth_span(const int cur_s,  const int cur_depth, const vector<int> &gen, const map<int, std::string> reverse_dict){
         /*
          * 1) confirms that cur_s is a depth marker, and gets the depth
          * 2) finds the span of the gen that corresponds either the next depth marker or, if end of gen, the end of the gen
          * 3) returns the depth and the span
-         *
-         * return (depth error = -1, span_start) if start is not a depth marker, else (no error = 2, span_end)
          */
         if (not depth_check(gen[cur_s], cur_depth, reverse_dict)){
-            return make_pair(-1, cur_s);  // not a depth marker
+            return -1;  // not a depth marker
         } else {
             for (size_t i = cur_s + 1; i < gen.size(); i++) {
                 if (depth_check(gen[i], cur_depth + 1, reverse_dict)){
-                    return make_pair(2, i);  // next depth marker found, return span
+                    return static_cast<int>(i);  // next depth marker found, return span
                 }
             }
         }
-        return make_pair(2, static_cast<int>(gen.size()));  // no next depth marker found, return span to end of gen
+        return static_cast<int>(gen.size());  // no next depth marker found, return span to end of gen
     }
 
     template<typename T>
@@ -318,13 +316,6 @@ public:
         /* This should work regardless of the internal order of adjacency list and the search order!
          * Which is why you can not verify directly against the ground-truth
          *
-         * -5 invalid distance index of start and end nodes
-         * -4 can not recreate the shortest path from the gen (cant parse the gen into levels or path is wrong),
-         * -3 format is wrong (cant parse the gen into levels),
-         * -2 if brackets are wrong (cant parse the gen into levels),
-         * -1 if depth markers are wrong (cant parse the gen into levels or depth is wrong),
-         * 0 if valid BFS gen is invalid but gives valid shortest path,
-         * 1 if valid BFS gen that gives correct shortest path
          *
          * D0    7     [     24    20    ]
          * D1    24    [     16    ]           20    [     5     ]
@@ -380,8 +371,8 @@ public:
          */
 
         while (cur < static_cast<int>(gen.size())) {
-            auto [depth_error, span_end] = find_depth_span(cur, cur_depth, gen, reverse_dict);
-            if (depth_error == -1) {
+            auto span_end = find_depth_span(cur, cur_depth, gen, reverse_dict);
+            if (span_end < 0) {
                 return -1;  // depth marker error
             }
             auto level_nodes = map<int, vector<int> >();
@@ -396,7 +387,7 @@ public:
                         i++;
                     }
                     if (i >= span_end or gen[i] != dict.at("}")) {
-                        return -2;  // queue end bracket error
+                        return -22;  // queue end bracket error
                     }
                     i++;
                 }
@@ -406,7 +397,7 @@ public:
                 auto node = gen[i];
                 i++;
                 if (i >= span_end or gen[i] != dict.at("[")) {
-                    return -2;  // adjacency start bracket error
+                    return -4;  // adjacency start bracket error
                 }
                 i++;
                 auto nbrs = vector<int>();
@@ -416,12 +407,12 @@ public:
                     i++;
                 }
                 if (i >= span_end or gen[i] != dict.at("]")) {
-                    return -2;  // adjacency end bracket error
+                    return -44;  // adjacency end bracket error
                 }
                 i++;
                 if (duplicate_adjacency_lists) {
                     if (i >= span_end or gen[i] != dict.at("{")) {
-                        return -2;  // duplicate adjacency list start bracket error
+                        return -444;  // duplicate adjacency list start bracket error
                     }
                     i++;
                     while (i < span_end and gen[i] != dict.at("}")) {
@@ -429,40 +420,41 @@ public:
                         i++;
                     }
                     if (i >= span_end or gen[i] != dict.at("}")) {
-                        return -2;  // duplicate adjacency list end bracket error
+                        return -4444;  // duplicate adjacency list end bracket error
                     }
                     i++;
                 }
                 // check that nbrs are adjacent to node
                 bool adjacency_list_valid = true;
                 for (auto nbr: nbrs) {
-                    if (node >= distances.shape(0) || nbr >= distances.shape(1) ||
-                        distances.at(node, nbr) != 1) {
+                    if (node >= distances.shape(0) || nbr >= distances.shape(1)) {
+                        return -5;
+                    }
+                    if (distances.at(node, nbr) != 1) {
                         adjacency_list_valid = false;
                         break;
                     }
-                    if (duplicate_adjacency_lists){
-                        bool alt_adjacency_list_valid = true;
-                        if (std::find(nbrs_alt.begin(), nbrs_alt.end(), nbr) == nbrs_alt.end()) {
+                    level_nodes[node] = nbrs;
+                }
+                if (duplicate_adjacency_lists && !adjacency_list_valid) {
+                    bool alt_adjacency_list_valid = true;
+                    for (auto nbr: nbrs_alt) {
+                        if (node >= distances.shape(0) || nbr >= distances.shape(1)) {
+                            return -6;
+                        }
+                        if (distances.at(node, nbr) != 1) {
                             alt_adjacency_list_valid = false;
                             break;
                         }
-                        if (! alt_adjacency_list_valid && !adjacency_list_valid) {
-                            has_invalid_adjacency_list = true;
-                        } else if (alt_adjacency_list_valid){
-                            level_nodes[node] = nbrs_alt;
-                        } else if (adjacency_list_valid) {
-                            level_nodes[node] = nbrs;
-                        }
-                    } else {
-                        if (!adjacency_list_valid) {
-                            has_invalid_adjacency_list = true;
-                        }
-                        level_nodes[node] = nbrs;
                     }
+                    if (alt_adjacency_list_valid) {
+                        level_nodes[node] = nbrs_alt;
+                    } else {
+                        has_invalid_adjacency_list = true;
+                    }
+                } else if (!adjacency_list_valid) {
+                        has_invalid_adjacency_list = true;
                 }
-
-
             }
             gen_levels.push_back(level_nodes);
             cur = span_end;
@@ -484,26 +476,25 @@ public:
                 }
             }
             if (!found) {
-                return -4;  // valid BFS gen but could not find path to end node
+                return -7;  // valid BFS gen but could not find path to end node
             }
         }
         if (path.back() != start) {  // because we made the path backwards
-            return -4;  // valid BFS gen but path does not start with start node
+            return -8;  // valid BFS gen but path does not start with start node
         }
         auto dist = distances.at(start, end);
         // check shape
         if (start >= distances.shape(0) || end >= distances.shape(1)) {
-            return -5;  // distance shape error
+            return -9;  // distance shape error
         }
         if (dist != static_cast<int>(path.size() - 1)) {
-            return -4;  // valid BFS gen but path is not shortest path
+            return -10;  // valid BFS gen but path is not shortest path
         }
         if (has_invalid_adjacency_list) {
             return 0;  // valid BFS gen but at least one adjacency list is invalid
         }
         return 1;
     }
-
 
     template<typename T>
     static int old_verify_bfs_gen(const py::array_t<T, py::array::c_style> &distances,
@@ -574,8 +565,8 @@ public:
                                                                 py::array_t<T, py::array::c_style> &queries,
                                                                 py::array_t<T, py::array::c_style> &gens,
                                                                 py::array_t<T, py::array::c_style> &lengths,
-                                                                const bool check_special_tokens = true,
-                                                                const bool include_queue = false) {
+                                                                const bool include_queue = false,
+                                                                const bool duplicate_adjacency_lists = false) {
         auto batch_size = gens.shape(0);
         auto out = py::array_t<int, py::array::c_style>(static_cast<int>(batch_size));
         out[py::make_tuple(py::ellipsis())] = -5; // initialize array
@@ -596,7 +587,7 @@ public:
                     rd(i, j) = bd(b, i, j);
                 }
             }
-            auto res = verify_bfs_gen(distances_slice, start, end, gen, check_special_tokens, include_queue);
+            auto res = verify_bfs_gen(distances_slice, start, end, gen, include_queue, duplicate_adjacency_lists);
             ra(b) = res;
         }
         return out;

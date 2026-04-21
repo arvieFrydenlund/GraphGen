@@ -282,6 +282,7 @@ public:
             task_start_idx = cur; // this gets defined regardless since it is also prefix end index
             if (args.tok->is_flat_model) {
                 // write in task and scratchpad
+                auto cur_sp_and_task_pos = 0;
                 auto cur_task_pos = 0;
                 auto task_start = pos_dictionary.at("task_start");
                 auto task_end = pos_dictionary.at("task_end");
@@ -296,7 +297,7 @@ public:
                     for (size_t i = 0; i < scratch_pad->tokenized_inputs.shape()[0]; i++, cur++) {
                         tokenized_inputs.copy_tok(scratch_pad->tokenized_inputs, cur, i,
                                  should_repeat);  // tokenized_inputs(cur, 0) = scratch_pad->tokenized_inputs(i);
-                        tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                        tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_sp_and_task_pos);
                         for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
                             tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                         }
@@ -307,6 +308,7 @@ public:
                                                        should_repeat);
                             cur_task_pos++;
                         }
+                        cur_sp_and_task_pos += 1;
                     }
                     if (args.tok->scratchpad_as_prefix) {  // match it with true task start if sp is prefix, otherwise it is part of task
                         task_start_idx = cur;
@@ -314,13 +316,13 @@ public:
                 }
                 // write in task
                 true_task_start_idx = cur;
-                for (size_t i = 0; i < task->tokenized_task_inputs.shape()[0]; i++, cur++, cur_task_pos++) {
+                for (size_t i = 0; i < task->tokenized_task_inputs.shape()[0]; i++, cur++, cur_task_pos++, cur_sp_and_task_pos++) {
                     tokenized_inputs.copy_tok(task->tokenized_task_inputs, cur, i,
                              should_repeat);  // tokenized_inputs(cur, 0) = task->tokenized_task_inputs(i);
                     tokenized_targets.copy_tok(task->tokenized_task_targets, cur_task_pos, i,
                              should_repeat); // tokenized_targets(cur_task_pos, 0) = task->tokenized_task_targets(i, 0);
                     tokenized_true_targets.copy_tok(task->tokenized_task_targets, i, i, should_repeat);
-                    tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                    tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_sp_and_task_pos);
                     for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
                         tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                     }
@@ -342,14 +344,14 @@ public:
                         scratch_pad_length += 1; // for start of task token in scratch pad targets
                     }
                 }
-                tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_task_pos);
+                tokenized_positions(cur, 0) =  task_start + static_cast<int>(cur_sp_and_task_pos);
                 for (size_t j = 1; j < tokenized_positions.shape()[1]; j++) {
                     tokenized_positions(cur, j) = pos_dictionary.at("task_invariance");
                 }
 
-
                 cur++;
                 cur_task_pos++;
+                cur_sp_and_task_pos++;
             } else {
                 throw std::invalid_argument("Non-flat model tokenization not implemented yet");
             }
