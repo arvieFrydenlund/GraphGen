@@ -219,7 +219,7 @@ inline void set_default_pos_dictionary() {
             {"thinking_start", 950},
             {"thinking_end", 999},
             {"task_start", 1000},
-            {"task_end", 1500},
+            {"task_end", 5000},
     };
 }
 
