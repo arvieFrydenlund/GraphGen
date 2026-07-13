@@ -2,3 +2,12 @@
 
 # Compiled C/C++ extension modules
 *.so
+
+# Python / setuptools build artifacts
+build/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# uv / venv
+.venv/
