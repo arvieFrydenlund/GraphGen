@@ -1,0 +1,2395 @@
+{
+    "machine_info": {
+        "node": "macK2DXPQK529",
+        "processor": "arm",
+        "machine": "arm64",
+        "python_compiler": "Clang 22.1.3 ",
+        "python_implementation": "CPython",
+        "python_implementation_version": "3.10.20",
+        "python_version": "3.10.20",
+        "python_build": [
+            "main",
+            "May 10 2026 19:20:50"
+        ],
+        "release": "25.5.0",
+        "system": "Darwin",
+        "cpu": {
+            "python_version": "3.10.20.final.0 (64 bit)",
+            "cpuinfo_version": [
+                9,
+                0,
+                0
+            ],
+            "cpuinfo_version_string": "9.0.0",
+            "arch": "ARM_8",
+            "bits": 64,
+            "count": 18,
+            "arch_string_raw": "arm64",
+            "brand_raw": "Apple M5 Pro"
+        }
+    },
+    "commit_info": {
+        "id": "988ca0b7d3c1005e5d67809fff6980c3277b7f1c",
+        "time": "2026-07-15T10:17:55-04:00",
+        "author_time": "2026-07-15T10:17:55-04:00",
+        "dirty": true,
+        "project": "GraphGen",
+        "branch": "refactor"
+    },
+    "benchmarks": [
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b64-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b64-small]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b64-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1464468340127496,
+                "max": 0.15468433299975004,
+                "mean": 0.1516255595737935,
+                "stddev": 0.0031076029191906837,
+                "rounds": 7,
+                "median": 0.1527999579993775,
+                "iqr": 0.004795802498847479,
+                "q1": 0.14935384349882952,
+                "q3": 0.154149645997677,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.1464468340127496,
+                "hd15iqr": 0.15468433299975004,
+                "ops": 6.595194126972487,
+                "total": 1.0613789170165546,
+                "data": [
+                    0.14904433299670927,
+                    0.1464468340127496,
+                    0.15468433299975004,
+                    0.15028237500519026,
+                    0.1527999579993775,
+                    0.1538823340088129,
+                    0.15423874999396503
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b64-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b64-medium]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b64-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1514964579982916,
+                "max": 0.15340520899917465,
+                "mean": 0.15247971442711009,
+                "stddev": 0.0008289346208489658,
+                "rounds": 7,
+                "median": 0.1527970839961199,
+                "iqr": 0.0015846665010030847,
+                "q1": 0.15167992725037038,
+                "q3": 0.15326459375137347,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.1514964579982916,
+                "hd15iqr": 0.15340520899917465,
+                "ops": 6.558249428503687,
+                "total": 1.0673580009897705,
+                "data": [
+                    0.1514964579982916,
+                    0.15165641700150445,
+                    0.15284937499382067,
+                    0.15340300000389107,
+                    0.1527970839961199,
+                    0.15175045799696818,
+                    0.15340520899917465
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b64-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b64-large]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b64-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.22106941699166782,
+                "max": 0.2271772499952931,
+                "mean": 0.2247784333972959,
+                "stddev": 0.0023727748832882136,
+                "rounds": 5,
+                "median": 0.22564737500215415,
+                "iqr": 0.0030846145091345534,
+                "q1": 0.22323782299281447,
+                "q3": 0.22632243750194903,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.22106941699166782,
+                "hd15iqr": 0.2271772499952931,
+                "ops": 4.4488253827826085,
+                "total": 1.1238921669864794,
+                "data": [
+                    0.2271772499952931,
+                    0.22603750000416767,
+                    0.22106941699166782,
+                    0.2239606249931967,
+                    0.22564737500215415
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b64-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b64-xl]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b64-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.806856166003854,
+                "max": 0.8846280419966206,
+                "mean": 0.8478888336016098,
+                "stddev": 0.03791022659917339,
+                "rounds": 5,
+                "median": 0.8664859590062406,
+                "iqr": 0.0699457812406763,
+                "q1": 0.8070153857552214,
+                "q3": 0.8769611669958977,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.806856166003854,
+                "hd15iqr": 0.8846280419966206,
+                "ops": 1.179399893441528,
+                "total": 4.239444168008049,
+                "data": [
+                    0.806856166003854,
+                    0.8846280419966206,
+                    0.8744055419956567,
+                    0.8070684590056771,
+                    0.8664859590062406
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b256-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b256-small]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b256-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5787485830078367,
+                "max": 0.6050916249951115,
+                "mean": 0.593193724998855,
+                "stddev": 0.012305407790199941,
+                "rounds": 5,
+                "median": 0.5983691250003176,
+                "iqr": 0.02250385349179851,
+                "q1": 0.5806378337510978,
+                "q3": 0.6031416872428963,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.5787485830078367,
+                "hd15iqr": 0.6050916249951115,
+                "ops": 1.6857899162738617,
+                "total": 2.965968624994275,
+                "data": [
+                    0.5812675839988515,
+                    0.5787485830078367,
+                    0.5983691250003176,
+                    0.6050916249951115,
+                    0.6024917079921579
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b256-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b256-medium]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b256-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.611634665998281,
+                "max": 0.6130717500054743,
+                "mean": 0.6123344331979752,
+                "stddev": 0.0006370599027688529,
+                "rounds": 5,
+                "median": 0.6120726249937434,
+                "iqr": 0.0011065522558055818,
+                "q1": 0.611869947744708,
+                "q3": 0.6129765000005136,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.611634665998281,
+                "hd15iqr": 0.6130717500054743,
+                "ops": 1.6330945081389663,
+                "total": 3.061672165989876,
+                "data": [
+                    0.6129447499988601,
+                    0.6120726249937434,
+                    0.6119483749935171,
+                    0.611634665998281,
+                    0.6130717500054743
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b256-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b256-large]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b256-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.901382249998278,
+                "max": 0.9169637500017416,
+                "mean": 0.9115133834013249,
+                "stddev": 0.0062408037552923335,
+                "rounds": 5,
+                "median": 0.9146820419991855,
+                "iqr": 0.007609281252371147,
+                "q1": 0.9076906875015993,
+                "q3": 0.9152999687539705,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.901382249998278,
+                "hd15iqr": 0.9169637500017416,
+                "ops": 1.0970765961422158,
+                "total": 4.557566917006625,
+                "data": [
+                    0.9097935000027064,
+                    0.9147453750047134,
+                    0.9169637500017416,
+                    0.901382249998278,
+                    0.9146820419991855
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b256-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b256-xl]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b256-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.3937509160023183,
+                "max": 3.6150689580099424,
+                "mean": 3.48298776660522,
+                "stddev": 0.08158510709719737,
+                "rounds": 5,
+                "median": 3.467845250008395,
+                "iqr": 0.08137235375397722,
+                "q1": 3.4372689482515852,
+                "q3": 3.5186413020055625,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 3.3937509160023183,
+                "hd15iqr": 3.6150689580099424,
+                "ops": 0.28710982266086876,
+                "total": 17.4149388330261,
+                "data": [
+                    3.467845250008395,
+                    3.3937509160023183,
+                    3.6150689580099424,
+                    3.451774959001341,
+                    3.4864987500041025
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b1024-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b1024-small]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b1024-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.353117749997182,
+                "max": 2.3725674579909537,
+                "mean": 2.3602399331954076,
+                "stddev": 0.007901341903520428,
+                "rounds": 5,
+                "median": 2.3586665420007193,
+                "iqr": 0.011397364491131157,
+                "q1": 2.35382993724852,
+                "q3": 2.365227301739651,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.353117749997182,
+                "hd15iqr": 2.3725674579909537,
+                "ops": 0.4236857388672987,
+                "total": 11.801199665977038,
+                "data": [
+                    2.3586665420007193,
+                    2.353117749997182,
+                    2.354067332998966,
+                    2.362780582989217,
+                    2.3725674579909537
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b1024-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b1024-medium]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b1024-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.4853798749973066,
+                "max": 2.559396625001682,
+                "mean": 2.5141788168024504,
+                "stddev": 0.03011928027486144,
+                "rounds": 5,
+                "median": 2.5088778330100467,
+                "iqr": 0.04585093724745093,
+                "q1": 2.4891365005023545,
+                "q3": 2.5349874377498054,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.4853798749973066,
+                "hd15iqr": 2.559396625001682,
+                "ops": 0.39774418323665883,
+                "total": 12.570894084012252,
+                "data": [
+                    2.490388709004037,
+                    2.4853798749973066,
+                    2.5088778330100467,
+                    2.559396625001682,
+                    2.52685104199918
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b1024-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b1024-large]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b1024-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.6795547920046374,
+                "max": 3.7049332079914166,
+                "mean": 3.6946247749991015,
+                "stddev": 0.01070014811201149,
+                "rounds": 5,
+                "median": 3.6951213749998715,
+                "iqr": 0.01773191549364128,
+                "q1": 3.6867629797525296,
+                "q3": 3.704494895246171,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 3.6795547920046374,
+                "hd15iqr": 3.7049332079914166,
+                "ops": 0.2706634802989549,
+                "total": 18.47312387499551,
+                "data": [
+                    3.6951213749998715,
+                    3.689165709001827,
+                    3.7049332079914166,
+                    3.6795547920046374,
+                    3.7043487909977557
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_erdos_renyi_n[b1024-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_erdos_renyi_n[b1024-xl]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b1024-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 13.671918416992412,
+                "max": 14.219218375001219,
+                "mean": 13.934490608196938,
+                "stddev": 0.2681440438372062,
+                "rounds": 5,
+                "median": 13.902807666992885,
+                "iqr": 0.5287553019916231,
+                "q1": 13.676455166252708,
+                "q3": 14.205210468244331,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 13.671918416992412,
+                "hd15iqr": 14.219218375001219,
+                "ops": 0.07176437432249959,
+                "total": 69.67245304098469,
+                "data": [
+                    13.67796741600614,
+                    13.902807666992885,
+                    13.671918416992412,
+                    14.219218375001219,
+                    14.200541165992036
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b64-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b64-small]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b64-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15061504200275522,
+                "max": 0.15825312500237487,
+                "mean": 0.1540712322894251,
+                "stddev": 0.002815893547098324,
+                "rounds": 7,
+                "median": 0.15425325000251178,
+                "iqr": 0.004574114758725045,
+                "q1": 0.15152259375099675,
+                "q3": 0.1560967085097218,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.15061504200275522,
+                "hd15iqr": 0.15825312500237487,
+                "ops": 6.490504328033706,
+                "total": 1.0784986260259757,
+                "data": [
+                    0.15061504200275522,
+                    0.1512698750011623,
+                    0.15425325000251178,
+                    0.15228075000050012,
+                    0.15628012501110788,
+                    0.15554645900556352,
+                    0.15825312500237487
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b64-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b64-medium]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b64-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15382424999552313,
+                "max": 0.15837937498872634,
+                "mean": 0.1565035952828891,
+                "stddev": 0.0017239704454273172,
+                "rounds": 7,
+                "median": 0.15652904199669138,
+                "iqr": 0.0029132504932931624,
+                "q1": 0.15518015600537183,
+                "q3": 0.158093406498665,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.15382424999552313,
+                "hd15iqr": 0.15837937498872634,
+                "ops": 6.389629568524885,
+                "total": 1.0955251669802237,
+                "data": [
+                    0.1576482499949634,
+                    0.15824179199989885,
+                    0.15837937498872634,
+                    0.15599337499588728,
+                    0.15652904199669138,
+                    0.15490908300853334,
+                    0.15382424999552313
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b64-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b64-large]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b64-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.22495733300456777,
+                "max": 0.22887487499974668,
+                "mean": 0.22744206660136115,
+                "stddev": 0.0014736978126019707,
+                "rounds": 5,
+                "median": 0.22774383399519138,
+                "iqr": 0.0012937922474520747,
+                "q1": 0.22694498900455073,
+                "q3": 0.2282387812520028,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.22760754100454506,
+                "hd15iqr": 0.22887487499974668,
+                "ops": 4.396724031498997,
+                "total": 1.1372103330068057,
+                "data": [
+                    0.22887487499974668,
+                    0.22760754100454506,
+                    0.22774383399519138,
+                    0.22495733300456777,
+                    0.22802675000275485
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b64-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b64-xl]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b64-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6361829579982441,
+                "max": 0.6542120000085561,
+                "mean": 0.6484660999994958,
+                "stddev": 0.007146926591192951,
+                "rounds": 5,
+                "median": 0.6513994169945363,
+                "iqr": 0.006954791748285061,
+                "q1": 0.6455230207502609,
+                "q3": 0.652477812498546,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.6361829579982441,
+                "hd15iqr": 0.6542120000085561,
+                "ops": 1.5421006587711794,
+                "total": 3.242330499997479,
+                "data": [
+                    0.6486363750009332,
+                    0.6361829579982441,
+                    0.6542120000085561,
+                    0.6513994169945363,
+                    0.6518997499952093
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b256-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b256-small]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b256-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5901828329951968,
+                "max": 0.592611374988337,
+                "mean": 0.5912279913958628,
+                "stddev": 0.001028713667981912,
+                "rounds": 5,
+                "median": 0.5909774159954395,
+                "iqr": 0.0017496352520538494,
+                "q1": 0.5903625832470425,
+                "q3": 0.5921122184990963,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.5901828329951968,
+                "hd15iqr": 0.592611374988337,
+                "ops": 1.6913948841276016,
+                "total": 2.956139956979314,
+                "data": [
+                    0.5909774159954395,
+                    0.5919458330026828,
+                    0.5901828329951968,
+                    0.5904224999976577,
+                    0.592611374988337
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b256-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b256-medium]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b256-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6308603340003174,
+                "max": 0.6342560420016525,
+                "mean": 0.6321606752026128,
+                "stddev": 0.0015151360244681094,
+                "rounds": 5,
+                "median": 0.6316096660011681,
+                "iqr": 0.0026134895015275106,
+                "q1": 0.6308618025032047,
+                "q3": 0.6334752920047322,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.6308603340003174,
+                "hd15iqr": 0.6342560420016525,
+                "ops": 1.581876315984843,
+                "total": 3.160803376013064,
+                "data": [
+                    0.6308603340003174,
+                    0.6316096660011681,
+                    0.6308622920041671,
+                    0.6332150420057587,
+                    0.6342560420016525
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b256-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b256-large]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b256-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.9147686250071274,
+                "max": 0.9326870829972904,
+                "mean": 0.9217922082025325,
+                "stddev": 0.008857784169879496,
+                "rounds": 5,
+                "median": 0.9163457910035504,
+                "iqr": 0.01584939549502451,
+                "q1": 0.9149420940048003,
+                "q3": 0.9307914894998248,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.9147686250071274,
+                "hd15iqr": 0.9326870829972904,
+                "ops": 1.0848431903649636,
+                "total": 4.6089610410126625,
+                "data": [
+                    0.9301596250006696,
+                    0.9147686250071274,
+                    0.9326870829972904,
+                    0.9149999170040246,
+                    0.9163457910035504
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b256-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b256-xl]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b256-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.5122881669958588,
+                "max": 2.590049666003324,
+                "mean": 2.5505837667995364,
+                "stddev": 0.028660773993886147,
+                "rounds": 5,
+                "median": 2.5503673749917652,
+                "iqr": 0.03658071874451707,
+                "q1": 2.532081979505165,
+                "q3": 2.568662698249682,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.5122881669958588,
+                "hd15iqr": 2.590049666003324,
+                "ops": 0.39206710754487256,
+                "total": 12.752918833997683,
+                "data": [
+                    2.5615337089984678,
+                    2.5122881669958588,
+                    2.5503673749917652,
+                    2.538679917008267,
+                    2.590049666003324
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b1024-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b1024-small]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b1024-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.350754708997556,
+                "max": 2.399588667001808,
+                "mean": 2.3785313836036948,
+                "stddev": 0.023531743632116468,
+                "rounds": 5,
+                "median": 2.391570749998209,
+                "iqr": 0.04239583350135945,
+                "q1": 2.3541235522570787,
+                "q3": 2.396519385758438,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.350754708997556,
+                "hd15iqr": 2.399588667001808,
+                "ops": 0.42042749862097994,
+                "total": 11.892656918018474,
+                "data": [
+                    2.395496292010648,
+                    2.391570749998209,
+                    2.350754708997556,
+                    2.355246500010253,
+                    2.399588667001808
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b1024-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b1024-medium]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b1024-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.431324584002141,
+                "max": 2.567970125004649,
+                "mean": 2.4835105834004936,
+                "stddev": 0.06024191489957661,
+                "rounds": 5,
+                "median": 2.4479402079887222,
+                "iqr": 0.09590669825411169,
+                "q1": 2.440827739501401,
+                "q3": 2.5367344377555128,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.431324584002141,
+                "hd15iqr": 2.567970125004649,
+                "ops": 0.4026558238502739,
+                "total": 12.417552917002467,
+                "data": [
+                    2.5263225420058006,
+                    2.4479402079887222,
+                    2.567970125004649,
+                    2.4439954580011545,
+                    2.431324584002141
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b1024-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b1024-large]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b1024-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 3.64353529199434,
+                "max": 3.7446673329977784,
+                "mean": 3.6922677499969723,
+                "stddev": 0.047608964858798265,
+                "rounds": 5,
+                "median": 3.6762485829967773,
+                "iqr": 0.08903729124722304,
+                "q1": 3.6528395107488905,
+                "q3": 3.7418768019961135,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 3.64353529199434,
+                "hd15iqr": 3.7446673329977784,
+                "ops": 0.27083626316125636,
+                "total": 18.46133874998486,
+                "data": [
+                    3.7409466249955585,
+                    3.6559409170004074,
+                    3.64353529199434,
+                    3.7446673329977784,
+                    3.6762485829967773
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_euclidean_n[b1024-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_euclidean_n[b1024-xl]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b1024-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 10.133224541990785,
+                "max": 10.231944917002693,
+                "mean": 10.164941783400717,
+                "stddev": 0.040510704844727095,
+                "rounds": 5,
+                "median": 10.150645375004387,
+                "iqr": 0.05160496850658092,
+                "q1": 10.135678979248041,
+                "q3": 10.187283947754622,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 10.133224541990785,
+                "hd15iqr": 10.231944917002693,
+                "ops": 0.09837734650217017,
+                "total": 50.82470891700359,
+                "data": [
+                    10.231944917002693,
+                    10.13649712500046,
+                    10.150645375004387,
+                    10.172396958005265,
+                    10.133224541990785
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b64-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b64-small]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b64-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1468333749944577,
+                "max": 0.15047604199207854,
+                "mean": 0.14839001799867088,
+                "stddev": 0.0014301088845549796,
+                "rounds": 7,
+                "median": 0.14829762499721255,
+                "iqr": 0.0025373119897267316,
+                "q1": 0.1471363335076603,
+                "q3": 0.14967364549738704,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.1468333749944577,
+                "hd15iqr": 0.15047604199207854,
+                "ops": 6.7389977674169215,
+                "total": 1.0387301259906963,
+                "data": [
+                    0.1468333749944577,
+                    0.1470532500097761,
+                    0.14738558400131296,
+                    0.14829762499721255,
+                    0.14867908399901353,
+                    0.15000516599684488,
+                    0.15047604199207854
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b64-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b64-medium]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b64-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15045808300783392,
+                "max": 0.15473545801069122,
+                "mean": 0.15295453557337169,
+                "stddev": 0.0012820852552366843,
+                "rounds": 7,
+                "median": 0.15320287500799168,
+                "iqr": 0.0006232707528397441,
+                "q1": 0.1527797289963928,
+                "q3": 0.15340299974923255,
+                "iqr_outliers": 2,
+                "stddev_outliers": 2,
+                "outliers": "2;2",
+                "ld15iqr": 0.1527728329965612,
+                "hd15iqr": 0.15473545801069122,
+                "ops": 6.537890466937504,
+                "total": 1.0706817490136018,
+                "data": [
+                    0.15344995800114702,
+                    0.15320287500799168,
+                    0.15326212499348912,
+                    0.15280041699588764,
+                    0.15473545801069122,
+                    0.1527728329965612,
+                    0.15045808300783392
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b64-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b64-large]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b64-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15608804200019222,
+                "max": 0.15866183298930991,
+                "mean": 0.15683549999916327,
+                "stddev": 0.0008379394408828769,
+                "rounds": 7,
+                "median": 0.1566705839941278,
+                "iqr": 0.0003068232508667279,
+                "q1": 0.1564325205035857,
+                "q3": 0.15673934375445242,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.15608804200019222,
+                "hd15iqr": 0.15866183298930991,
+                "ops": 6.376107450196767,
+                "total": 1.097848499994143,
+                "data": [
+                    0.15672050000284798,
+                    0.15657783299684525,
+                    0.15674562500498723,
+                    0.15608804200019222,
+                    0.1566705839941278,
+                    0.15866183298930991,
+                    0.1563840830058325
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b64-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b64-xl]",
+            "params": {
+                "batch_size": 64,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b64-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.15475791599601507,
+                "max": 0.15700170799391344,
+                "mean": 0.15595461871375196,
+                "stddev": 0.0008263256341280729,
+                "rounds": 7,
+                "median": 0.15599279099842533,
+                "iqr": 0.0013634380011353642,
+                "q1": 0.15536903075189912,
+                "q3": 0.15673246875303448,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.15475791599601507,
+                "hd15iqr": 0.15700170799391344,
+                "ops": 6.412121732896268,
+                "total": 1.0916823309962638,
+                "data": [
+                    0.15599279099842533,
+                    0.15475791599601507,
+                    0.15531116600323003,
+                    0.1561492500040913,
+                    0.1569268750026822,
+                    0.15700170799391344,
+                    0.1555426249979064
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b256-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b256-small]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b256-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.586794958988321,
+                "max": 0.5992251249990659,
+                "mean": 0.5914460833970224,
+                "stddev": 0.004857788791661454,
+                "rounds": 5,
+                "median": 0.5897335829940857,
+                "iqr": 0.006165416001749691,
+                "q1": 0.5882235837489134,
+                "q3": 0.5943889997506631,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.586794958988321,
+                "hd15iqr": 0.5992251249990659,
+                "ops": 1.690771192965574,
+                "total": 2.9572304169851122,
+                "data": [
+                    0.5886997920024442,
+                    0.586794958988321,
+                    0.5897335829940857,
+                    0.5992251249990659,
+                    0.5927769580011955
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b256-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b256-medium]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b256-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5991458749922458,
+                "max": 0.6029124589986168,
+                "mean": 0.6008889001968782,
+                "stddev": 0.0015760060465256774,
+                "rounds": 5,
+                "median": 0.6008401669969317,
+                "iqr": 0.002707896004721988,
+                "q1": 0.5994830937452207,
+                "q3": 0.6021909897499427,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.5991458749922458,
+                "hd15iqr": 0.6029124589986168,
+                "ops": 1.6642011521137352,
+                "total": 3.004444500984391,
+                "data": [
+                    0.5991458749922458,
+                    0.5995954999962123,
+                    0.6008401669969317,
+                    0.6019505000003846,
+                    0.6029124589986168
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b256-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b256-large]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b256-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6218195840046974,
+                "max": 0.6335947499901522,
+                "mean": 0.6258413086005021,
+                "stddev": 0.004607897690071206,
+                "rounds": 5,
+                "median": 0.6244655829941621,
+                "iqr": 0.005057885504356818,
+                "q1": 0.6228953337522398,
+                "q3": 0.6279532192565966,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.6218195840046974,
+                "hd15iqr": 0.6335947499901522,
+                "ops": 1.5978491452348944,
+                "total": 3.1292065430025104,
+                "data": [
+                    0.6335947499901522,
+                    0.6244655829941621,
+                    0.6260727090120781,
+                    0.6232539170014206,
+                    0.6218195840046974
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b256-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b256-xl]",
+            "params": {
+                "batch_size": 256,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b256-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6180499999900348,
+                "max": 0.6497459579986753,
+                "mean": 0.6336823579971679,
+                "stddev": 0.011545717870671273,
+                "rounds": 5,
+                "median": 0.6332666660018731,
+                "iqr": 0.013794302503811195,
+                "q1": 0.6268332807449042,
+                "q3": 0.6406275832487154,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.6180499999900348,
+                "hd15iqr": 0.6497459579986753,
+                "ops": 1.5780777030950093,
+                "total": 3.1684117899858393,
+                "data": [
+                    0.6497459579986753,
+                    0.6297610409965273,
+                    0.6375881249987287,
+                    0.6332666660018731,
+                    0.6180499999900348
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b1024-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b1024-small]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    15,
+                    25
+                ]
+            },
+            "param": "b1024-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.307859666994773,
+                "max": 2.3853657500003465,
+                "mean": 2.3425456417986426,
+                "stddev": 0.029288266037782555,
+                "rounds": 5,
+                "median": 2.3337583749962505,
+                "iqr": 0.03826408350505517,
+                "q1": 2.3246752917475533,
+                "q3": 2.3629393752526084,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.307859666994773,
+                "hd15iqr": 2.3853657500003465,
+                "ops": 0.4268860261062767,
+                "total": 11.712728208993212,
+                "data": [
+                    2.33028049999848,
+                    2.3554639170033624,
+                    2.307859666994773,
+                    2.3853657500003465,
+                    2.3337583749962505
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b1024-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b1024-medium]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    50,
+                    75
+                ]
+            },
+            "param": "b1024-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.3764579169946956,
+                "max": 2.4314933749992633,
+                "mean": 2.3939405499986606,
+                "stddev": 0.022075203866149636,
+                "rounds": 5,
+                "median": 2.3890837079961784,
+                "iqr": 0.024047238501225365,
+                "q1": 2.3787206984998193,
+                "q3": 2.4027679370010446,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.3764579169946956,
+                "hd15iqr": 2.4314933749992633,
+                "ops": 0.4177213172651925,
+                "total": 11.969702749993303,
+                "data": [
+                    2.3890837079961784,
+                    2.3764579169946956,
+                    2.379474959001527,
+                    2.3931927910016384,
+                    2.4314933749992633
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b1024-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b1024-large]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    150,
+                    200
+                ]
+            },
+            "param": "b1024-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.4960667079867562,
+                "max": 2.5418762500048615,
+                "mean": 2.5102222413988784,
+                "stddev": 0.018709999497850432,
+                "rounds": 5,
+                "median": 2.5006614580051973,
+                "iqr": 0.020637291250750422,
+                "q1": 2.4991142707476683,
+                "q3": 2.5197515619984188,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.4960667079867562,
+                "hd15iqr": 2.5418762500048615,
+                "ops": 0.3983711017725376,
+                "total": 12.551111206994392,
+                "data": [
+                    2.4960667079867562,
+                    2.5001301250013057,
+                    2.5006614580051973,
+                    2.512376665996271,
+                    2.5418762500048615
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_random_tree_n[b1024-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_random_tree_n[b1024-xl]",
+            "params": {
+                "batch_size": 1024,
+                "node_range": [
+                    400,
+                    500
+                ]
+            },
+            "param": "b1024-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.4481809999997495,
+                "max": 2.5134119160065893,
+                "mean": 2.484486483395449,
+                "stddev": 0.02775924973510216,
+                "rounds": 5,
+                "median": 2.4974972499912838,
+                "iqr": 0.04520760424929904,
+                "q1": 2.458848656493501,
+                "q3": 2.5040562607428,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.4481809999997495,
+                "hd15iqr": 2.5134119160065893,
+                "ops": 0.40249766166300077,
+                "total": 12.422432416977244,
+                "data": [
+                    2.5134119160065893,
+                    2.4974972499912838,
+                    2.5009377089882037,
+                    2.4481809999997495,
+                    2.4624045419914182
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b64-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b64-small]",
+            "params": {
+                "batch_size": 64,
+                "arm_config": [
+                    2,
+                    4,
+                    4,
+                    8
+                ]
+            },
+            "param": "b64-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1464404579892289,
+                "max": 0.1497570409992477,
+                "mean": 0.14824850585760682,
+                "stddev": 0.0012190230774473676,
+                "rounds": 7,
+                "median": 0.14847183399251662,
+                "iqr": 0.001997906994802179,
+                "q1": 0.1472194787565968,
+                "q3": 0.14921738575139898,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.1464404579892289,
+                "hd15iqr": 0.1497570409992477,
+                "ops": 6.745430547276499,
+                "total": 1.0377395410032477,
+                "data": [
+                    0.1497570409992477,
+                    0.14896454200788867,
+                    0.14930166699923575,
+                    0.14847183399251662,
+                    0.14776704100950155,
+                    0.14703695800562855,
+                    0.1464404579892289
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b64-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b64-medium]",
+            "params": {
+                "batch_size": 64,
+                "arm_config": [
+                    3,
+                    5,
+                    8,
+                    15
+                ]
+            },
+            "param": "b64-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.14582266598881688,
+                "max": 0.14701954199699685,
+                "mean": 0.14617720242780965,
+                "stddev": 0.0003922050478664759,
+                "rounds": 7,
+                "median": 0.14606683400052134,
+                "iqr": 0.0002036972546193283,
+                "q1": 0.1460013962496305,
+                "q3": 0.14620509350424982,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 0.14582266598881688,
+                "hd15iqr": 0.14701954199699685,
+                "ops": 6.841012027808201,
+                "total": 1.0232404169946676,
+                "data": [
+                    0.14624770800583065,
+                    0.14701954199699685,
+                    0.14582266598881688,
+                    0.14607724999950733,
+                    0.1459995839977637,
+                    0.14606683400052134,
+                    0.14600683300523087
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b64-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b64-large]",
+            "params": {
+                "batch_size": 64,
+                "arm_config": [
+                    4,
+                    8,
+                    15,
+                    30
+                ]
+            },
+            "param": "b64-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.148692167000263,
+                "max": 0.14996024999709334,
+                "mean": 0.1492478689989574,
+                "stddev": 0.000495841622263353,
+                "rounds": 7,
+                "median": 0.14905474999977741,
+                "iqr": 0.0008533129948773421,
+                "q1": 0.14886084325189586,
+                "q3": 0.1497141562467732,
+                "iqr_outliers": 0,
+                "stddev_outliers": 3,
+                "outliers": "3;0",
+                "ld15iqr": 0.148692167000263,
+                "hd15iqr": 0.14996024999709334,
+                "ops": 6.700263170973555,
+                "total": 1.0447350829927018,
+                "data": [
+                    0.14892174999113195,
+                    0.149470125004882,
+                    0.14884054100548383,
+                    0.14979549999407027,
+                    0.14996024999709334,
+                    0.148692167000263,
+                    0.14905474999977741
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b64-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b64-xl]",
+            "params": {
+                "batch_size": 64,
+                "arm_config": [
+                    4,
+                    8,
+                    30,
+                    60
+                ]
+            },
+            "param": "b64-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.1603718749975087,
+                "max": 0.1662529169989284,
+                "mean": 0.16349728557023419,
+                "stddev": 0.0019417082966783968,
+                "rounds": 7,
+                "median": 0.16381895799713675,
+                "iqr": 0.002527020751585951,
+                "q1": 0.16224804149896954,
+                "q3": 0.1647750622505555,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.1603718749975087,
+                "hd15iqr": 0.1662529169989284,
+                "ops": 6.116309494144023,
+                "total": 1.1444809989916394,
+                "data": [
+                    0.1662529169989284,
+                    0.16498158300237264,
+                    0.16381895799713675,
+                    0.1603718749975087,
+                    0.16204599999764469,
+                    0.1628541660029441,
+                    0.16415549999510404
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b256-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b256-small]",
+            "params": {
+                "batch_size": 256,
+                "arm_config": [
+                    2,
+                    4,
+                    4,
+                    8
+                ]
+            },
+            "param": "b256-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5886586660053581,
+                "max": 0.5905776669969782,
+                "mean": 0.5896743000019342,
+                "stddev": 0.000937475678568698,
+                "rounds": 5,
+                "median": 0.5900238750036806,
+                "iqr": 0.0017863432512967847,
+                "q1": 0.5886781045010139,
+                "q3": 0.5904644477523107,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.5886586660053581,
+                "hd15iqr": 0.5905776669969782,
+                "ops": 1.6958514217029976,
+                "total": 2.948371500009671,
+                "data": [
+                    0.5886845839995658,
+                    0.5905776669969782,
+                    0.5886586660053581,
+                    0.5904267080040881,
+                    0.5900238750036806
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b256-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b256-medium]",
+            "params": {
+                "batch_size": 256,
+                "arm_config": [
+                    3,
+                    5,
+                    8,
+                    15
+                ]
+            },
+            "param": "b256-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5803490000107558,
+                "max": 0.5983879160048673,
+                "mean": 0.587132233203738,
+                "stddev": 0.007256135373154329,
+                "rounds": 5,
+                "median": 0.5874291249929229,
+                "iqr": 0.009963822740246542,
+                "q1": 0.5809208750106336,
+                "q3": 0.5908846977508802,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 0.5803490000107558,
+                "hd15iqr": 0.5983879160048673,
+                "ops": 1.703193835132187,
+                "total": 2.93566116601869,
+                "data": [
+                    0.5811115000105929,
+                    0.5803490000107558,
+                    0.5874291249929229,
+                    0.5983879160048673,
+                    0.5883836249995511
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b256-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b256-large]",
+            "params": {
+                "batch_size": 256,
+                "arm_config": [
+                    4,
+                    8,
+                    15,
+                    30
+                ]
+            },
+            "param": "b256-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.5985015409969492,
+                "max": 0.6236250410001958,
+                "mean": 0.6105946079973364,
+                "stddev": 0.011852029179304458,
+                "rounds": 5,
+                "median": 0.6095221669966122,
+                "iqr": 0.022872281246236525,
+                "q1": 0.5993262912488717,
+                "q3": 0.6221985724951082,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.5985015409969492,
+                "hd15iqr": 0.6236250410001958,
+                "ops": 1.6377478394050318,
+                "total": 3.052973039986682,
+                "data": [
+                    0.5996012079995126,
+                    0.5985015409969492,
+                    0.6095221669966122,
+                    0.6236250410001958,
+                    0.6217230829934124
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b256-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b256-xl]",
+            "params": {
+                "batch_size": 256,
+                "arm_config": [
+                    4,
+                    8,
+                    30,
+                    60
+                ]
+            },
+            "param": "b256-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 0.6417117920063902,
+                "max": 0.6556142500048736,
+                "mean": 0.6490666836005403,
+                "stddev": 0.0066214577739040145,
+                "rounds": 5,
+                "median": 0.6516937919950578,
+                "iqr": 0.012340363991825143,
+                "q1": 0.6421131672541378,
+                "q3": 0.654453531245963,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 0.6417117920063902,
+                "hd15iqr": 0.6556142500048736,
+                "ops": 1.5406737478077632,
+                "total": 3.2453334180027014,
+                "data": [
+                    0.6540666249929927,
+                    0.6516937919950578,
+                    0.6556142500048736,
+                    0.642246959003387,
+                    0.6417117920063902
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b1024-small]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b1024-small]",
+            "params": {
+                "batch_size": 1024,
+                "arm_config": [
+                    2,
+                    4,
+                    4,
+                    8
+                ]
+            },
+            "param": "b1024-small",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.256667458001175,
+                "max": 2.3337643749982817,
+                "mean": 2.3130659916001606,
+                "stddev": 0.03210392634291657,
+                "rounds": 5,
+                "median": 2.328780915995594,
+                "iqr": 0.027941010990616633,
+                "q1": 2.3021274270067806,
+                "q3": 2.3300684379973973,
+                "iqr_outliers": 1,
+                "stddev_outliers": 1,
+                "outliers": "1;1",
+                "ld15iqr": 2.317280750008649,
+                "hd15iqr": 2.3337643749982817,
+                "ops": 0.43232661914163895,
+                "total": 11.565329958000802,
+                "data": [
+                    2.3337643749982817,
+                    2.328780915995594,
+                    2.317280750008649,
+                    2.256667458001175,
+                    2.3288364589971025
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b1024-medium]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b1024-medium]",
+            "params": {
+                "batch_size": 1024,
+                "arm_config": [
+                    3,
+                    5,
+                    8,
+                    15
+                ]
+            },
+            "param": "b1024-medium",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.321031125000445,
+                "max": 2.373819291999098,
+                "mean": 2.339637691798271,
+                "stddev": 0.02156862081860562,
+                "rounds": 5,
+                "median": 2.3381637499987846,
+                "iqr": 0.02978688575240085,
+                "q1": 2.321403218746127,
+                "q3": 2.351190104498528,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.321031125000445,
+                "hd15iqr": 2.373819291999098,
+                "ops": 0.42741660535969106,
+                "total": 11.698188458991353,
+                "data": [
+                    2.373819291999098,
+                    2.343647041998338,
+                    2.3381637499987846,
+                    2.321031125000445,
+                    2.3215272499946877
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b1024-large]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b1024-large]",
+            "params": {
+                "batch_size": 1024,
+                "arm_config": [
+                    4,
+                    8,
+                    15,
+                    30
+                ]
+            },
+            "param": "b1024-large",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.391384791000746,
+                "max": 2.5179740419989685,
+                "mean": 2.4531999247992644,
+                "stddev": 0.055207964511671585,
+                "rounds": 5,
+                "median": 2.443128290993627,
+                "iqr": 0.09913187474376173,
+                "q1": 2.406671104254201,
+                "q3": 2.505802978997963,
+                "iqr_outliers": 0,
+                "stddev_outliers": 2,
+                "outliers": "2;0",
+                "ld15iqr": 2.391384791000746,
+                "hd15iqr": 2.5179740419989685,
+                "ops": 0.40763086199826376,
+                "total": 12.265999623996322,
+                "data": [
+                    2.5179740419989685,
+                    2.5017459579976276,
+                    2.443128290993627,
+                    2.391384791000746,
+                    2.4117665420053527
+                ],
+                "iterations": 1
+            }
+        },
+        {
+            "group": null,
+            "name": "test_bench_path_star_n[b1024-xl]",
+            "fullname": "old_tests/bench_generator.py::test_bench_path_star_n[b1024-xl]",
+            "params": {
+                "batch_size": 1024,
+                "arm_config": [
+                    4,
+                    8,
+                    30,
+                    60
+                ]
+            },
+            "param": "b1024-xl",
+            "extra_info": {},
+            "options": {
+                "disable_gc": false,
+                "timer": "perf_counter",
+                "min_rounds": 5,
+                "max_time": 1.0,
+                "min_time": 5e-06,
+                "warmup": false
+            },
+            "stats": {
+                "min": 2.536577666993253,
+                "max": 2.6947822499932954,
+                "mean": 2.6362585499940905,
+                "stddev": 0.06160034306486084,
+                "rounds": 5,
+                "median": 2.6550413749937434,
+                "iqr": 0.0765073027505423,
+                "q1": 2.601250634994358,
+                "q3": 2.6777579377449,
+                "iqr_outliers": 0,
+                "stddev_outliers": 1,
+                "outliers": "1;0",
+                "ld15iqr": 2.536577666993253,
+                "hd15iqr": 2.6947822499932954,
+                "ops": 0.37932546487226815,
+                "total": 13.181292749970453,
+                "data": [
+                    2.536577666993253,
+                    2.672083166995435,
+                    2.6550413749937434,
+                    2.6947822499932954,
+                    2.622808290994726
+                ],
+                "iterations": 1
+            }
+        }
+    ],
+    "datetime": "2026-07-15T14:48:44.932028+00:00",
+    "version": "5.2.3"
+}

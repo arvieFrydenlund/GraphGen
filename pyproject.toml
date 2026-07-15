@@ -36,6 +36,14 @@ dependencies = [
 ]
 requires-python = ">=3.10,<3.11"
 
+[project.optional-dependencies]
+# Install with: uv pip install -e ".[dev]"   (or  pip install -e ".[dev]")
+# Used by the pre-refactor timing baselines under old_tests/.
+dev = [
+    "pytest>=8",
+    "pytest-benchmark>=4",
+]
+
 # --- scikit-build-core --------------------------------------------------------
 # Drives CMake for the C++ extension. `editable.rebuild = true` makes
 # `import generator` re-run `cmake --build` transparently, so C++ edits
