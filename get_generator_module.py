@@ -793,54 +793,43 @@ def create_task_pos_for_inference():
     pass  # TODO
 
 
-def get_generator_module(cpp_files=('undirected_graphs.h', 'directed_graphs.h', 'utils.h', 'dictionaries.h', 'matrix.h',
-                                    'args.h', 'graph_wrapper.h', 'graph_tokenizer.h', 'tasks.h', 'scratch_pads.h',
-                                    'instance.h', 'generator.cpp'),
-                         cpp_path='',
-                         boost_path='/usr/include/boost/graph/',):
+def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
     """
-    This will import the C++ module `generator` and may compile it from source if it is not found or is out-of-date.
+    Import the C++ `generator` module, installing / rebuilding it via
+    scikit-build-core (`pip install -e .`) when necessary.
+
+    Post-Step-1a of PLAN.md the C++ build is driven by CMake + scikit-build-core
+    (see pyproject.toml). Two mechanisms keep the module up to date:
+
+      1. If `import generator` fails, we shell out to `pip install -e .` from
+         the repo root. That runs CMake and drops an editable-install shim
+         into site-packages.
+      2. Once installed in editable mode, scikit-build-core's
+         `editable.rebuild = true` makes subsequent imports transparently
+         rebuild the extension when C++ sources change -- no explicit
+         freshness check needed here.
+
+    `cpp_files`, `cpp_path`, and `boost_path` are accepted for backwards
+    compatibility with pre-Step-1a callers, but no longer used: CMakeLists.txt
+    is the single source of truth for what gets compiled.
     """
+    del cpp_files, cpp_path, boost_path  # legacy kwargs; ignored on purpose
 
-    def build_module(name, cpp_files, cpp_path, boost_path):
-        from os import system  #  -Ofast, don't use this cause numpy warnings
-        import sysconfig
-        sys_config = sysconfig.get_config_var("EXT_SUFFIX")
-        includes = " ".join([f"{cpp_path}{f}" for f in cpp_files]) + " "
-        if system(f"g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared "
-                  f"-Wno-sign-compare -Wunused-variable "  # I should fix these instead of suppressing the warnings
-                  f"-fPIC $(python3 -m pybind11 --includes) "
-                  f"-I{boost_path} "
-                  f"-I. {includes} "
-                  f"-o generator{sys_config}") != 0:
-            print(f"ERROR: Unable to compile `{name}.cpp`.")
-            import sys
-            sys.exit(1)
-
-    def check_fresh(cpp_files, cpp_path):
-        for f in cpp_files:
-            if getmtime(generator_module.origin) < os.path.getmtime(f'{cpp_path}{f}'):
-                print(f"ERROR: `{f}` is newer than `generator object`. Please recompile.")
-                return False
-        return True
+    def build_module():
+        """Install the extension in editable mode from the repo root."""
+        import subprocess
+        repo_root = os.path.dirname(os.path.abspath(__file__))
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", repo_root],
+            check=True,
+        )
 
     try:
-        from os.path import getmtime
-        import importlib.machinery
-        from importlib.util import find_spec
-
-        generator_module = find_spec("generator")
-        if generator_module is None:
-            raise ModuleNotFoundError
-        elif not check_fresh(cpp_files, cpp_path):
-            print("C++ module `generator` is out-of-date. Compiling from source...")
-            build_module("generator", cpp_files, cpp_path, boost_path)
-        import generator
+        import generator  # noqa: F401 -- probe import
     except ModuleNotFoundError:
-        print("C++ module `generator` not found. Compiling from source...")
-        build_module("generator", cpp_files, cpp_path, boost_path)
-        print(find_spec('generator'))
-        import generator
+        print("C++ module `generator` not found. Building via scikit-build-core...")
+        build_module()
+        import generator  # noqa: F811
 
     setattr(generator, "get_args_parser", get_args_parser)
 

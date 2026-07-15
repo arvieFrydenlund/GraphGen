@@ -1,3 +1,7 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
 [project]
 name = "GraphGen"
 version = "0.1.0"
@@ -20,5 +24,32 @@ dependencies = [
     "bidict",
     "PrettyPrintTree",
     "pybind11",
+    # scikit-build-core's editable-install rebuild shim shells out to `cmake`
+    # (and `ninja`) at *import* time whenever a source file changes. Pin them
+    # as runtime deps so the venv always has them, no brew prerequisite.
+    # scikit-build-core itself is pinned here (not only in [build-system])
+    # because install.sh uses --no-build-isolation, and because the same
+    # persistent venv is what runs the editable rebuild.
+    "scikit-build-core>=0.10",
+    "cmake>=3.24",
+    "ninja",
 ]
 requires-python = ">=3.10,<3.11"
+
+# --- scikit-build-core --------------------------------------------------------
+# Drives CMake for the C++ extension. `editable.rebuild = true` makes
+# `import generator` re-run `cmake --build` transparently, so C++ edits
+# picked up without any manual step. Step 1a of PLAN.md.
+
+[tool.scikit-build]
+minimum-version = "0.10"
+cmake.version = ">=3.24"
+build-dir = "build/{wheel_tag}"
+# Package layout: only the C++ extension ships. No Python packages.
+wheel.packages = []
+wheel.py-api = "cp310"
+
+[tool.scikit-build.editable]
+mode = "redirect"
+rebuild = true
+verbose = false

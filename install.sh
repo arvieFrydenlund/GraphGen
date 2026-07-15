@@ -1,10 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# Resolve the Python interpreter. Prefer the project's uv/venv Python
-# (which has pybind11 installed and matches pyproject.toml's requires-python),
-# then fall back to whatever `python3` is on PATH. Callers can override with
-# `PYTHON=/path/to/python bash install.sh`.
+# GraphGen build shim.
+#
+# Post-Step-1a: CMake + scikit-build-core do all the real work. This script
+# just picks a Python interpreter and runs an editable install, which:
+#   1) configures + builds the C++ extension via CMake,
+#   2) drops a rebuild-on-import shim into site-packages
+#      (see tool.scikit-build.editable.rebuild in pyproject.toml),
+# so `import generator` from anywhere transparently rebuilds when C++ sources
+# change.
+#
+# Callers can override the interpreter with `PYTHON=/path/to/python bash install.sh`.
+
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x ".venv/bin/python" ]]; then
     PYTHON=".venv/bin/python"
@@ -17,38 +25,23 @@ if [[ -z "${PYTHON:-}" ]]; then
 fi
 echo "Using Python: ${PYTHON}"
 
-# Derive the extension suffix (e.g. .cpython-310-darwin.so) from sysconfig
-# rather than python3-config, since uv-managed envs don't ship python3-config.
-EXT_SUFFIX="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')"
-PYBIND11_INCLUDES="$("${PYTHON}" -m pybind11 --includes)"
-
-# Resolve the Boost include dir. On macOS we install Boost via Homebrew
-# (see install_mac_boost.sh) and pick it up here without needing sudo /
-# system symlinks. On Linux fall back to the traditional /usr/include path.
-if [[ "$(uname -s)" == "Darwin" ]] \
-    && command -v brew >/dev/null 2>&1 \
-    && brew list boost >/dev/null 2>&1; then
-  BOOST_INCLUDE_DIR="$(brew --prefix boost)/include"
+# uv-managed venvs don't ship pip, so prefer `uv pip` when available.
+# Falls back to `python -m pip` otherwise. Both invoke scikit-build-core
+# through the pyproject.toml [build-system] block.
+#
+# --no-build-isolation is important: without it, uv builds in an isolated
+# throwaway env and CMake bakes that env's ninja path into CMakeCache.txt,
+# breaking the editable rebuild shim later at import time. Using the
+# persistent venv (which pins scikit-build-core, cmake, ninja, pybind11 as
+# runtime deps) means the rebuild shim finds the same tools every time.
+if command -v uv >/dev/null 2>&1; then
+  # Make sure build deps exist in the venv before we skip isolation.
+  VIRTUAL_ENV="$(cd "$(dirname "${PYTHON}")/.." && pwd)" \
+    uv pip install --python "${PYTHON}" \
+      "scikit-build-core>=0.10" "cmake>=3.24" ninja "pybind11>=2.13"
+  VIRTUAL_ENV="$(cd "$(dirname "${PYTHON}")/.." && pwd)" \
+    uv pip install --python "${PYTHON}" --no-build-isolation -e .
 else
-  BOOST_INCLUDE_DIR="/usr/include"
+  "${PYTHON}" -m pip install "scikit-build-core>=0.10" "cmake>=3.24" ninja "pybind11>=2.13"
+  "${PYTHON}" -m pip install --no-build-isolation -e .
 fi
-
-# On macOS, `g++` is actually clang++, which (a) refuses to accept header
-# files as compilation inputs alongside a single `-o` output, and (b) needs
-# `-undefined dynamic_lookup` for pybind11 modules so Python's symbols are
-# resolved at import time instead of at link time. On real g++ (Linux),
-# keep the original invocation so behavior there is unchanged.
-if g++ --version 2>/dev/null | grep -qi clang; then
-  g++ -std=c++20 -O3 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -undefined dynamic_lookup -Wno-sign-compare -Wunused-variable \
-    -fPIC ${PYBIND11_INCLUDES} \
-    -I"${BOOST_INCLUDE_DIR}" \
-    -I. generator.cpp -o "generator${EXT_SUFFIX}"
-else
-  g++ -std=c++20 -Ofast -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -Wno-sign-compare -Wunused-variable \
-    -fPIC ${PYBIND11_INCLUDES} \
-    -I"${BOOST_INCLUDE_DIR}" \
-    -I. undirected_graphs.h directed_graphs.h utils.h dictionaries.h matrix.h args.h graph_wrapper.h graph_tokenizer.h tasks.h scratch_pads.h instance.h generator.cpp -o "generator${EXT_SUFFIX}"
-fi
-
-"${PYTHON}" setup.py build
-"${PYTHON}" setup.py install

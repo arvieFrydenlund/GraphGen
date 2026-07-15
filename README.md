@@ -53,26 +53,90 @@ This will be useful for real world datasets where the graphs are pre-defined.
 
 ## Build
 
-You need to include python library and pybind11 to the compiler options, for Clion include
-examples:
-* -I/usr/include/python3.11 -lpython3.11
-* -I/usr/include/python3.10 -lpython3.10
-* -I/home/arvie/PycharmProjects/Virtualenv/Next-Token-Failures/lib/python3.10/site-packages/pybind11/include
+The C++ extension is built with CMake, driven by
+[scikit-build-core](https://scikit-build-core.readthedocs.io/). No manual
+`g++` invocation, no `python3-config`, no per-machine include paths.
 
-use
+### Prerequisites
 
-``python3 -c "import pybind11;print(pybind11.get_include())"`` to find last one
+* Python 3.10 (`.venv` set up with [uv](https://github.com/astral-sh/uv) or plain `python -m venv`)
+* Boost headers
+    * macOS: `bash install_mac_boost.sh` (or `brew install boost`)
+    * Linux: `sudo apt install libboost-all-dev`
+* A C++20 compiler (clang on macOS, g++ on Linux)
 
-My current clion build options: `-g -I/usr/include/python3.12 -lpython3.12 -I/h/arvie/PycharmProjects/Virtualenv/next_token_3.12/lib/python3.12/site-packages/pybind11/include  -Wall -Wpedantic  -fsanitize=address`
-and maybe `-fsanitize=leak` and `ASAN_OPTIONS=detect_leaks=1`.
+CMake, Ninja, pybind11 and scikit-build-core are pinned as runtime deps in
+[pyproject.toml](pyproject.toml), so they get installed into the venv
+automatically -- you don't need them on the system.
 
-Also, remember to set the environmental file to the python interpreter you want to use with pybind11 in the project settings.
+> Note: scikit-build-core drives CMake, and CMake in turn uses
+> [Ninja](https://ninja-build.org/) as its build backend to run the
+> compile/link commands.
 
+### First install
 
-Direct compilation: `g++ --std=c++20 -DNDEBUG -fno-stack-protector -Wall -Wpedantic -shared -fPIC $(python3 -m pybind11 --includes) -I/usr/include/boost/graph/ -I. undirected_graphs.h directed_graphs.h utils.h generator.cpp -o generator$(python3-config --extension-suffix)`
+```bash
+bash install.sh
+```
 
-Note this works if using the primary system python, if you have multiple versions of python installed [see here where python3-config --extension-suffix fails](https://stackoverflow.com/questions/77112605/what-is-the-prefered-way-of-generating-extension-module-filename-suffix-in-virtu) 
+That's it. Under the hood the script:
 
+1. Picks `.venv/bin/python` (or `$PYTHON` if set, or `python3`).
+2. Installs the build deps (`scikit-build-core`, `cmake`, `ninja`,
+   `pybind11`) into the venv so `--no-build-isolation` works.
+3. Runs `pip install -e . --no-build-isolation`, which invokes CMake +
+   Ninja to compile [generator.cpp](generator.cpp) into
+   `generator.cpython-310-*.so` and drops a scikit-build-core
+   editable-install shim into `site-packages`.
+
+### Rebuilding after C++ edits
+
+Just re-import. `[tool.scikit-build.editable].rebuild = true` in
+[pyproject.toml](pyproject.toml) makes the editable-install shim run
+`cmake --build` transparently every time you `import generator`, so any
+change to `generator.cpp` / the header files / `CMakeLists.txt` picks up
+on the next `python` invocation with no explicit rebuild step.
+
+There is also a Python fallback: `get_generator_module()` in
+[get_generator_module.py](get_generator_module.py) shells out to
+`pip install -e .` if `import generator` fails outright (e.g. fresh
+checkout, `.so` deleted).
+
+### Verifying a build
+
+Minimal smoke test -- doesn't touch dictionaries, just proves the module
+compiled and the FFI works:
+
+```bash
+source .venv/bin/activate
+python -c "
+from get_generator_module import get_generator_module
+get_generator_module()
+import generator
+generator.set_seed(1234)
+assert generator.get_seed() == 1234
+print('OK')
+"
+```
+
+### Manual CMake build (optional, IDE-friendly)
+
+If you want to compile without pip in the loop -- e.g. from CLion:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+The `.so` lands in `build/`. You'll need `pybind11` findable on
+`CMAKE_PREFIX_PATH` (easiest: activate the venv and run `cmake` from
+there).
+
+### Vendored dependency
+
+[Kokkos mdspan](https://github.com/kokkos/mdspan) is vendored under
+`third_party/mdspan/` (BSD-3-Clause). See
+`third_party/mdspan/VENDORED.md` for source and refresh instructions.
 
 
 ## Citation
