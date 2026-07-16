@@ -1,11 +1,10 @@
 """
-V1 (pre-refactor) end-to-end timing baselines for the 4 graph generators
-we care about: ``erdos_renyi_n``, ``euclidean_n``, ``random_tree_n``,
-``path_star_n``.
+End-to-end timing baselines for the four graph generators we care about:
+``erdos_renyi_n``, ``euclidean_n``, ``random_tree_n``, ``path_star_n``.
 
 We deliberately time the *whole* pipeline -- sample -> task -> tokenize ->
-Python dict marshalling -- because that's what Steps 3-8 of PLAN.md rewrite,
-and end-to-end throughput is what user code experiences.
+Python dict marshalling -- because end-to-end throughput is what user code
+experiences.
 
 Scope (per user request):
   * scratchpad_type = "none" only  (no BFS/DFS scratchpad sweep)

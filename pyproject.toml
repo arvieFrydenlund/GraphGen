@@ -30,6 +30,9 @@ dependencies = [
     # scikit-build-core itself is pinned here (not only in [build-system])
     # because install.sh uses --no-build-isolation, and because the same
     # persistent venv is what runs the editable rebuild.
+    #
+    # scikit-build itself requires Ninja as its CMake generator; pinning it
+    # here means users don't have to install it separately via brew/apt.
     "scikit-build-core>=0.10",
     "cmake>=3.24",
     "ninja",
@@ -38,7 +41,7 @@ requires-python = ">=3.10,<3.11"
 
 [project.optional-dependencies]
 # Install with: uv pip install -e ".[dev]"   (or  pip install -e ".[dev]")
-# Used by the pre-refactor timing baselines under old_tests/.
+# Provides the pytest + benchmark harnesses under tests/ and old_tests/.
 dev = [
     "pytest>=8",
     "pytest-benchmark>=4",
@@ -46,8 +49,8 @@ dev = [
 
 # --- scikit-build-core --------------------------------------------------------
 # Drives CMake for the C++ extension. `editable.rebuild = true` makes
-# `import generator` re-run `cmake --build` transparently, so C++ edits
-# picked up without any manual step. Step 1a of PLAN.md.
+# `import generator` re-run `cmake --build` transparently, so C++ edits are
+# picked up without any manual step.
 
 [tool.scikit-build]
 minimum-version = "0.10"
@@ -61,3 +64,15 @@ wheel.py-api = "cp310"
 mode = "redirect"
 rebuild = true
 verbose = false
+
+# --- pytest -----------------------------------------------------------------
+# Put the repo root on sys.path so tests can `import get_generator_module`
+# without a package layout.
+#
+# `testpaths` restricts collection to tests/ only. The old_tests/ tree
+# exercises the retired V1 C++ API and is kept solely so its recorded
+# baseline JSON can be replayed against the new framework for timing
+# comparison once the pipeline is complete.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

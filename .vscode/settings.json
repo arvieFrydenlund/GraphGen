@@ -1,0 +1,8 @@
+{
+    "cmake.cmakePath": "${workspaceFolder}/.venv/bin/cmake",
+    "cmake.configureArgs": [
+        "-DPython_EXECUTABLE=${workspaceFolder}/.venv/bin/python",
+        "-Dpybind11_DIR=${workspaceFolder}/.venv/lib/python3.10/site-packages/pybind11/share/cmake/pybind11"
+    ],
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}

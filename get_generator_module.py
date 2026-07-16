@@ -798,8 +798,8 @@ def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
     Import the C++ `generator` module, installing / rebuilding it via
     scikit-build-core (`pip install -e .`) when necessary.
 
-    Post-Step-1a of PLAN.md the C++ build is driven by CMake + scikit-build-core
-    (see pyproject.toml). Two mechanisms keep the module up to date:
+    The C++ build is driven by CMake + scikit-build-core (see pyproject.toml).
+    Two mechanisms keep the module up to date:
 
       1. If `import generator` fails, we shell out to `pip install -e .` from
          the repo root. That runs CMake and drops an editable-install shim
@@ -810,8 +810,8 @@ def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
          freshness check needed here.
 
     `cpp_files`, `cpp_path`, and `boost_path` are accepted for backwards
-    compatibility with pre-Step-1a callers, but no longer used: CMakeLists.txt
-    is the single source of truth for what gets compiled.
+    compatibility with older callers, but no longer used: CMakeLists.txt is
+    the single source of truth for what gets compiled.
     """
     del cpp_files, cpp_path, boost_path  # legacy kwargs; ignored on purpose
 

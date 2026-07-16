@@ -3,8 +3,8 @@ set -euo pipefail
 
 # GraphGen build shim.
 #
-# Post-Step-1a: CMake + scikit-build-core do all the real work. This script
-# just picks a Python interpreter and runs an editable install, which:
+# CMake + scikit-build-core do all the real work. This script just picks a
+# Python interpreter and runs an editable install, which:
 #   1) configures + builds the C++ extension via CMake,
 #   2) drops a rebuild-on-import shim into site-packages
 #      (see tool.scikit-build.editable.rebuild in pyproject.toml),
