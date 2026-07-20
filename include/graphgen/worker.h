@@ -17,6 +17,8 @@
 
 #include "graphgen/generator_config.h"
 #include "graphgen/graph_sampler.h"
+#include "graphgen/task_sampler.h"
+#include "graphgen/tokenizer.h"
 #include "graphgen/worker_shared_context.h"
 
 namespace graphgen {
@@ -29,10 +31,24 @@ public:
 
     py::dict generate_batch(const GeneratorConfig& cfg);
 
+    // Test-only introspection: runs one full graph_sampler_.run(...) call
+    // and returns a small dict of invariants (num_vertices, num_edges,
+    // num_components, vocab_ids) for pytest to check. Removed when
+    // generate_batch() gains a real return shape.
+    py::dict sample_graph_stats(const GeneratorConfig& cfg);
+
+    // Test-only introspection: runs graph_sampler_ then task_sampler_
+    // and returns the query + target fields (start, end, path,
+    // valid_next_hops) plus a couple of graph stats. Removed when
+    // generate_batch() gains a real return shape.
+    py::dict sample_shortest_path_stats(const GeneratorConfig& cfg);
+
 private:
     std::shared_ptr<WorkerSharedContext> ctx_;
     std::mt19937_64 gen_;
-    GraphSampler sampler_;
+    GraphSampler graph_sampler_;
+    TaskSampler  task_sampler_;
+    Tokenizer    tokenizer_;
 };
 
 }  // namespace graphgen

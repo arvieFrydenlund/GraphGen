@@ -1,9 +1,7 @@
 import os
 import sys
-import time
 import pydoc
 import numpy as np
-import torch
 
 try:
     import networkx as nx
@@ -11,789 +9,984 @@ except ImportError as e:
     print(f"NetworkX is not installed or broken. {e}")
     nx = None
 
-from sympy.polys.polyconfig import query
-
 """
-All code belonging to the generator is in here.  This is the python interface to the C++ code.
+Python-side interface to the C++ `generator` module.
 
-TThere is also code for recreating the graphs in python for plotting and statistics.
+Contents:
+  * :func:`get_generator_module` -- lazy import + rebuild of the
+    editable-installed C++ extension.
+  * :class:`GraphPlotter` -- render a single graph + task instance
+    for debugging.
+  * :func:`pprint_batch` + :func:`pprint_distance_matrix`
+    + :func:`pprint_distance_ranks` -- column-aligned batch
+    renderer, semantic-agnostic distance matrix printer, and
+    per-source distance-rank table printer for
+    ``batch['distance_rank_targets']``.
+  * :data:`SECTION_KEYS` + ``section_*`` helpers -- slice per-row
+    or padded batched tensors out of a ``Worker.generate_batch()``
+    dict.
 """
-
-
-def get_args_parser():
-    """
-    :return: the parser i.e. not the parsed arguments i.e. parser.parse_args()
-    """
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Test generator functions')
-
-    # graph settings
-    parser.add_argument('--graph_type', type=str, default='erdos_renyi')  # 'erdos_renyi' # 'euclidean'  # 'path_star'  # 'balanced'
-    parser.add_argument('--min_num_nodes', type=int, default=15,
-                        help="Minimum number of nodes for generated graphs.  "
-                             "We strongly recommend using shuffle_nodes and a vocab range map via min_vocab and max_vocab.")
-    parser.add_argument('--max_num_nodes', type=int, default=25,
-                        help='If -1 use max=min only i.e. only sample a single size')
-    parser.add_argument('--c_min', type=int, default=75,
-                        help='Min number of sampled edges to form a single connected component')  # for graphs with multiple connected components
-    parser.add_argument('--c_max', type=int, default=125,
-                        help='Max number of sampled edges to form a single connected component')
-    parser.add_argument('--shuffle_edges', action='store_true', default=True,
-                        help='Whether to shuffle edge list when generating the graph tokenization.')
-    parser.add_argument('--dont_shuffle_edges', action='store_false', dest='shuffle_edges')
-    parser.add_argument('--shuffle_nodes', action='store_true', default=True,
-                        help='Whether to shuffle node ids when generating the graph tokenization.'
-                             'This randomly maps nodes across the whole spectrum of available vocab ids.')
-    parser.add_argument('--dont_shuffle_nodes', action='store_false', dest='shuffle_nodes')
-
-    parser.add_argument('--min_vocab', type=int, default=-1,
-                        help='Minimum vocab id to use when shuffling nodes.'
-                             '-1 and -1 max_vocab means uses set dictionary values')
-    parser.add_argument('--max_vocab', type=int, default=-1,
-                        help='Maximum vocab id to use when shuffling nodes.'
-                             '-1 with a set minimum, will use the number of nodes.')
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--max_edges', type=int, default=512)
-    parser.add_argument('--max_attempts', type=int, default=1000)
-
-    # erdos_renyi graphs settings
-    parser.add_argument('--p', type=float, default=-1.0,
-                        help="Probability for edge creation for erdos_renyi graphs, -1.0 means random")
-    # euclidean graphs settings
-    parser.add_argument('--dims', type=int, default=2,
-                        help="Number of dimensions for euclidean graphs")
-    parser.add_argument('--radius', type=float, default=-1.0,
-                        help="Radius for euclidean graphs, -1.0 means random")
-    # random tree graphs settings
-    parser.add_argument('--max_degree', type=int, default=3)
-    parser.add_argument('--max_depth', type=int, default=-1, help="-1 means it will be overridden by max_path_length")
-    parser.add_argument('--bernoulli_p', type=float, default=0.5)
-    parser.add_argument('--probs', type=float, nargs='+',
-                        help="Probabilities for random tree graphs, should sum to 1.0")
-    parser.add_argument('--start_at_root', action='store_true', default=True,)
-    parser.add_argument('--end_at_leaf', action='store_true', default=True,)
-
-    # path star graphs settings
-    parser.add_argument('--min_num_arms', type=int, default=2,
-                        help="Minimum number of arms for star graphs")
-    parser.add_argument('--max_num_arms', type=int, default=5,
-                        help="Maximum number of arms for star graphs")
-    parser.add_argument('--min_arm_length', type=int, default=-1,
-                        help="Minimum length of each arm in star graphs.  -1 means it will be overridden by min_path_length")
-    parser.add_argument('--max_arm_length', type=int, default=-1,
-                        help="Maximum length of each arm in star graphs. -1 means it will be overridden by max_path_length")
-
-    # balanced graphs settings
-    parser.add_argument('--min_lookahead', type=int, default=3,
-                        help="Minimum lookahead for balanced graphs")
-    parser.add_argument('--max_lookahead', type=int, default=8,
-                        help="Maximum lookahead for balanced graphs")
-    parser.add_argument('--min_noise_reserve', type=int, default=0,
-                        help="Minimum noise reserve for balanced graphs")
-    parser.add_argument('--max_num_parents', type=int, default=4,
-                        help="Maximum number of parents for balanced graphs")
-
-    # task settings
-    parser.add_argument('--task_type', type=str, default='shortest_path')
-    parser.add_argument('--scratchpad_type', type=str, default='none') #'none' 'BFS'  # 'DFS'
-
-    parser.add_argument('--min_path_length', type=int, default=3,
-                        help='Minimum path length for shortest path tasks (inclusive)')
-    parser.add_argument('--max_path_length', type=int, default=12,
-                        help='Maximum path length for shortest path tasks (inclusive)')
-    parser.add_argument('--sort_adjacency_lists', action='store_true', default=False,
-                        help='Whether to sort adjacency lists when generating BFS/DFS scratchpad.')
-    parser.add_argument('--use_unique_depth_markers', action='store_true', default=False,
-                        help='Whether to use unique depth markers when generating BFS/DFS scratchpad.')
-    parser.add_argument('--stop_once_found', action='store_true', default=True, help='')
-    parser.add_argument('--include_queue', action='store_true', default=False)
-    parser.add_argument('--reverse_adjacency_lists', action='store_true', default=False)
-    parser.add_argument('--duplicate_adjacency_lists', action='store_true', default=False)
-    parser.add_argument('--task_sample_dist', nargs='*', default=None,
-                        help='Optional sampling distribution for different task types.'
-                             ' E.g. for shortest path tasks, [shortest_path, center, centroid].'
-                             ' Should sum to 1.0.')
-
-    parser.add_argument('--min_query_size', type=int, default=2,
-                        help='Minimum query size for center/centroid tasks (inclusive)')
-    parser.add_argument('--max_query_size', type=int, default=10,
-                        help='Maximum query size for center/centroid tasks (inclusive)')
-
-    parser.add_argument('--min_khops', type=int, default=1,
-                        help='Minimum hops for khops path tasks (inclusive)')
-    parser.add_argument('--max_khops', type=int, default=7)
-    parser.add_argument('--min_prefix_length', type=int, default=70)
-    parser.add_argument('--max_prefix_length', type=int, default=100)
-    parser.add_argument('--right_side_connect', action='store_true', default=False,
-                        help='The usual khops version, but not how I have BFS set up.')
-    parser.add_argument('--khops_no_repeats', action='store_true', default=False,
-                        help='for khops gen and MTP')
-    parser.add_argument('--permutation_version', action='store_true', default=False,)
-    parser.add_argument('--mask_to_vocab_size', action='store_true', default=False,)
-    parser.add_argument('--mask_to_size', type=int, default=-1,)
-    parser.add_argument('--intermediate_labels', action='store_true', default=False,)
-    parser.add_argument('--partition_method', type=str, default='uniform')
-
-    # tokenization settings
-    parser.add_argument('--is_causal', action='store_true', default=False,
-                        help='Whether to use causal tokenization of distances'
-                             ' (i.e. decoder-only style) or non-causal (i.e. encoder-only style).')
-    parser.add_argument('--is_direct_ranking', action='store_true', default=False,
-                        help='Whether to use direct ranking for graph distance ranking loss on node-list.'
-                             'This assumes include_nodes_in_graph_tokenization'
-                        )
-    parser.add_argument('--query_at_end', action='store_true', default=False,
-                        help='Whether to place the query at the end of the graph or before.')
-    parser.add_argument('--no_graph', action='store_true', default=False,
-                        help='Used for scratchpad -> path without graph experiments')
-    parser.add_argument('--concat_edges', action='store_true', default=True,
-                        help='Whether to concatenate edge pairs into a single token or use separate tokens.'
-                             'This happens in the model but produces a 2d tensor for src_tokens [seq_len, 2]')
-    parser.add_argument('--dont_concat_edges', action='store_false', dest='concat_edges')
-    parser.add_argument('--duplicate_edges', action='store_true', default=False,
-                        help='Whether to allow duplicate edges when generating the graph tokenization.'
-                             'This repeats the edge list twice, thus bypassing the causal constraint.'
-                             'Only makes sense for undirected graphs since we also swap (u, v) to (v, u).')
-    parser.add_argument('--include_nodes_in_graph_tokenization', action='store_true', default=False,
-                        help='Whether to include node tokens in the graph tokenization, after the edges, '
-                             'i.e. edge list and then node list.')
-    parser.add_argument('--num_thinking_tokens', type=int, default=0)
-    parser.add_argument('--scratchpad_as_prefix', action='store_true', default=False)
-    parser.add_argument('--is_flat_model', action='store_true', default=True,
-                        help='Whether the model is flat (i.e. single input tensor) or uses separate encoder/decoder inputs.')
-    parser.add_argument('--align_prefix_front_pad', action='store_true', default=False,
-                        help='Whether to align the prefix (up to target seq) by front padding the input. '
-                             'Only makes sense for flat models.')
-
-    # positional encoding settings
-    parser.add_argument('--use_edges_invariance', action='store_true', default=False,)
-    parser.add_argument('--use_node_invariance', action='store_true', default=False,)
-    parser.add_argument('--use_graph_invariance', action='store_true', default=False,)
-    parser.add_argument('--use_query_invariance', action='store_true', default=False,)
-    parser.add_argument('--use_task_structure', action='store_true', default=False,)
-    parser.add_argument('--use_graph_structure', action='store_true', default=False,)
-    parser.add_argument('--use_full_structure', action='store_true', default=False,)
-
-    # debugging settings
-    parser.add_argument('--print_cpp_args', action='store_true', default=False,
-                        help='Whether to print the arguments passed to the C++ code for debugging purposes.')
-
-    return parser
 
 
 #############################
 # Extra Generator Functions #
 #############################
 
-class ReconstructedGraph(object):
-    def __init__(self, graph_type, task_type,
-                 edge_list, query, task_input, task_targets, pos=None,
-                 spring_k=1.5, spring_scale=1.5, trees_to_left=False, verbose=False, **kwargs):
-        """
+class GraphPlotter:
+    """Render a single graph + task instance for inspection / debugging.
 
-        :param graph_type:
-        :param edge_list: [num_edges, 2]
-        :param pos:
-        """
+    Given an edge list (with vertex ids ALREADY demangled from token ids
+    to their symbolic form) plus optional query / target sets, computes
+    a layout, colours vertices by role, and draws with networkx +
+    matplotlib.
 
-        self.graph_type = graph_type
-        self.task_type = task_type
-        self.edge_list = edge_list
-        self.query = query
-        self.task_input = task_input
+    Vertex colouring uses TWO independent channels:
+      * fill    (``node_color``)   -- default / query / target
+      * outline (``edgecolors``)   -- default / query / target /
+                                       alt (red, for shortest-path
+                                       label-smoothing alternatives)
+
+    A target vertex on an alternative shortest-path hop is green-fill
+    + red-outline; a center vertex that also sits in the query is
+    green-fill + purple-outline. This preserves the label-smoothing
+    signal that a single-channel colour scheme would flatten.
+
+    Extraction is out of scope: give this class already-symbolic
+    edges + role sets. A typical debug loop pulls per-row data with
+    ``section_tokens(batch, section, row)`` and inverts
+    ``ctx.token_dict`` before handing the results here.
+    """
+
+    # ---- Palette --------------------------------------------------------
+    DEFAULT_COLOUR = '#1f78b4'   # matplotlib tab:blue
+    QUERY_COLOUR   = 'purple'
+    TARGET_COLOUR  = 'green'
+    ALT_COLOUR     = 'red'
+
+    # Graph kinds whose default layout is a rooted tree (Graphviz
+    # `twopi` radial or `dot` LR hierarchical). Everything else falls
+    # through to `neato` force-directed.
+    _TREE_KINDS = frozenset({
+        'path_star', 'balanced', 'random_tree',
+    })
+
+    def __init__(self, edges, *,
+                 graph_kind,
+                 directed,
+                 task_kind=None,
+                 query=None,
+                 task_targets=None,
+                 pos=None,
+                 root=None):
+        """
+        Args:
+          edges: iterable of ``(u, v)`` pairs of symbolic vertex ids.
+                 Already demangled from token ids -- this class is
+                 display-only, not extraction.
+          graph_kind: string from the generator's graph kinds. Drives
+                 the default layout choice (see :data:`_TREE_KINDS`);
+                 does NOT determine directedness -- pass that
+                 explicitly via `directed`.
+          directed: whether to build a ``nx.DiGraph`` (True) or
+                 ``nx.Graph`` (False). Mirrors ``cfg.directed`` --
+                 the plotter has no independent opinion about which
+                 kinds are directed; each sampler enforces its own
+                 constraint (e.g. path_star requires directed=True,
+                 euclidean requires False), and the caller passes
+                 through whatever the batch was generated with.
+          task_kind: string from the generator's task kinds, or
+                 ``None`` / ``'none'`` to skip role colouring
+                 entirely.
+          query: iterable of vertex ids appearing in the query, or
+                 ``None``.
+          task_targets: ``list[list[symbol]]``. Outer index is the
+                 generation step; inner list is the alternatives at
+                 that step with position 0 = CHOSEN, positions > 0 =
+                 label-smoothing alternatives. Matches the shape you
+                 get by gathering ``batch['targets']`` along the
+                 label-smoothing axis and stripping pad. For
+                 center / centroid pass a single-step list, e.g.
+                 ``[[c0, c1, c2]]``; the plotter flattens across
+                 steps for those task kinds.
+          pos: optional ``{vertex_id: (x, y)}`` layout override.
+                 When provided, no layout engine is run.
+          root: for tree layouts, the root vertex passed to
+                 Graphviz. Defaults to ``task_targets[0][0]`` on
+                 shortest_path tasks (path start), else ``None``.
+        """
+        self.graph_kind   = graph_kind
+        self.directed     = bool(directed)
+        self.task_kind    = task_kind
+        self.query        = set(query) if query is not None else set()
         self.task_targets = task_targets
+        self.pos          = dict(pos) if pos is not None else None
 
-        self.root = None
+        # Build graph up front so subsequent passes can iterate G.
+        self.G = nx.DiGraph() if self.directed else nx.Graph()
+        self.G.add_edges_from(edges)
 
-        self.default_colour = '#1f78b4'  # matplotlib tab:blue
-        self.query_colour = 'purple'  # matplotlib tab:purple
-        self.target_colour = 'green'  # matplotlib tab:green
+        # Role sets + rank map (for shortest_path alt-outlining).
+        (self._target_set,
+         self._target_rank) = self._extract_targets(task_targets)
 
-        if self.is_directed():
-            self.G = nx.DiGraph()  # or nx.Graph() for undirected graphs
+        # Root for tree layouts. Old behaviour: path start on
+        # shortest_path, else nothing.
+        if root is not None:
+            self.root = root
+        elif self.task_kind in ('shortest_path', 'path') \
+                and task_targets and task_targets[0]:
+            self.root = task_targets[0][0]
         else:
-            self.G = nx.Graph()
-        self.pos, self.colour_map, self.node_edge_colour_map = None, None, None
-        if pos is not None:
-            self.pos = {}
-            for node, node_pos in pos.items():
-                self.G.add_node(node, pos=node_pos)
-        self.G.add_edges_from(edge_list)
-        self.process_task()
-        self.set_plot_positions_for_layout(spring_k, spring_scale, trees_to_left, verbose, **kwargs)
+            self.root = None
 
+        # Colour vectors, one entry per node in G.nodes() iteration
+        # order. Populated by _compute_colours(); left as scalars if
+        # role colouring is disabled.
+        self.node_color      = self.DEFAULT_COLOUR
+        self.node_edge_color = self.DEFAULT_COLOUR
+        self._compute_colours()
+
+    # ---- Public API -----------------------------------------------------
 
     def is_directed(self):
-        return self.graph_type in ('path_star', 'balanced')
+        return self.directed
 
-    def get_node_list(self):
-        nodes = []
-        for e in self.edge_list:
-            nodes.append(e[0])
-            nodes.append(e[1])
-        nodes = sorted(list(set(nodes)))
-        return nodes
+    def plot(self, *, ax=None, node_size=200, with_labels=True,
+             trees_to_left=False, spring_k=1.5, spring_scale=1.5,
+             verbose=False, show=False, **draw_kwargs):
+        """Draw the graph.
 
-    # RECONSTRUCTION METHODS
-    def process_task(self):
-        # print(self.query)
-        # print(self.task_input)
-        # print(self.task_targets)
-        # print(self.get_node_list())
-        # print()
-        if self.task_input is None or self.task_targets is None or self.task_type in (None, 'none', 'None'):
-            self.colour_map = self.default_colour
-        elif self.task_type in ('shortest_path', 'path'):
-            self.colour_map = []
-            self.node_edge_colour_map = []
-            target_nodes = []
-            target_node_to_rank = {}
-            for t in self.task_targets[1:-1]:  # cut special tokens
-                for i, node in enumerate(t):
-                    target_nodes.append(node)
-                    target_node_to_rank[node] = i
-            self.root = target_nodes[0]
-            query = self.query[1:-1]  # cut special tokens
-            for node in self.G:
-                if node in query:
-                    self.colour_map.append(self.query_colour)
-                    self.node_edge_colour_map.append(self.query_colour)
-                elif node in target_nodes:
-                    self.colour_map.append(self.target_colour)
-                    # colour alternative paths with optional red boundary
-                    self.node_edge_colour_map.append(self.target_colour if target_node_to_rank[node] == 0 else 'red')
-                else:
-                    self.colour_map.append(self.default_colour)
-                    self.node_edge_colour_map.append(self.default_colour)
-        elif self.task_type in ('center', 'centroid'):
-            self.colour_map = []
-            self.node_edge_colour_map= []
-            target_nodes = []
-            for t in self.task_targets[1:-1]:  # cut special tokens
-                for node in t:
-                    target_nodes.append(node)
-            query = self.query[1:-1]  # cut special tokens
-            for node in self.G:
-                if node in target_nodes and node in query:
-                    self.colour_map.append(self.target_colour)
-                    self.node_edge_colour_map.append(self.query_colour)
-                elif node in target_nodes:
-                    self.colour_map.append(self.target_colour)
-                    self.node_edge_colour_map.append(self.target_colour)
-                elif node in query:
-                    self.colour_map.append(self.query_colour)
-                    self.node_edge_colour_map.append(self.query_colour)
-                else:
-                    self.colour_map.append(self.default_colour)
-                    self.node_edge_colour_map.append(self.default_colour)
-        else:
-            raise ValueError(f"Unexpected task_type: {self.task_type}")
+        Layout is computed on first call (Graphviz preferred, spring
+        fallback). The matplotlib backend is NOT set here -- pick
+        one at the top of your script if you need something specific
+        (e.g. ``matplotlib.use('Qt5Agg')``).
 
-    # PLOTTING METHODS
-    def plot(self, save_path=None, save_name=None, node_size=200,  with_labels=True, **kwargs):
-        assert nx is not None, "NetworkX is required for plotting. Please install it with 'pip install networkx'."
-        import matplotlib
-        # matplotlib.use('TkAgg')
-        matplotlib.use('Qt5Agg')
+        Args:
+          ax: existing matplotlib axes to draw on; a fresh figure is
+              created when ``None``.
+          node_size: passed to ``nx.draw``.
+          with_labels: passed to ``nx.draw``.
+          trees_to_left: for tree kinds, use ``dot`` with
+              ``rankdir=LR`` instead of the default radial
+              (``twopi``).
+          spring_k, spring_scale: spring-layout parameters used only
+              when the Graphviz fallback fires.
+          verbose: print a note when the Graphviz layout fails.
+          show: call ``plt.show()`` after drawing. Off by default
+              because most callers want to compose several axes
+              before showing.
+          **draw_kwargs: forwarded to ``nx.draw``.
+
+        Returns the axes that were drawn on.
+        """
+        assert nx is not None, (
+            "GraphPlotter.plot requires networkx: pip install networkx")
         from matplotlib import pyplot as plt
 
-        # the edgecolors keyword argument (for setting the outline of nodes)
-        # is different from the edge_color keyword argument (for setting the colour of lines)
-        nx.draw(self.G, with_labels=with_labels, pos=self.pos, node_size=node_size, linewidths=2,
-                node_color=self.colour_map,
-                edgecolors=self.node_edge_colour_map)
-        plt.show()
-        if save_path is not None:
-            #if graph.type not in save_path:
-            #    save_path = os.path.join(save_path, graph.type)
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
-            if save_name is not None:
-                save_path = os.path.join(save_path, save_name)
+        self._ensure_layout(trees_to_left=trees_to_left,
+                            spring_k=spring_k,
+                            spring_scale=spring_scale,
+                            verbose=verbose)
+        if ax is None:
+            _fig, ax = plt.subplots()
+
+        # `edgecolors` (node outline) is a DIFFERENT kwarg from
+        # `edge_color` (line colour); keep both spellings visible in
+        # the call so future edits don't collapse them.
+        nx.draw(self.G, ax=ax, pos=self.pos,
+                with_labels=with_labels,
+                node_size=node_size,
+                linewidths=2,
+                node_color=self.node_color,
+                edgecolors=self.node_edge_color,
+                **draw_kwargs)
+        if show:
+            plt.show()
+        return ax
+
+    def save(self, path, name='graph.png'):
+        """Write the current matplotlib figure to ``path/name``.
+
+        Creates ``path`` if missing. Must be called after :meth:`plot`
+        (or with an active figure on the stack).
+        """
+        from matplotlib import pyplot as plt
+        os.makedirs(path, exist_ok=True)
+        plt.savefig(os.path.join(path, name))
+
+    # ---- Colouring ------------------------------------------------------
+
+    def _extract_targets(self, task_targets):
+        """Return ``(target_set, rank_map)``.
+
+        Rank map is only meaningful for shortest_path (position 0 =
+        chosen, positions > 0 = label-smoothing alts). For other task
+        kinds it stays empty and the outline logic short-circuits.
+        """
+        if task_targets is None:
+            return set(), {}
+
+        target_set = set()
+        rank = {}
+        for step in task_targets:
+            for i, node in enumerate(step):
+                target_set.add(node)
+                # First occurrence wins (a node that appears both as
+                # chosen at one step and as an alt at another is
+                # treated as chosen for outline purposes).
+                rank.setdefault(node, i)
+        return target_set, rank
+
+    def _compute_colours(self):
+        # No task -> uniform structural colour.
+        if self.task_kind in (None, 'none', 'None') \
+                or self.task_targets is None:
+            return
+
+        if self.task_kind not in ('shortest_path', 'path',
+                                  'center', 'centroid'):
+            raise ValueError(
+                f"GraphPlotter: unsupported task_kind {self.task_kind!r}")
+
+        node_color      = []
+        node_edge_color = []
+        is_shortest_path = self.task_kind in ('shortest_path', 'path')
+
+        for v in self.G:
+            in_query  = v in self.query
+            in_target = v in self._target_set
+
+            # Fill: target > query > default. A target vertex that
+            # also appears in the query stays green -- target
+            # dominates. Matches the old ReconstructedGraph
+            # behaviour and reads as "this is what the model must
+            # produce".
+            if in_target:
+                node_color.append(self.TARGET_COLOUR)
+            elif in_query:
+                node_color.append(self.QUERY_COLOUR)
             else:
-                save_path = os.path.join(save_path, 'graph.png')
-            plt.savefig(save_path)
+                node_color.append(self.DEFAULT_COLOUR)
 
+            # Outline: secondary channel encoding the finer role.
+            if is_shortest_path and in_target:
+                # Rank 0 = chosen hop; rank > 0 = valid alternative
+                # (from label smoothing). Alt hops get a red ring
+                # so the chosen path pops visually.
+                node_edge_color.append(
+                    self.TARGET_COLOUR
+                    if self._target_rank.get(v, 0) == 0
+                    else self.ALT_COLOUR)
+            elif in_target and in_query:
+                # Center / centroid: target vertex that's also in
+                # the query gets a purple ring so both roles read
+                # at a glance.
+                node_edge_color.append(self.QUERY_COLOUR)
+            elif in_target:
+                node_edge_color.append(self.TARGET_COLOUR)
+            elif in_query:
+                node_edge_color.append(self.QUERY_COLOUR)
+            else:
+                node_edge_color.append(self.DEFAULT_COLOUR)
 
-    def set_plot_positions_for_layout(self, spring_k=1.5, spring_scale=1.5, trees_to_left=False, verbose=False, **kwargs):
-        if self.pos is None:
+        self.node_color      = node_color
+        self.node_edge_color = node_edge_color
+
+    # ---- Layout ---------------------------------------------------------
+
+    def _ensure_layout(self, *, trees_to_left, spring_k, spring_scale,
+                       verbose):
+        if self.pos is not None:
+            return
+        try:
+            self.pos = self._auto_layout(trees_to_left)
+        except Exception as e:  # pygraphviz missing, dot not on PATH, ...
             if verbose:
-                print('No pos provided, using layout to compute positions.')
+                print(f"GraphPlotter: layout failed ({e}); "
+                      f"falling back to spring layout")
+            n = max(len(self.G.nodes), 1)
+            k = (1.0 / np.sqrt(n)) * (spring_k if spring_k else 1.0)
+            self.pos = nx.spring_layout(self.G, k=k, scale=spring_scale)
 
-            try:
-                if self.graph_type in ('path_star', 'balanced', 'random_tree'):
-                    if trees_to_left:
-                        pos = nx.nx_agraph.graphviz_layout(self.G, prog='dot', args='-Grankdir=LR -Groot={self.root}')
-                    else:
-                        pos = nx.nx_agraph.graphviz_layout(self.G, prog="twopi", args=f"-Groot={self.root}")
-                else:
-                    pos = nx.nx_agraph.graphviz_layout(self.G, prog="neato")
-            except Exception as e:
-                if verbose:
-                    print('Using spring layout due to error:', e)
-                if spring_k is None:
-                    spring_k = 1 / np.sqrt(len(self.G.nodes))
-                else:
-                    spring_k = 1 / np.sqrt(len(self.G.nodes)) * spring_k
-                pos = nx.spring_layout(self.G, k=spring_k, scale=spring_scale)
-            self.pos = pos
+    def _auto_layout(self, trees_to_left):
+        # path_star: bespoke radial layout. Divide the plane into
+        # `num_arms` equal wedges, place the root at the origin, and
+        # let each arm radiate STRAIGHT outward along its wedge angle
+        # -- vertices at integer depths along a ray. Reads cleaner
+        # than Graphviz `twopi` (which arcs the arms around) and
+        # works without pygraphviz installed. Only applies when
+        # graph_kind explicitly names the topology; anything else
+        # goes through the generic layout paths below.
+        if self.graph_kind == 'path_star':
+            return self._path_star_layout()
 
-    def pprint(self):
-        pass
+        # Rooted-tree kinds: Graphviz twopi (radial) or dot (LR
+        # hierarchical). Everything else: neato force-directed.
+        #
+        # Fix vs old code: the LR branch used to be a plain string
+        # (`'-Grankdir=LR -Groot={self.root}'`) not an f-string, so
+        # `-Groot` never actually resolved -- Graphviz picked its own
+        # root. It's an f-string here.
+        if self.graph_kind in self._TREE_KINDS:
+            root_arg = f'-Groot={self.root}' if self.root is not None else ''
+            if trees_to_left:
+                args = ('-Grankdir=LR ' + root_arg).strip()
+                return nx.nx_agraph.graphviz_layout(
+                    self.G, prog='dot', args=args)
+            return nx.nx_agraph.graphviz_layout(
+                self.G, prog='twopi', args=root_arg)
+        return nx.nx_agraph.graphviz_layout(self.G, prog='neato')
+
+    def _path_star_layout(self):
+        """Radial layout for a path_star (rooted directed tree of chains).
+
+        Root at the origin; each arm i occupies angle
+        ``2*pi * i / num_arms`` and its vertices sit at unit-integer
+        depths along that ray. Handles the case where the plotter
+        received edges from a shuffled batch (which is always) by
+        rediscovering root + arms from ``self.G``'s in/out-degree
+        structure -- caller doesn't have to pass anything extra.
+        """
+        # Root: unique vertex with in-degree 0. For a well-formed
+        # path_star this is exactly vertex 0's SYMBOL id (whatever
+        # random vocab id it drew). If we can't find one -- shouldn't
+        # happen -- surface the assumption loudly rather than picking
+        # arbitrarily.
+        if not isinstance(self.G, nx.DiGraph):
+            raise ValueError(
+                "GraphPlotter._path_star_layout requires a directed "
+                "graph (was `directed=True` passed?)")
+        roots = [v for v in self.G if self.G.in_degree(v) == 0]
+        if len(roots) != 1:
+            raise ValueError(
+                f"_path_star_layout: expected exactly one root "
+                f"(in-degree 0), found {len(roots)}")
+        root = roots[0]
+
+        # Each arm: chain starting from a direct successor of root,
+        # following the single out-edge until we hit a leaf. If a
+        # vertex ever has multiple successors, the topology isn't a
+        # pure path_star; walk stops at that vertex.
+        arms = []
+        for child in self.G.successors(root):
+            arm = [child]
+            cur = child
+            while self.G.out_degree(cur) == 1:
+                nxt = next(iter(self.G.successors(cur)))
+                arm.append(nxt)
+                cur = nxt
+            arms.append(arm)
+
+        # Radial placement. Arms in G.successors iteration order --
+        # which is edge-insertion order, i.e. the shuffled order the
+        # sampler produced. That's fine: the visual is still a
+        # pretty star; the arm labelling is what carries "which arm
+        # is which", and the plotter doesn't care.
+        pos = {root: (0.0, 0.0)}
+        num_arms = max(len(arms), 1)
+        for i, arm in enumerate(arms):
+            theta   = 2.0 * np.pi * i / num_arms
+            cos_t   = float(np.cos(theta))
+            sin_t   = float(np.sin(theta))
+            for depth, v in enumerate(arm, start=1):
+                pos[v] = (depth * cos_t, depth * sin_t)
+        return pos
 
 
-def create_reconstruct_graphs(b_n, token_dict, ids=None, verbose=False, **kwargs):
+def pprint_distance_matrix(matrix, *, name='distances', unreachable=-1,
+                           cell_width=3, formatter=None):
+    """Print a single ``(n, n)`` distance matrix as a labelled grid.
+
+    Semantic-agnostic: works for hop counts, weighted / Dijkstra
+    distances, or any pairwise scalar you want to eyeball. Rows and
+    columns are labelled ``v0 .. v(n-1)`` in internal-vertex-id
+    order; cells equal to ``unreachable`` render as the sentinel
+    string so unreachable pairs pop visually.
+
+    Args:
+      matrix: any 2D array-like of shape ``(n, n)``. Slice the batch
+              tensor yourself before calling
+              (e.g. ``batch['hop_distances'][b, :nn[b], :nn[b]]``).
+      name: heading printed once above the grid.
+      unreachable: sentinel value; matching cells render as
+              ``' -1'`` (right-justified to ``cell_width``). Set to
+              ``None`` to disable the sentinel branch entirely.
+      cell_width: column width per numeric cell. Default 3 fits
+              hop-count matrices; bump for wider floats.
+      formatter: optional ``callable(value) -> str`` producing the
+              cell text. Default int-formats every value with
+              ``>{cell_width}d`` alignment (appropriate for hop
+              counts). For weighted / float matrices pass e.g.
+              ``formatter=lambda v: f'{v:>{cell_width}.2f}'``.
+
+    Called by :func:`pprint_batch` under ``show_hop_distances=True``;
+    also callable standalone from a debug session.
     """
-    Take the c++ output and reconstruct the graphs for plotting and sanity checking.
+    matrix = np.asarray(matrix)
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError(
+            f"pprint_distance_matrix: expected square 2D matrix, got "
+            f"shape {matrix.shape}")
+    n = matrix.shape[0]
 
-    :param b_n: c++ output dictionary
-    :param token_dict: mapping from symbols to tokenized ids
-    :param ids: batch ids to reconstruct, if None, reconstruct all
-    :return:
-    """
+    if formatter is None:
+        def formatter(v):
+            return f'{int(v):>{cell_width}d}'
 
-    reconstructions = []
+    unreachable_cell = f'{-1:>{cell_width}d}'   # '-1' right-justified
 
-    id_to_symbol_ = {v: k for k, v in token_dict.items()}
-    def id_to_symbol(id):
-        symbol = id_to_symbol_[id]
-        if symbol.isdigit():
-            return int(symbol)
-        return symbol
+    # Row label is `' v{i:<label_pad} '`. label_pad scales with n so
+    # multi-digit ids don't collide with the header spacing.
+    label_pad = max(1, len(str(max(n - 1, 0))))
+    row_label_width = label_pad + 3   # ' v' + digits + ' '
 
-    pad = token_dict.get('<pad>', -1)
-
-    src_tokens = b_n['src_tokens']
-    prev_output_tokens = b_n['prev_output_tokens']  # task targets
-    num_nodes = b_n['num_nodes']
-    num_edges = b_n['num_edges']
-    true_task_length = b_n['true_task_lengths']
-    query_lengths = b_n['query_lengths']
-
-    graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)
-    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)
-    task_targets = b_n['prev_output_tokens']
-    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True, pad_value=-1)
-    query_gather_indices = query_gather_ids(b_n, pad_value=-1)
-    node_positions = None
-    if 'node_positions' in b_n and b_n['node_positions'] is not None:
-        node_positions = b_n['node_positions']
-
-    concat_edges = b_n['concat_edges']
-    graph_type = b_n['graph_type']
-    task_type = b_n['task_type']
-
-    is_directed = graph_type in ('path_star', 'balanced', 'khops', 'khops_gen')
-
-    if ids is None:
-        ids = list(range(src_tokens.shape[0]))
-
-
-    def gather(tensor, gather_indices, id):
-        gather_indices, mask = gather_indices
-        if tensor is None or gather_indices is None:
-            raise ValueError("Tensor and gather_indices cannot be None")
-        if tensor.ndim == 2:
-            t = tensor[id, gather_indices[id], 0]
-        elif tensor.ndim == 3:
-            t = tensor[id, gather_indices[id], :]
-        else:
-            raise ValueError(f"Unexpected tensor shape: {tensor.shape}")
-        # cut down to actual lengths
-        if mask is not None:
-            valid_length = mask[id].sum()
-            if tensor.ndim == 2:
-                t = t[:valid_length]
-            elif tensor.ndim == 3:
-                t = t[:valid_length, :]
-        return t
-
-    for id in ids:
-        if b_n["graph_type"] in ('khops', 'khops_gen'):  # these have no edge list
-            raise NotImplementedError
-        else:
-            assert not b_n['no_graph'], "No graph to reconstruct"
-            if concat_edges:
-                edges = gather(src_tokens, graph_edge_gather_indices, id)
-                edge_list = edges.reshape(-1, 2).tolist()
-            else:  # here we actually need to parse the src
-                graph_start = b_n['graph_edge_start_indices'][id]
-                assert src_tokens.shape[-1] == 1, 'src can not have structure if concat_edges is False'
-                edge_list = []
-                for i in range(num_edges[id]):
-                    edge_tokens = src_tokens[id, graph_start + (i * 3): graph_start + (i * 3) + 2, 0]
-                    edge_list.append(edge_tokens[:2].tolist())  # cut off edge marker if it exists
-            for i in range(len(edge_list)):
-                edge_list[i] = [id_to_symbol(e) for e in edge_list[i]]
-
-            edge_list = [sorted(e) if not is_directed else e for e in edge_list]
-            edge_list = sorted(edge_list, key=lambda x: (x[0], x[1]))
-
-        query, task_input, task_targets = None, None, None
-        if true_task_gather_indices is not None:
-            query = gather(src_tokens, query_gather_indices, id)[:, 0].tolist()
-            query = [id_to_symbol(q) for q in query]
-            task_input = gather(src_tokens, true_task_gather_indices, id)[:, 0].tolist()
-            task_input = [id_to_symbol(t) for t in task_input]
-            task_targets_t = prev_output_tokens[id, :true_task_length[id], :]
-            task_targets= []
-            for i in range(true_task_length[id]):
-                targets_at_i = []
-                for j in range(task_targets_t.shape[-1]):
-                    if task_targets_t[i, j] != pad:
-                        targets_at_i.append(id_to_symbol(task_targets_t[i, j]))
-                task_targets.append(targets_at_i)
-
-            print(edge_list)
-            print(query)
-            print(task_targets)
-
-            if nx is not None:
-                r = ReconstructedGraph(graph_type, task_type, edge_list, query, task_input, task_targets, pos=None, verbose=verbose, **kwargs)
-                reconstructions.append(r)
-
-    return reconstructions
-
-def pprint_distance(distances, min_node=0, max_node=500, idxs=(0,1,2), use_node_ids=True):
-    """
-    d in a n * n matrix, we add a column and a row for the range ids, then cut off at the min and max num nodes
-    """
-    if distances.ndim == 3:
-        if isinstance(idxs, int):
-            if idxs > 0:
-                idxs_ = list(range(idxs))
+    print(f'{name}  (n={n}, [0,n) x [0,n))')
+    header = ' ' * row_label_width + ' '.join(
+        f'v{i}'.rjust(cell_width) for i in range(n))
+    print(header)
+    for i in range(n):
+        cells = []
+        for j in range(n):
+            v = matrix[i, j]
+            if unreachable is not None and v == unreachable:
+                cells.append(unreachable_cell)
             else:
-                idxs_ = list(range(distances.shape[0]))
-        elif len(idxs) == 0:
-            idxs_ = list(range(distances.shape[0]))
-        else:
-            idxs_ = [b for b in idxs if b < distances.shape[0]]
-    else:
-        distances = np.expand_dims(distances, 0)
-        idxs_ = [0]
-
-    for b in idxs_:
-        print(f'BATCH INDEX: {b}\n')
-        d_out = distances[b, ...].copy()
-        d_out = d_out[min_node:max_node + 1, min_node:max_node + 1]
-        n = d_out.shape[0]
-        if use_node_ids:
-            a1 = np.arange(min_node, max_node + 1)[:n]
-            a2 = np.arange(min_node, max_node + 2)[:n + 1]
-        else:
-            a1 = np.arange(n)
-            a2 = np.arange(n + 1)
-        a2[-1] = -1
-        d_out = np.concatenate([d_out, a1[None, :]], axis=0)
-        d_out = np.concatenate([d_out, a2[:, None]], axis=1)
-        print(d_out)
-
-
-def pprint_ranks(b_n, token_dict, idxs=(0,1,2), map_ids_to_tokens=True):
-
-    src = b_n['src_tokens']
-    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
-    nodes = src[:, graph_node_gather_indices[0], 0]
-
-    rev_token_dict = {v: k for k, v in token_dict.items()}
-    rev_token_dict[-1] = -1
-
-    if isinstance(idxs, int):
-        if idxs > 0:
-            idxs = list(range(idxs))
-        else:
-            idxs = list(range(src.shape[0]))
-    elif len(idxs) == 0:
-        idxs = list(range(src.shape[0]))
-    else:
-        idxs = [b for b in idxs if b < src.shape[0]]
-
-    if b_n["node_ranks"] is not None:
-        node_ranks = b_n["node_ranks"]
-        print(f'Node ranks shape: {node_ranks.shape}')
-        for b in idxs:
-            print(f'BATCH INDEX: {b}\n')
-            ranks_out = node_ranks[b, ...]
-            nodes_out = nodes[b, ...].squeeze()
-            rlen = np.sum(ranks_out != -1, axis=-1)
-            if map_ids_to_tokens:
-                ranks_out = np.vectorize(lambda x: rev_token_dict.get(x, str(x)))(ranks_out)
-                nodes_out = np.vectorize(lambda x: rev_token_dict.get(x, str(x)))(nodes_out)
-
-            print(ranks_out.shape, nodes.shape)
-            for n in range(ranks_out.shape[0]):
-                print(f'Node: {nodes_out[n]}')
-                for i in range(ranks_out.shape[1]):
-                    if rlen[n, i] > 0:
-                        print(f'  Rank {i}: {ranks_out[n, i, :rlen[n, i]]}')
-                print()
-    else:
-        print("No node ranks to print.")
-
-
-
-def pprint_batched_dict(b_n, token_dict, pos_dict, title='', print_distances=False, print_graph_gts=False, idxs=(0,1,2),
-                        print_dist=False, print_shapes=True):
-    """
-    :param b_n: batched dict
-    :param title:
-    :param print_distances:
-    :param print_graph_gts:
-    :param idxs:
-    :return: None
-    """
-
-    rev_token_dict = {v: k for k, v in token_dict.items()}
-    # rev_pos_dict = {v: k for k, v in pos_dict.items()}  # just print the idxs because they are readable
-    src_tokens = b_n['src_tokens']
-    graph_edge_gather_indices = edge_gather_ids(b_n, pad_value=-1)[0]
-    graph_node_gather_indices = node_gather_ids(b_n, pad_value=-1)[0]
-    task_targets = b_n['prev_output_tokens']
-    true_task_targets = b_n['true_task_targets']
-    true_task_gather_indices = task_gather_ids(b_n, is_true_task=True, pad_value=-1)[0]
-    scratch_pad_gather_indices = scratchpad_gather_ids(b_n, pad_value=-1)[0]
-    scratch_pad_targets = b_n['scratch_pad_targets']
-    positions = b_n['positions']
-    if positions is None:
-        positions = np.arange(src_tokens.shape[1])[None, :].repeat(src_tokens.shape[0], axis=0)
-    difficulty = b_n['difficulty']
-
-    if print_shapes:
-        print('src_tokens shape:', src_tokens.shape)
-        if task_targets is not None:
-            print('task_targets shape:', task_targets.shape)
-        if positions is not None:
-            print('positions shape:', positions.shape)
-
-    if isinstance(idxs, int):
-        if idxs > 0:
-            idxs_ = list(range(idxs))
-        else:
-            idxs_ = list(range(src_tokens.shape[0]))
-    elif len(idxs) == 0:
-        idxs_ = list(range(src_tokens.shape[0]))
-    else:
-        idxs_ = [b for b in idxs if b < src_tokens.shape[0]]
-
-    max_num_chars = 0
-    def update_max(b_, tensor, dict_, max_num_chars_):
-        if tensor.ndim < 3:
-            tensor = np.expand_dims(tensor, -1)
-        for i in range(tensor.shape[1]):
-            for j in range(tensor.shape[2]):
-                token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
-                if dict_:
-                    token_str = dict_.get(token_id, str(token_id))
-                else:
-                    token_str = str(token_id)
-                if len(token_str) > max_num_chars_:
-                    max_num_chars_ = len(token_str)
-        return max_num_chars_
-
-    for b in idxs_:
-        max_num_chars = update_max(b, src_tokens, rev_token_dict, max_num_chars)
-        if task_targets is not None:
-            max_num_chars = update_max(b, task_targets, None, max_num_chars)
-        if positions is not None:
-            max_num_chars =update_max(b, positions, pos_dict, max_num_chars)
-
-    def pprint_tensor(b_, tensor, dict_, pad, offset1=0, offset2=len('Src:   '), skip=0):
-        s = ''
-        if tensor.ndim < 3:
-            tensor = np.expand_dims(tensor, -1)
-        max_j_dim = tensor.shape[2]
-        m = (tensor == pad).all(axis=1)
-        for j in range(max_j_dim):
-            if m[b_, j]:
-                max_j_dim = j
-                break
-        for j in range(max_j_dim):
-            s += ' ' * (max_num_chars + 1) * offset1
-            for i in range(tensor.shape[1]):
-                token_id = tensor[b_, i, j] if tensor.ndim > 2 else tensor[b_, i]
-                if dict_:
-                    token_str = dict_.get(token_id, str(token_id))
-                else:
-                    token_str = str(token_id)
-                if token_id == pad:
-                    token_str = ' '
-                s += token_str.ljust(max_num_chars + 1)
-                if skip > 0:
-                    s += ' '.ljust(max_num_chars + 1) * skip
-            if j < max_j_dim - 1:
-                s += '\n' + ' ' * offset2
-            else:
-                s += '\n'
-        return s
-
-
-    if title:
-        print(f'{title}')
-
-    pad = token_dict.get('<pad>', -1)
-    pos_pad = pos_dict.get('pad', -1)
-    for b in idxs_:
-        # print so all tokens line up
-        diff_str = ''
-        if difficulty is not None:
-            diff_str = f'Difficulty: {difficulty[b]}'
-        s = f'BATCH INDEX: {b}  {diff_str}\n'
-        target_start_idx = 0
-        true_target_start_idx = 0
-        scratch_pad_start_idx = 0
-        if task_targets is not None:
-            target_start_idx = b_n['task_start_indices'][b]
-            true_target_start_idx = b_n['true_task_start_indices'][b]
-            if scratch_pad_targets is not None:
-                scratch_pad_start_idx = b_n['scratch_pad_start_indices'][b]
-        if positions is not None:
-            s += 'Pos:   '
-            s += pprint_tensor(b, positions, None, pos_pad)
-        s += 'Src:   '
-        s += pprint_tensor(b, src_tokens, rev_token_dict, pad)
-        if task_targets is not None:
-            s += 'Tgt:   '
-            s += pprint_tensor(b, task_targets, rev_token_dict, pad, offset1=target_start_idx)
-            if b_n['task_type'] not in ('khops', 'khops_gen'):
-                s += 'Tr Tgt:'
-                s += pprint_tensor(b, true_task_targets, rev_token_dict, pad, offset1=true_target_start_idx)
-            s += f'TgtIdx:'
-            s += pprint_tensor(b, np.expand_dims(true_task_gather_indices, -1), None, pad=-1, offset1=b_n['true_task_start_indices'][b])
-            if scratch_pad_gather_indices is not None:
-                if scratch_pad_targets is not None:
-                    s += 'ScrPad:'
-                    s += pprint_tensor(b, scratch_pad_targets, rev_token_dict, pad, offset1=scratch_pad_start_idx)
-                s += f'SP Idx:'
-                s += pprint_tensor(b, np.expand_dims(scratch_pad_gather_indices, -1), None, pad=-1, offset1=b_n['scratch_pad_start_indices'][b])
-        if graph_edge_gather_indices is not None:
-            s += f'EdgIdx:'
-            edge_offset = b_n['graph_edge_start_indices'][b]
-            if not b_n['concat_edges']:
-                edge_offset += 2
-            s += pprint_tensor(b, np.expand_dims(graph_edge_gather_indices, -1), None, pad=-1, offset1=edge_offset,
-                               skip = 0 if b_n['concat_edges'] else 2)
-        if graph_node_gather_indices is not None:
-            s += f'NodIdx:'
-            s += pprint_tensor(b, np.expand_dims(graph_node_gather_indices, -1), None, pad=-1, offset1=b_n['graph_node_start_indices'][b])
-        s += 'Idx:   '
-        a = np.expand_dims(np.expand_dims(np.arange(b_n['src_lengths'][b]), 1), 0)
-        s += pprint_tensor(0, a, None, pad=-1,)
-        print(s)
-
-        if print_dist and b_n["distances"] is not None:
-            pprint_distance(b_n["distances"], min_node=b_n["min_vocab"], max_node=b_n["max_vocab"], idxs=[b], use_node_ids=False)
-
-    if b_n['align_prefix_front_pad']:
-        print('Showing that align_prefix_front_pad works as targets are aligned to the right (either at scratchpad = 16 or task = 6):')
-        print(src_tokens[:3, :, 0])
-
-    # print out the shape of distance matrix, and ground_truths_gather_distances
-    if b_n["distances"] is not None:
-        distances = b_n["distances"]
-        print(f'Distances shape: {distances.shape}')
-    if b_n["ground_truths_gather_distances"] is not None:
-        ground_truths_gather_distances = b_n["ground_truths_gather_distances"]
-        print(f'Ground truths gather distances shape: {ground_truths_gather_distances.shape}')
-    if b_n["node_ranks"] is not None:
-        node_ranks = b_n["node_ranks"]
-        print(f'Node ranks shape: {node_ranks.shape}')
+                cells.append(formatter(v))
+        print(f' v{i:<{label_pad}} ' + ' '.join(cells))
     print()
 
 
-def _gather_ids(starts, lengths, stride=1, offset=0, pad_value=0):
-    bs = starts.shape[0]
-    if isinstance(starts, np.ndarray):
-        max_len = lengths.max()
-        gather_indices = np.arange(max_len)[None, :].repeat(bs, axis=0)  # [bs, max_len]
-        gather_indices = gather_indices * stride + offset  # apply stride and offset
-        gather_indices = gather_indices + starts[:, None]  # [bs, max_len]
-        mask = gather_indices < (starts + lengths)[:, None]  # [bs, max_len]
-        gather_indices = gather_indices * mask + pad_value * (~mask)  # [bs, max_len]
-    elif isinstance(starts, torch.Tensor):
-        max_len = lengths.max().item()
-        gather_indices = torch.arange(max_len)[None, :].expand(bs, -1)  # [bs, max_len]
-        gather_indices = gather_indices * stride + offset  # apply stride and offset
-        gather_indices = gather_indices + starts[:, None]  # [bs, max_len]
-        mask = gather_indices < (starts + lengths)[:, None]  # [bs, max_len]
-        gather_indices = gather_indices * mask + pad_value * (~mask)  # [bs, max_len]
+def pprint_distance_ranks(batch, ctx, indices=None, *,
+                          unreachable=-1, max_width=140, title=''):
+    """Print the per-source distance-rank table for each item in a batch.
+
+    Requires ``batch['distance_rank_targets']`` (from
+    ``cfg.return_distance_rank_targets=True``). For each source
+    vertex ``u`` in ``[0, num_nodes[b])`` it prints one block::
+
+        Source v{u} ({source_symbol}):
+          d=0: {source_symbol}
+          d=1: {tied vertex symbols at hop distance 1, in vocab-id order}
+          d=2: ...
+          ...
+
+    Values are demangled through ``ctx.token_dict`` for readability.
+    The source symbol at each block header is read directly from the
+    tensor's own ``(u, d=0, k=0)`` slot (guaranteed to hold the
+    source vertex itself), so this works whether or not
+    ``cfg.return_positions`` is on -- no separate
+    ``internal_to_vocab`` lookup needed.
+
+    Long tie rows are soft-wrapped at ``max_width`` characters,
+    continuation lines indented under the ``d=`` prefix.
+
+    Args:
+      batch: dict from ``Worker.generate_batch``. Must contain
+             ``'distance_rank_targets'`` and ``'num_nodes'``.
+      ctx: ``WorkerSharedContext`` used to generate the batch;
+             ``token_dict`` is inverted here to demangle vocab ids.
+      indices: which batch rows to render. ``None`` or ``-1`` = all
+             rows; a positive int = first N; a list = specific rows.
+      unreachable: sentinel marking pad slots (default ``-1``).
+      max_width: soft wrap width for the tie-row content.
+      title: optional heading printed once above the whole rendering.
+    """
+    if title:
+        print(title)
+
+    assert getattr(ctx, 'token_dict', None), \
+        "pprint_distance_ranks: ctx.token_dict is empty; call " \
+        "ctx.set_default_dictionary()"
+    assert 'distance_rank_targets' in batch, (
+        "pprint_distance_ranks: batch missing 'distance_rank_targets' "
+        "-- did you set cfg.return_distance_rank_targets=True?")
+    assert 'num_nodes' in batch, \
+        "pprint_distance_ranks: batch missing 'num_nodes'"
+
+    T  = batch['distance_rank_targets']
+    nn = batch['num_nodes']
+    B, _, max_dist, _ = T.shape
+
+    if indices is None or (isinstance(indices, int) and indices < 0):
+        idxs = list(range(B))
+    elif isinstance(indices, int):
+        idxs = list(range(min(indices, B)))
     else:
-        raise ValueError(f"Unexpected type for starts: {type(starts)}")
+        idxs = [b for b in indices if 0 <= b < B]
+
+    # Invert token_dict for id -> symbol; unknown ids fall back to
+    # their numeric string form so nothing crashes on stray padding.
+    id_to_symbol = {v: k for k, v in ctx.token_dict.items()}
+    def tok_str(tok_id):
+        return id_to_symbol.get(int(tok_id), str(int(tok_id)))
+
+    sep_width = min(78, max_width)
+    for b in idxs:
+        n = int(nn[b])
+        print('=' * sep_width)
+        print(f'BATCH INDEX {b}  n={n}  max_distance={max_dist}  '
+              f'(distance_rank_targets)')
+        print('-' * sep_width)
+        for u in range(n):
+            # Source symbol lives at (u, d=0, k=0) by construction.
+            src_sym = tok_str(T[b, u, 0, 0])
+            print(f'Source v{u} ({src_sym}):')
+            for d in range(max_dist):
+                ties = T[b, u, d, :]
+                real = [int(t) for t in ties if int(t) != unreachable]
+                if not real:
+                    continue
+                sym_list = [tok_str(t) for t in real]
+                # Soft-wrap the tie row so long tie groups
+                # (dense-graph hubs, etc.) don't blow past max_width.
+                prefix = f'  d={d}: '
+                indent = ' ' * len(prefix)
+                line = prefix
+                for i, s in enumerate(sym_list):
+                    piece = s if i == 0 else ' ' + s
+                    if len(line) + len(piece) > max_width and line != prefix:
+                        print(line)
+                        line = indent + s
+                    else:
+                        line += piece
+                print(line)
+            print()
+
+
+# --------------------------------------------------------------------------
+#  Section slicing helpers
+# --------------------------------------------------------------------------
+#
+# Every section in a Worker.generate_batch() row is a CONTIGUOUS span
+# of columns. The batch dict already reports the span shape via
+# `<section>_start_indices` and `<section>_lengths` (both (B,) int32),
+# so the old V1-style gather-index arrays -- (B, max_len) int32 tensors
+# per section, allocated per batch -- were pure overhead: they encoded
+# `[s, s+1, ..., s+len-1]` for every row when a single `(s, s+len)`
+# slice per row would suffice.
+#
+# These helpers give you both:
+#   * `section_span(batch, section, row)` -- the (start, end) column
+#     pair, cheap enough to compute inline every call.
+#   * `section_tokens(batch, section, row, key='src_tokens')` -- a
+#     numpy view into the batch tensor for that row + section, no copy.
+#
+# `section_tokens_padded` gives you a padded (B, max_section_len)
+# tensor ready to hand to `torch.from_numpy(...).to(device)` -- this
+# is the shape training / inference loops actually want, since GPUs
+# consume whole batches at a time. `section_tokens` (row-wise view)
+# is the debug / inspection tool: cheap, zero-copy, no padding.
+#
+# Sections supported (name -> (start_key, len_key) in the batch dict):
+SECTION_KEYS = {
+    'edges':      ('graph_edge_start_indices',  'graph_edge_lengths'),
+    'query':      ('query_start_indices',       'query_lengths'),
+    'thinking':   ('thinking_start_indices',    'thinking_lengths'),
+    'scratchpad': ('scratchpad_start_indices',  'scratchpad_lengths'),
+    'target':     ('task_start_indices',        'task_lengths'),
+}
+
+
+def section_span(batch, section, row):
+    """Return ``(start, end)`` column indices for ``section`` in
+    ``row`` of ``batch``.
+
+    ``end`` is exclusive. Returns ``(start, start)`` (an empty span)
+    when the section is absent for that row -- lets callers do
+    ``if start == end: skip`` without a special-case for missing
+    sections (e.g. no scratchpad when scratchpad_kind='none').
+    """
+    if section not in SECTION_KEYS:
+        raise ValueError(
+            f"section_span: unknown section {section!r}; "
+            f"valid sections are {sorted(SECTION_KEYS)}")
+    s_key, l_key = SECTION_KEYS[section]
+    s = int(batch[s_key][row])
+    l = int(batch[l_key][row])
+    return s, s + l
+
+
+def section_tokens(batch, section, row, key='src_tokens'):
+    """Slice out the given section from ``batch[key]`` for one row.
+
+    Returns a NumPy view (no copy). Shape:
+      * SEAN token tensor: ``(length,)``
+      * STAN token tensor: ``(length, struct_dim)``
+      * any other 2D/3D per-row batch tensor with row index at axis 0
+
+    An empty slice is returned when the section is absent for that row.
+
+    Typical uses:
+      edges = generator.section_tokens(batch, 'edges', b)
+      # -> (u, v, EDGE, u, v, EDGE, ...) under SEAN concat mode
+      target = generator.section_tokens(batch, 'target', b)
+      # -> the vocab tokens the model must produce
+    """
+    s, e = section_span(batch, section, row)
+    return batch[key][row, s:e]
+
+
+def section_tokens_padded(batch, section, key='src_tokens', pad_value=None):
+    """Return a padded ``(B, max_section_len [, D])`` tensor of the
+    section content across ALL rows in the batch.
+
+    This is the primary shape for training / inference: hand the
+    result to ``torch.from_numpy(...).to(device)`` (zero-copy on the
+    numpy side, one host->device copy) and you have a ready-to-use
+    GPU batch tensor for the section. Row-wise :func:`section_tokens`
+    is the debug / inspection counterpart -- use it when you want to
+    look at one row without materialising padding.
+
+    Args:
+      batch: the generate_batch dict.
+      section: name from :data:`SECTION_KEYS`.
+      key: source tensor to slice (default ``'src_tokens'``).
+      pad_value: fill for the padded tail per row. Defaults to
+                 TOK_PAD (1) for token tensors, 0 otherwise.
+
+    Returns a numpy array. Shape:
+      * SEAN: ``(B, max_section_len)`` int32
+      * STAN: ``(B, max_section_len, struct_dim)`` int32
+    """
+    tensor = batch[key]
+    if pad_value is None:
+        pad_value = 1 if key in ('src_tokens', 'targets', 'positions') else 0
+
+    # Reuse the vectorised gather-index / mask builder. `pad_value=0`
+    # inside the gather keeps every tail-column index in-bounds
+    # (column 0 is always valid); we overwrite those positions with
+    # the caller's `pad_value` via the mask after the gather. The
+    # gather itself is one C-level call -- no Python row loop.
+    gather_ids, mask = section_gather_ids(batch, section, pad_value=0)
+    B, max_len = gather_ids.shape
+
+    if tensor.ndim == 2:
+        out = np.take_along_axis(tensor, gather_ids, axis=1)      # (B, max_len)
+        out[~mask] = pad_value
+    elif tensor.ndim == 3:
+        # take_along_axis needs indices with the same ndim as the input;
+        # broadcast the (B, max_len) column indices across the trailing
+        # struct-dim so every channel is gathered from the same column.
+        D = tensor.shape[2]
+        gids3 = np.broadcast_to(gather_ids[:, :, None], (B, max_len, D))
+        out = np.take_along_axis(tensor, gids3, axis=1)           # (B, max_len, D)
+        out[~mask, :] = pad_value
+    else:
+        raise ValueError(
+            f"section_tokens_padded: expected 2D or 3D tensor, got shape "
+            f"{tensor.shape}")
+    return out
+
+
+def section_span_batched(batch, section):
+    """Return ``(starts, ends)`` int32 arrays of shape ``(B,)`` --
+    end is exclusive. When a section is empty for a row, ``end == start``.
+
+    Useful for vectorised downstream logic that wants to build masks
+    or slice with fancy indexing without a Python loop.
+    """
+    s_key, l_key = SECTION_KEYS[section]
+    starts  = np.asarray(batch[s_key], dtype=np.int32)
+    lengths = np.asarray(batch[l_key], dtype=np.int32)
+    return starts, starts + lengths
+
+
+def section_gather_ids(batch, section, pad_value=0):
+    """Return ``(gather_indices, mask)`` for a section across the batch.
+
+    Shape (both):
+      * ``gather_indices``: ``(B, max_section_len)`` int32 --
+        column index of each in-section position, or ``pad_value``
+        where the section is shorter than ``max_section_len``.
+      * ``mask``: ``(B, max_section_len)`` bool -- True inside the
+        section, False in the padded tail.
+
+    Feed ``gather_indices`` to ``np.take_along_axis(tensor, gather_indices, axis=1)``
+    or ``torch.gather(tensor, 1, gather_indices)`` (after converting
+    to a torch tensor) to pull the section into a batched
+    ``(B, max_section_len, ...)`` tensor in one op -- the standard
+    "fancy indexing" pattern.
+
+    Use :func:`section_gather_ids` when you need shape-preserving
+    fancy indexing that PyTorch autograd can differentiate through,
+    or when the same gather is applied to several batch tensors
+    (compute once, use N times). If you just need the section values
+    themselves as a batched padded tensor, :func:`section_tokens_padded`
+    is more direct.
+
+    This one function replaces the V1-era per-section wrappers
+    (``task_gather_ids``, ``edge_gather_ids``, ``scratchpad_gather_ids``,
+    ``node_gather_ids``, ``query_gather_ids``) with a single dispatch
+    on the section name.
+    """
+    starts, ends = section_span_batched(batch, section)  # (B,), (B,)
+    B       = starts.shape[0]
+    lengths = ends - starts
+    max_len = int(lengths.max()) if B > 0 else 0
+
+    # gather_indices[b, i] = starts[b] + i, clipped to pad_value once past
+    # each row's actual length. Broadcasting is cheaper than a Python loop.
+    positions      = np.arange(max_len, dtype=np.int32)[None, :]     # (1, max_len)
+    gather_indices = starts[:, None] + positions                     # (B, max_len)
+    mask           = gather_indices < ends[:, None]                  # (B, max_len)
+    gather_indices = np.where(mask, gather_indices, pad_value).astype(np.int32)
     return gather_indices, mask
 
-# these parse the output tensor to generate indicies for gathering the relevant tokens for each component of the input (graph, query, task, scratchpad)
-def _gather_ids_helper(b_n, start_n, lengths_n, stride=1, offset=0, pad_value=0):
-    if start_n not in b_n or lengths_n not in b_n or b_n[start_n] is None or b_n[lengths_n] is None:
-        return None, None
-    starts = b_n[start_n]
-    lengths = b_n[lengths_n]
-    return _gather_ids(starts, lengths, stride=stride, offset=offset, pad_value=pad_value)
 
+def pprint_batch(batch, ctx, indices=None, *,
+                 show_positions=True, show_hop_distances=False,
+                 max_width=140, title=''):
+    """Human-readable, column-aligned rendering of a
+    ``Worker.generate_batch()`` dict.
 
-def task_gather_ids(b_n, is_true_task, pad_value=0, **kwargs):
-    if is_true_task:
-        if 'true_task_gather_ids' in b_n and b_n['true_task_gather_ids'] is not None:
-            return b_n['true_task_gather_ids']
-        out = _gather_ids_helper(b_n, 'true_task_start_indices', 'true_task_lengths', pad_value=pad_value, **kwargs)
-        b_n['true_task_gather_ids'] = out
+    Every annotation row (Src / Pos / Edg / Qry / Thk / Scr / Tgt /
+    Lbl_k / Idx) uses the SAME fixed column width so a section's
+    tokens line up VERTICALLY under the src tokens they annotate.
+    Positions outside a given section stay blank on that row --
+    visually revealing exactly where each section sits in the
+    sequence, with what content, and where label smoothing kicks in.
+
+    Rows are wrapped in horizontal chunks so wide sequences fit
+    inside ``max_width`` characters.
+
+    Args:
+      batch: dict returned by ``Worker.generate_batch``.
+      ctx: the ``WorkerSharedContext`` whose ``token_dict`` was used
+           to fill this batch (i.e. the ctx the Worker was constructed
+           with). Required so pprint renders with the same symbol
+           table the tokenizer used -- no chance of drift.
+      indices: which batch rows to render. ``None`` or ``-1`` = all
+           rows; a positive int = first N; a list = specific rows.
+      show_positions: print the positional-id row (default True).
+      show_hop_distances: also print the (n, n) hop-distance matrix
+           per item, clipped to the item's actual num_nodes (default
+           False; requires ``cfg.return_hop_distances=True``).
+      max_width: soft target for wrapped-line width in characters.
+      title: optional heading printed once above the whole rendering.
+    """
+    # --- Resolve inputs and symbol table -----------------------------------
+    if title:
+        print(title)
+
+    # ctx.token_dict is the sole source of truth. If the caller
+    # generated the batch with this ctx (the only sensible flow),
+    # every id in src / targets is guaranteed to have an entry.
+    assert getattr(ctx, 'token_dict', None), \
+        "pprint_batch: ctx.token_dict is empty; call ctx.set_default_dictionary()"
+
+    # Invert token_dict (symbol -> id) into id -> symbol.
+    id_to_symbol = {v: k for k, v in ctx.token_dict.items()}
+
+    def tok_str(tok_id):
+        tid = int(tok_id)
+        # Every id in a batch produced by this ctx's Worker MUST be
+        # in id_to_symbol. Missing entries almost always indicate the
+        # caller passed a different ctx than the one that generated
+        # the batch -- surface that loudly rather than silently
+        # rendering a fallback symbol.
+        assert tid in id_to_symbol, (
+            f"pprint_batch: token id {tid} not in ctx.token_dict; the "
+            f"ctx handed to pprint_batch differs from the one that "
+            f"generated this batch")
+        return id_to_symbol[tid]
+
+    # --- Resolve which rows to print --------------------------------------
+    src = batch['src_tokens']
+    B   = src.shape[0]
+    if indices is None or (isinstance(indices, int) and indices < 0):
+        idxs = list(range(B))
+    elif isinstance(indices, int):
+        idxs = list(range(min(indices, B)))
     else:
-        if 'task_gather_ids' in b_n and b_n['task_gather_ids'] is not None:
-            return b_n['task_gather_ids']
-        out = _gather_ids_helper(b_n, 'task_start_indices', 'task_lengths', pad_value=pad_value, **kwargs)
-        b_n['true_task_gather_ids'] = out
-    return out
+        idxs = [b for b in indices if 0 <= b < B]
+
+    targets       = batch.get('targets')
+    positions     = batch.get('positions')
+    hop_distances = batch.get('hop_distances')
+    src_lengths           = batch['src_lengths']
+    num_nodes             = batch['num_nodes']
+    num_edges             = batch['num_edges']
+    left_pad_lengths      = batch['left_pad_lengths']
+    graph_edge_start      = batch['graph_edge_start_indices']
+    graph_edge_lengths    = batch['graph_edge_lengths']
+    query_start           = batch['query_start_indices']
+    query_lengths         = batch['query_lengths']
+    thinking_start        = batch['thinking_start_indices']
+    thinking_lengths      = batch['thinking_lengths']
+    scratchpad_start      = batch['scratchpad_start_indices']
+    scratchpad_lengths    = batch['scratchpad_lengths']
+    task_start            = batch['task_start_indices']
+    task_lengths          = batch['task_lengths']
+
+    pad_id = 1  # TOK_PAD
+
+    # Fixed label column ("Src:  ", "Tgt:  ", "Lbl0: ", "Idx:  ", ...)
+    # All chunks share a row-label margin of this width.
+    row_label_width = 6
+
+    for b in idxs:
+        L        = int(src_lengths[b])
+        n        = int(num_nodes[b])
+        m        = int(num_edges[b])
+        left_pad = int(left_pad_lengths[b])
+        content_start = left_pad
+        content_end   = left_pad + L    # exclusive
+
+        # Row tokens (SEAN col-0 / STAN col-0). Vocab-token rendering
+        # only uses col-0; STAN's cols 1..D-1 carry structural padding
+        # or the second vertex of an edge triple that already appears
+        # elsewhere in the sequence.
+        row_tokens = src[b, content_start:content_end, 0] if src.ndim == 3 \
+                     else src[b, content_start:content_end]
+        symbols = [tok_str(t) for t in row_tokens]
+
+        # Column width: max symbol width across THIS row, wide enough
+        # to also hold column indices.
+        col_w = max((len(s) for s in symbols), default=1)
+        col_w = max(col_w, len(str(content_end - 1)))
+        col_w = max(col_w, 2)
+
+        # ------------- Header -----------------------------------------
+        print('=' * min(78, max_width))
+        print(f'BATCH INDEX {b}   n={n}  m={m}  src_len={L}'
+              f'  left_pad={left_pad}')
+        # Section boundaries at a glance.
+        def section_str(label, start_arr, len_arr):
+            s = int(start_arr[b]); ln = int(len_arr[b])
+            return None if ln == 0 else f'{label}[{s}:{s + ln})'
+        sections = [f'BOS@{content_start}']
+        for lbl, s_arr, l_arr in [
+            ('Edges',      graph_edge_start,   graph_edge_lengths),
+            ('Query',      query_start,        query_lengths),
+            ('Thinking',   thinking_start,     thinking_lengths),
+            ('Scratchpad', scratchpad_start,   scratchpad_lengths),
+            ('Target',     task_start,         task_lengths),
+        ]:
+            item = section_str(lbl, s_arr, l_arr)
+            if item is not None:
+                sections.append(item)
+        sections.append(f'EOS@{content_end - 1}')
+        print('Sections: ' + '  '.join(sections))
+        print('-' * min(78, max_width))
+
+        # ------------- Section masks: which columns each row covers ---
+        # Each entry: (row_label, start_col, len, per_col_symbol_fn)
+        #   per_col_symbol_fn(c) returns the symbol to render at
+        #   ROW column c, or None if that column isn't in this section.
+        section_rows = []
+
+        def make_src_sub(s_col, s_len):
+            # For every column in [s_col, s_col + s_len), render the
+            # actual src token at that column; return None outside.
+            def fn(c):
+                if s_col <= c < s_col + s_len:
+                    idx_in_row = c - content_start
+                    if 0 <= idx_in_row < len(symbols):
+                        return symbols[idx_in_row]
+                return None
+            return fn
+
+        for lbl, s_arr, l_arr in [
+            ('Edg',  graph_edge_start,   graph_edge_lengths),
+            ('Qry',  query_start,        query_lengths),
+            ('Thk',  thinking_start,     thinking_lengths),
+            ('Scr',  scratchpad_start,   scratchpad_lengths),
+            ('Tgt',  task_start,         task_lengths),
+        ]:
+            s = int(s_arr[b]); ln = int(l_arr[b])
+            if ln > 0:
+                section_rows.append((lbl, make_src_sub(s, ln)))
+
+        # ------------- Targets tensor -> per-k label rows -------------
+        # Generation region starts at the earliest section marker
+        # (thinking/scratchpad/task, whichever exists), which sits ONE
+        # column before its content start.
+        def marker_col_of(sec_start, sec_len):
+            s = int(sec_start[b]); ln = int(sec_len[b])
+            return s - 1 if ln > 0 else None
+        gen_cands = [
+            marker_col_of(thinking_start,   thinking_lengths),
+            marker_col_of(scratchpad_start, scratchpad_lengths),
+            marker_col_of(task_start,       task_lengths),
+        ]
+        gen_cands = [c for c in gen_cands if c is not None]
+        gen_col = min(gen_cands) if gen_cands else content_start
+
+        label_rows = []  # list of (row_label, per_col_fn)
+        if targets is not None:
+            gen_len_row = targets.shape[1]   # global max_gen_len
+            max_labels  = targets.shape[2]
+            for k in range(max_labels):
+                def make_label_fn(kk):
+                    def fn(c):
+                        gp = c - gen_col
+                        if 0 <= gp < gen_len_row:
+                            tok = int(targets[b, gp, kk])
+                            if tok != pad_id:
+                                return tok_str(tok)
+                        return None
+                    return fn
+                label_rows.append((f'Lbl{k}' if k > 0 else 'L0*', make_label_fn(k)))
+            # `L0*` on the first label row emphasises "chosen" (must
+            # match src at that column); Lbl1..Lbl(k-1) are alternatives.
+
+        # ------------- Chunk-wrapped rendering ------------------------
+        cols_per_line = max(1,
+            (max_width - row_label_width - 2) // (col_w + 1))
+        total_cols = content_end - content_start
+
+        def render_row(prefix, cells):
+            # cells is a list of strings or None (blank).
+            padded = [(c if c is not None else '').rjust(col_w) for c in cells]
+            print(prefix.ljust(row_label_width) + ' '.join(padded))
+
+        for start in range(0, total_cols, cols_per_line):
+            end = min(start + cols_per_line, total_cols)
+            cols = list(range(content_start + start, content_start + end))
+
+            # Idx: column indices.
+            render_row('Idx:', [str(c) for c in cols])
+            # Src: full row's tokens.
+            render_row('Src:', [symbols[c - content_start] for c in cols])
+            # Pos: positional ids (optional).
+            if show_positions and positions is not None:
+                pos_row = positions[b, content_start:content_end, 0] \
+                          if positions.ndim == 3 \
+                          else positions[b, content_start:content_end]
+                render_row('Pos:',
+                           [str(int(pos_row[c - content_start])) for c in cols])
+            # Per-section overlays.
+            for lbl, fn in section_rows:
+                cells = [fn(c) for c in cols]
+                # Skip a section row if it has no content in THIS chunk.
+                if not any(x is not None for x in cells):
+                    continue
+                render_row(lbl + ':', cells)
+            # Targets alternatives, one row per k. Skip k>0 rows that
+            # are empty in this chunk (common: chosen-only positions
+            # like markers show only on L0*).
+            for lbl, fn in label_rows:
+                cells = [fn(c) for c in cols]
+                if not any(x is not None for x in cells):
+                    continue
+                render_row(lbl + ':', cells)
+            print()
+
+        # ------------- Optional hop-distance matrix -------------------
+        # Delegates to pprint_distance_matrix so the same renderer
+        # backs both `pprint_batch(..., show_hop_distances=True)` and
+        # standalone ad-hoc `pprint_distance_matrix(hd)` calls. Any
+        # future distance semantics (weighted, ...) get their own
+        # slice + call with a different `name` / `formatter`.
+        if show_hop_distances and hop_distances is not None:
+            pprint_distance_matrix(
+                hop_distances[b, :n, :n],
+                name='Hop distances',
+                unreachable=-1,
+            )
 
 
-def scratchpad_gather_ids(b_n, pad_value=0, **kwargs):
-    if 'scratchpad_gather_ids' in b_n and b_n['scratchpad_gather_ids'] is not None:
-        return b_n['scratchpad_gather_ids']
-    out = _gather_ids_helper(b_n, 'scratch_pad_start_indices', 'scratch_pad_lengths', pad_value=pad_value, **kwargs)
-    b_n['scratchpad_gather_ids'] = out
-    return out
-
-
-def edge_gather_ids(b_n, pad_value=0, *kwargs):
-    if 'graph_edge_gather_ids' in b_n and b_n['graph_edge_gather_ids'] is not None:
-        return b_n['graph_edge_gather_ids']
-
-    if 'graph_edge_start_indices' not in b_n or 'graph_edge_lengths' not in b_n or b_n['graph_edge_start_indices'] is None or b_n['graph_edge_lengths'] is None or b_n['no_graph']:
-        return None, None
-
-    starts = b_n['graph_edge_start_indices']
-    lengths = b_n['graph_edge_lengths']
-    if 'graph_node_lengths' in b_n and b_n['graph_node_lengths'] is not None:
-        node_lengths = b_n['graph_node_lengths']
-        lengths -= node_lengths  # adjust edge lengths to account for node tokens if they are included in the graph tokenization
-
-    if b_n["concat_edges"]:
-        out = _gather_ids(starts, lengths, pad_value=pad_value)
-    else:  # gather at edge markers
-        out = _gather_ids(starts, lengths, stride=3, offset=2, pad_value=pad_value)
-    b_n['graph_edge_gather_ids'] = out
-    return out
-
-
-def node_gather_ids(b_n, pad_value=0, **kwargs):
-    if 'graph_node_gather_ids' in b_n and b_n['graph_node_gather_ids'] is not None:
-        return b_n['graph_node_gather_ids']
-    out = _gather_ids_helper(b_n, 'graph_node_start_indices', 'graph_node_lengths', pad_value=pad_value, **kwargs)
-    b_n['graph_node_gather_ids'] = out
-    return out
-
-
-def query_gather_ids(b_n, pad_value=0, **kwargs):
-    if 'query_gather_ids' in b_n and b_n['query_gather_ids'] is not None:
-        return b_n['query_gather_ids']
-    out = _gather_ids_helper(b_n, 'query_start_indices', 'query_lengths', pad_value=pad_value, **kwargs)
-    b_n['query_gather_ids'] = out
-    return out
-
-
-def create_task_pos_for_inference():
-    pass  # TODO
-
-
-def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
+def get_generator_module():
     """
     Import the C++ `generator` module, installing / rebuilding it via
     scikit-build-core (`pip install -e .`) when necessary.
@@ -808,13 +1001,7 @@ def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
          `editable.rebuild = true` makes subsequent imports transparently
          rebuild the extension when C++ sources change -- no explicit
          freshness check needed here.
-
-    `cpp_files`, `cpp_path`, and `boost_path` are accepted for backwards
-    compatibility with older callers, but no longer used: CMakeLists.txt is
-    the single source of truth for what gets compiled.
     """
-    del cpp_files, cpp_path, boost_path  # legacy kwargs; ignored on purpose
-
     def build_module():
         """Install the extension in editable mode from the repo root."""
         import subprocess
@@ -831,51 +1018,21 @@ def get_generator_module(cpp_files=None, cpp_path='', boost_path=None):
         build_module()
         import generator  # noqa: F811
 
-    setattr(generator, "get_args_parser", get_args_parser)
+    setattr(generator, "pprint_distance_matrix", pprint_distance_matrix)
+    setattr(generator, "pprint_distance_ranks",  pprint_distance_ranks)
+    setattr(generator, "pprint_batch",     pprint_batch)
+    setattr(generator, "GraphPlotter",     GraphPlotter)
 
-
-    def get_graph(args, graph_type=None, batch_size=None, task_sample_dist=None):
-        if not isinstance(args, dict):
-            args = vars(args)
-        if graph_type is None:
-            graph_type = args['graph_type']
-        if batch_size is not None:
-            args['batch_size'] = batch_size
-        if task_sample_dist is not None:
-            args['task_sample_dist'] = task_sample_dist
-        else:
-            if args.get('task_sample_dist', None) is None:
-                args['task_sample_dist'] = []
-        if graph_type == 'erdos_renyi':
-            b_n = generator.erdos_renyi_n(**args)
-        elif graph_type == 'euclidian':
-            b_n = generator.euclidian_n(**args)
-        elif graph_type == 'random_tree':
-            b_n = generator.random_tree_n(**args)
-        elif graph_type == 'path_star':
-            b_n = generator.path_star_n(**args)
-        elif graph_type == 'balanced':
-            b_n = generator.balanced_n(**args)
-        elif graph_type == 'khops_gen':  # kinda a graph if you squint
-            b_n = generator.khops_gen_n(**args)
-        elif graph_type == 'khops':  # kinda a graph if you squint
-            b_n = generator.khops_n(**args)
-        else:
-            raise ValueError(f"Unknown graph type: {graph_type}")
-        return b_n
-
-
-    setattr(generator, "get_graph", get_graph)
-
-    setattr(generator, "task_gather_ids", task_gather_ids)
-    setattr(generator, "scratchpad_gather_ids", scratchpad_gather_ids)
-    setattr(generator, "edge_gather_ids", edge_gather_ids)
-    setattr(generator, "node_gather_ids", node_gather_ids)
-
-    setattr(generator, "pprint_distance", pprint_distance)
-    setattr(generator, "pprint_ranks", pprint_ranks)
-    setattr(generator, "pprint_batched_dict", pprint_batched_dict)
-    setattr(generator, 'create_reconstruct_graphs', create_reconstruct_graphs)
+    # Section slicing helpers (see docstrings above). ONE dispatch on
+    # section name; replaces V1's per-section wrappers
+    # (task_gather_ids, edge_gather_ids, scratchpad_gather_ids,
+    # node_gather_ids, query_gather_ids).
+    setattr(generator, "SECTION_KEYS",           SECTION_KEYS)
+    setattr(generator, "section_span",           section_span)
+    setattr(generator, "section_tokens",         section_tokens)
+    setattr(generator, "section_tokens_padded",  section_tokens_padded)
+    setattr(generator, "section_span_batched",   section_span_batched)
+    setattr(generator, "section_gather_ids",     section_gather_ids)
 
     def help_str():  # displays docstrings from cpp files with print(generator.help_str())
         # note this only works for the cpp functions not the added python functions above

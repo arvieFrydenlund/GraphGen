@@ -3205,6 +3205,30 @@ Each sub-step is a mini-Step-8: add one private method to `TaskComputer` (and po
 
 After Step 12 the codebase is in its post-refactor shape. Tuning items from Phase 4 of "Suggested refactor order" (Tier 3A flat matrices, Tier 3C `flat_hash_map`, Tier 2C ER-via-union-find, Tier 2D squared-Euclidean, R4 PCH, R9 documented invariants) are safe to pursue **only when the profiler says they matter**, guarded by the pytest + doctest suite plus the benchmark baselines recorded in Steps 8 and 12. Order by profiler evidence, one item per commit, benchmark before/after.
 
+### Hop-distance matrix (landed mid-refactor)
+
+Documenting the design as-implemented so future changes preserve the invariants.
+
+**Type + naming.** `graphgen::HopDistView` is a `md::mdspan<int32_t, dextents<int, 2>, layout_stride>` (`md` routes to `std` under C++23 when `__cpp_lib_mdspan >= 202207L`, else to the vendored Kokkos reference impl — see `include/graphgen/mdspan_shim.h`). The type name is `Hop*` rather than a generic `Distance*` because a `WeightedDistanceMatrix` will slot in alongside it later; the two matrices are semantically independent (a weighted graph can still be asked for hop counts). Sentinels: `HOP_UNREACHABLE = -1` inside the valid `(n_i, n_i)` region, `HOP_PAD = INT32_MIN` outside it.
+
+**Accessor on `SampledGraph`.** `sg.hop_distances()` is lazy: first call runs `n` single-source BFS and caches, subsequent calls hit the cache. Storage is either `hop_owned_` (contiguous `n*n int32_t`) or an externally attached view into a `(B, max_n, max_n)` batch tensor. `sg.attach_hop_distances_view(v)` is call-once-before-first-use with runtime rejection of double-attach and too-small views. `sg.release_hop_distances()` drops the owned buffer but is a no-op on attached views (the caller owns that buffer's lifetime). Consumers always get a `(n_i, n_i)` `HopDistView` — the batch-tensor padding is invisible.
+
+**Batch return.** `cfg.return_hop_distances` (default `false`) toggles the `"hop_distances"` key in `generate_batch`'s dict. When set, the worker allocates one `py::array_t<int32_t>` of shape `(batch_size, cfg.max_num_nodes, cfg.max_num_nodes)` pre-filled with `HOP_PAD`, attaches per-row views to each item's `SampledGraph` before the task pass, and after tasks calls `hop_distances()` on any item whose task did not touch it (e.g. `shortest_path` uses its cheap 2-BFS pattern; the post-task fill guarantees the returned tensor is populated). When the flag is off, tasks that need distances (Center/Centroid) still fill an owned buffer that gets released between the task and tokenize stages. Two storage modes, one consumer-facing view type; the flag is the only visible knob.
+
+**Clipping without submdspan.** `std::submdspan` is P2630 / C++26 and libc++ 18 doesn't ship it. `sampled_graph.cpp` clips manually by constructing a fresh `layout_stride::mapping` with smaller extents but the same strides and data pointer. Zero portability surface added.
+
+### Future work: weighted-distance matrix
+
+Deferred until weighted graphs land. When they do, follow the hop-matrix template exactly:
+
+- New header `weighted_distance_matrix.h` with `WeightedDistView = md::mdspan<double, dextents<int, 2>, layout_stride>`, sentinels `WEIGHT_UNREACHABLE = std::numeric_limits<double>::infinity()`, `WEIGHT_PAD = NaN` (or another out-of-band value).
+- New accessors on `SampledGraph`: `weighted_distances()`, `attach_weighted_distances_view(v)`, `release_weighted_distances()`. Independent from the hop accessors — a weighted graph may still expose both matrices simultaneously.
+- Fill via Dijkstra on `CsrGraph` (needs an edge-weight vector added to CSR).
+- New config flag `return_weighted_distances`. Once weighted graphs work, lift the current `return_hop_distances && weighted` blanket-reject in `generator_config.cpp`.
+- Batch return + view-attach + release pipeline mirrors `return_hop_distances`.
+
+Keep both matrices' lifecycles orthogonal: the hop matrix's compute + release is unaffected by the weighted matrix's, and vice versa. Both flags default `false`; both allocations only happen on-demand.
+
 ### If a step fails a test
 
 The correct response is *not* to weaken the test. In order:

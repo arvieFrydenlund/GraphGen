@@ -12,13 +12,15 @@
 #define GRAPHGEN_GRAPH_SAMPLER_H
 
 #include <random>
+#include <vector>
 
+#include "graphgen/csr_graph.h"
 #include "graphgen/graph_kind.h"
 #include "graphgen/sampled_graph.h"
 
 namespace graphgen {
 
-class GeneratorConfig;  // forward decl -- only referenced by pointer/ref
+struct GeneratorConfig;  // forward decl -- only referenced by pointer/ref
 
 class GraphSampler {
 public:
@@ -37,6 +39,24 @@ private:
     SampledGraph sample_balanced   (std::mt19937_64& rng, const GeneratorConfig& cfg);
     SampledGraph sample_khops      (std::mt19937_64& rng, const GeneratorConfig& cfg);
     SampledGraph sample_khops_gen  (std::mt19937_64& rng, const GeneratorConfig& cfg);
+
+    // Randomise the edge list before CsrGraph::build consumes it.
+    // CsrGraph stores per-row slots in input order, so shuffling here
+    // shows up as randomised neighbour order within each vertex's
+    // adjacency list. The tokenizer emits edges in that CSR-derived
+    // order (via g.edges()), so the shuffled order is the emission
+    // order -- and derived quantities like the "first-mention edge
+    // index" the BFS scratchpad's adjacency-list sort uses are stable
+    // with respect to the same rng seed.
+    //
+    // Every sample_* helper should call this before handing its
+    // edges vector to CsrGraph so the model never sees a canonical
+    // construction order leak through the tokens. Static because it
+    // touches no per-instance state; lives on GraphSampler (not
+    // CsrGraph) because CsrGraph is a pure data structure that
+    // shouldn't take an rng.
+    static void shuffle_edges(std::vector<Edge>& edges,
+                              std::mt19937_64& rng);
 };
 
 }  // namespace graphgen

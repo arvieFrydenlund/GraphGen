@@ -31,14 +31,18 @@ def worker(generator):
 
 
 RECOGNISED_KINDS = [
-    "erdos_renyi",
-    "euclidean",
     "random_tree",
-    "path_star",
     "balanced",
-    "khops",
-    "khops_gen",
+    # khops / khops_gen are now implemented -- see IMPLEMENTED_KINDS
+    # in the paired test below (they use empty graphs so they don't
+    # fit the "generate_batch on a stub graph_kind throws" pattern
+    # this suite covers).
 ]
+
+# Kinds whose per-topology sampler is fully wired up; generate_batch should
+# Kinds whose per-topology sampler is fully wired up; generate_batch should
+# succeed (returning a possibly-empty dict at this stage of the pipeline).
+IMPLEMENTED_KINDS = ["erdos_renyi", "euclidean", "path_star"]
 
 
 def test_shared_context_construction(generator):
@@ -61,6 +65,30 @@ def test_generate_batch_stub_raises_per_kind(generator, worker, kind):
     msg = str(exc_info.value)
     assert f"sample_{kind}" in msg, f"expected 'sample_{kind}' in message, got: {msg}"
     assert "not implemented" in msg, f"expected 'not implemented' in message, got: {msg}"
+
+
+@pytest.mark.parametrize("kind", IMPLEMENTED_KINDS)
+def test_generate_batch_implemented_kind_does_not_throw(generator, worker, kind):
+    # Kind-specific kwargs; the shared fields (batch_size, vocab) stay
+    # the same. Each sampler validates its own required fields, so we
+    # only fill in what that sampler needs.
+    kind_kwargs = {
+        "erdos_renyi": dict(
+            min_num_nodes=10, max_num_nodes=10,
+            edge_prob=0.5),
+        "euclidean": dict(
+            min_num_nodes=10, max_num_nodes=10),
+        "path_star": dict(
+            directed=True,
+            min_arms=2, max_arms=3,
+            min_arm_length=2, max_arm_length=4),
+    }
+    cfg = generator.GeneratorConfig(
+        graph_kind=kind,
+        batch_size=1,
+        **kind_kwargs[kind])
+    result = worker.generate_batch(cfg)
+    assert isinstance(result, dict)
 
 
 def test_generate_batch_unknown_kind_raises(generator, worker):

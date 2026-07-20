@@ -29,19 +29,21 @@ def generator():
 def test_default_ctor_populates_token_dictionary(generator):
     ctx = generator.WorkerSharedContext()
     d = ctx.token_dict
-    # V1 default: 23 special tokens at positions 0..22, then 50 integer
-    # vocab tokens "0".."49" at positions 23..72. No extras.
+    # 26 special tokens at positions 0..25, then 50 integer
+    # vocab tokens "0".."49" at positions 26..75. No extras.
     assert d["<s>"] == 0
     assert d["<pad>"] == 1
     assert d["</s>"] == 2
     assert d["<unk>"] == 3
     assert d["|"] == 4
-    assert d["D"] == 22
-    assert d["0"] == 23
-    assert d["49"] == 72
-    assert ctx.num_special == 23
+    assert d["D"] == 23
+    assert d["<"] == 24
+    assert d[">"] == 25
+    assert d["0"] == 26
+    assert d["49"] == 75
+    assert ctx.num_special == 26
     assert ctx.num_extra == 0
-    assert ctx.max_vocab == 73
+    assert ctx.max_vocab == 76
     assert ctx.extra_after_symbol == "D"
 
 
@@ -54,7 +56,7 @@ def test_special_token_ids_match_dictionary(generator):
     assert generator.WorkerSharedContext.TOK_EOS == ctx.token_dict["</s>"]
     assert generator.WorkerSharedContext.TOK_UNK == ctx.token_dict["<unk>"]
     assert generator.WorkerSharedContext.TOK_EDGE == ctx.token_dict["|"]
-    assert generator.WorkerSharedContext.NUM_SPECIAL_DEFAULT == 23
+    assert generator.WorkerSharedContext.NUM_SPECIAL_DEFAULT == 26
 
 
 def test_default_pos_dictionary(generator):
@@ -152,12 +154,12 @@ def test_validate_for_config_topology_kind_missing_graph_fails(generator):
 def test_set_default_dictionary_resizes(generator, max_num_nodes, extra_after):
     ctx = generator.WorkerSharedContext()
     ctx.set_default_dictionary(max_num_nodes=max_num_nodes, extra_after=extra_after)
-    assert ctx.num_special == 23
+    assert ctx.num_special == 26
     assert ctx.num_extra == extra_after
-    assert ctx.max_vocab == 23 + max_num_nodes
+    assert ctx.max_vocab == 26 + max_num_nodes
     # Extra tokens are D0, D1, ... positioned after the vocab range.
     for i in range(extra_after):
-        assert ctx.token_dict[f"D{i}"] == 23 + max_num_nodes + i
+        assert ctx.token_dict[f"D{i}"] == 26 + max_num_nodes + i
 
 
 def test_set_default_dictionary_custom_extra_symbol(generator):

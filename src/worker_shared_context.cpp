@@ -83,12 +83,15 @@ void WorkerSharedContext::set_default_dictionary(int max_num_nodes,
         {"?",     TOK_QUERY_END},
         {"@",     TOK_AT},
         {"#",     TOK_SCRATCH_START},
+        {"%",     TOK_SCRATCH_END},
         {"[",     TOK_BFS_ADJ_START},
         {"]",     TOK_BFS_ADJ_END},
         {"{",     TOK_CURLY_START},
         {"}",     TOK_CURLY_END},
         {"$",     TOK_DOLLAR},
         {extra_after_symbol, TOK_D_PREFIX},
+        {"<",     TOK_THINK_START},
+        {">",     TOK_THINK_END},
     };
 
     // Sanity: indices must be contiguous starting at zero.

@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(graphgen LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -24,11 +24,22 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(generator MODULE
     generator.cpp
     src/generator_config.cpp
+    src/batch_output_arrays.cpp
     src/csr_graph.cpp
     src/graph_kind.cpp
     src/graph_sampler.cpp
+    src/layout.cpp
     src/random_utils.cpp
     src/sampled_graph.cpp
+    src/scratchpad.cpp
+    src/scratchpad_sampler.cpp
+    src/section_plan.cpp
+    src/task.cpp
+    src/task_sampler.cpp
+    src/bfs_helpers.cpp
+    src/bfs_scratchpad_style.cpp
+    src/tokenization_mode.cpp
+    src/tokenizer.cpp
     src/worker.cpp
     src/worker_shared_context.cpp
 )
@@ -67,18 +78,41 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND
     add_executable(graphgen_tests
         tests_cpp/test_main.cpp
         tests_cpp/test_csr_graph.cpp
+        tests_cpp/test_csr_algorithms.cpp
+        tests_cpp/test_graph_sampler.cpp
+        tests_cpp/test_layout.cpp
         tests_cpp/test_random_utils.cpp
         tests_cpp/test_sampled_graph.cpp
+        tests_cpp/test_task_sampler.cpp
+        tests_cpp/test_tokenizer.cpp
         src/csr_graph.cpp
         src/graph_kind.cpp
+        src/graph_sampler.cpp
+        src/layout.cpp
         src/random_utils.cpp
         src/sampled_graph.cpp
+        src/scratchpad.cpp
+        src/scratchpad_sampler.cpp
+        src/section_plan.cpp
+        src/task.cpp
+        src/task_sampler.cpp
+        src/bfs_helpers.cpp
+        src/bfs_scratchpad_style.cpp
+        src/tokenization_mode.cpp
+        src/tokenizer.cpp
+        src/worker_shared_context.cpp
     )
     target_include_directories(graphgen_tests PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/third_party/doctest
+        ${CMAKE_SOURCE_DIR}/third_party/mdspan/include  # Kokkos mdspan
     )
+    # task_computer.cpp (and worker.cpp) transitively include
+    # generator_config.h, which pulls in <pybind11/pybind11.h>. Link
+    # pybind11::pybind11 to get its include directory (and Python.h
+    # from Python::Module) without dragging in the Python runtime.
+    target_link_libraries(graphgen_tests PRIVATE pybind11::pybind11)
     target_compile_options(graphgen_tests PRIVATE
         -O0
         -g

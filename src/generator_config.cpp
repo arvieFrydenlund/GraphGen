@@ -10,6 +10,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "graphgen/bfs_scratchpad_style.h"
+
 namespace graphgen {
 
 namespace py = pybind11;
@@ -62,49 +64,98 @@ py::object opt_to_py(const std::optional<T> &v) {
     return py::cast(*v);
 }
 
+// ---- Kwarg validation -------------------------------------------------------
+
+// Reject caller kwargs that used the pre-rename spelling. Silently
+// ignoring them would leave the corresponding field at its "none"
+// default and blow up much later in sampler dispatch; catch it here
+// with a clear message pointing at the new spelling.
+void reject_legacy_kwargs(const py::kwargs &kw) {
+    static constexpr const char *kRenamed[][2] = {
+        {"graph_type",      "graph_kind"},
+        {"task_type",       "task_kind"},
+        {"scratchpad_type", "scratchpad_kind"},
+        // The following 8 fields were absorbed into `tokenization_mode`
+        // (an enum-valued config field, currently exposed as a string).
+        // Each combination of these flags used to configure part of the
+        // tokenization strategy; the enum now names each valid recipe.
+        {"concat_edges",           "tokenization_mode"},
+        {"is_flat_model",          "tokenization_mode"},
+        {"use_edges_invariance",   "tokenization_mode"},
+        {"use_node_invariance",    "tokenization_mode"},
+        {"use_graph_invariance",   "tokenization_mode"},
+        {"use_query_invariance",   "tokenization_mode"},
+        {"use_graph_structure",    "tokenization_mode"},
+        {"use_full_structure",     "tokenization_mode"},
+        // The three BFS-scratchpad bools were folded into
+        // `bfs_scratchpad_style` (mutually exclusive variants).
+        {"include_queue",             "bfs_scratchpad_style"},
+        {"reverse_adjacency_lists",   "bfs_scratchpad_style"},
+        {"duplicate_adjacency_lists", "bfs_scratchpad_style"},
+        // Dropped outright: depth markers never worked, and scratchpad
+        // ordering is fixed (the model needs the query before it can
+        // build the scratchpad, so "prefix" is not a real axis).
+        {"use_unique_depth_markers", "<removed: never functional>"},
+        {"scratchpad_as_prefix",     "<removed: query must precede scratchpad>"},
+        {"is_causal",                "<removed: dead flag>"},
+        {"is_direct_ranking",        "<removed: dead flag>"},
+        // sort_adjacency_lists is now always on for the BFS scratchpad
+        // (matches the legacy default), so the flag is unnecessary.
+        {"sort_adjacency_lists",     "<removed: always on for BFS scratchpad>"},
+        // Renamed for naming symmetry with include_nodes_in_graph_tokenization.
+        // Note: include_graph_in_graph_tokenization has INVERTED polarity
+        // (default true = include, false = omit).
+        {"no_graph",        "include_graph_in_graph_tokenization (default true; invert polarity)"},
+        {"duplicate_edges", "include_duplicate_edges_in_graph_tokenization"},
+    };
+    for (const auto &pair : kRenamed) {
+        if (kw.contains(pair[0])) {
+            throw std::invalid_argument(
+                std::string("GeneratorConfig: '") + pair[0] +
+                "' has been renamed; use '" + pair[1] + "' instead.");
+        }
+    }
+}
+
 }  // namespace
 
 GeneratorConfig::GeneratorConfig(const py::kwargs &kw) {
+    reject_legacy_kwargs(kw);
+
     // --- Shared -----------------------------------------------------------
     set_from_kwargs(kw, "min_num_nodes", min_num_nodes);
     set_from_kwargs(kw, "max_num_nodes", max_num_nodes);
-    set_from_kwargs(kw, "min_vocab",     min_vocab);
-    set_from_kwargs(kw, "max_vocab",     max_vocab);
     set_from_kwargs(kw, "batch_size",    batch_size);
     set_from_kwargs(kw, "max_edges",     max_edges);
     set_from_kwargs(kw, "max_attempts",  max_attempts);
 
     // --- Dispatch ---------------------------------------------------------
-    // Accept both the canonical "*_kind" names and the legacy "*_type" names
-    // so existing callers that still pass task_type / graph_type keep working.
     set_from_kwargs(kw, "graph_kind",      graph_kind);
-    set_from_kwargs(kw, "graph_type",      graph_kind);
     set_from_kwargs(kw, "task_kind",       task_kind);
-    set_from_kwargs(kw, "task_type",       task_kind);
     set_from_kwargs(kw, "scratchpad_kind", scratchpad_kind);
-    set_from_kwargs(kw, "scratchpad_type", scratchpad_kind);
+
+    // --- Graph structure --------------------------------------------------
+    set_from_kwargs(kw, "directed", directed);
+    set_from_kwargs(kw, "weighted", weighted);
 
     // --- Tokenization -----------------------------------------------------
-    set_from_kwargs(kw, "is_causal",                           is_causal);
-    set_from_kwargs(kw, "is_direct_ranking",                   is_direct_ranking);
-    set_from_kwargs(kw, "query_at_end",                        query_at_end);
-    set_from_kwargs(kw, "no_graph",                            no_graph);
-    set_from_kwargs(kw, "concat_edges",                        concat_edges);
-    set_from_kwargs(kw, "duplicate_edges",                     duplicate_edges);
-    set_from_kwargs(kw, "include_nodes_in_graph_tokenization", include_nodes_in_graph_tokenization);
-    set_from_kwargs(kw, "num_thinking_tokens",                 num_thinking_tokens);
-    set_from_kwargs(kw, "scratchpad_as_prefix",                scratchpad_as_prefix);
-    set_from_kwargs(kw, "is_flat_model",                       is_flat_model);
-    set_from_kwargs(kw, "align_prefix_front_pad",              align_prefix_front_pad);
+    set_from_kwargs(kw, "tokenization_mode",                   tokenization_mode);
+
+    set_from_kwargs(kw, "query_at_end",                                 query_at_end);
+    set_from_kwargs(kw, "include_graph_in_graph_tokenization",          include_graph_in_graph_tokenization);
+    set_from_kwargs(kw, "include_duplicate_edges_in_graph_tokenization", include_duplicate_edges_in_graph_tokenization);
+    set_from_kwargs(kw, "include_nodes_in_graph_tokenization",          include_nodes_in_graph_tokenization);
+    set_from_kwargs(kw, "num_thinking_tokens",                          num_thinking_tokens);
+    set_from_kwargs(kw, "align_prefix_front_pad",                       align_prefix_front_pad);
 
     // --- Pos ids ----------------------------------------------------------
     set_from_kwargs(kw, "return_pos_ids",       return_pos_ids);
-    set_from_kwargs(kw, "use_edges_invariance", use_edges_invariance);
-    set_from_kwargs(kw, "use_node_invariance",  use_node_invariance);
-    set_from_kwargs(kw, "use_graph_invariance", use_graph_invariance);
-    set_from_kwargs(kw, "use_query_invariance", use_query_invariance);
-    set_from_kwargs(kw, "use_graph_structure",  use_graph_structure);
-    set_from_kwargs(kw, "use_full_structure",   use_full_structure);
+
+    // --- Distance matrix returns ------------------------------------------
+    set_from_kwargs(kw, "return_hop_distances", return_hop_distances);
+    set_from_kwargs(kw, "return_positions",     return_positions);
+    set_from_kwargs(kw, "return_distance_rank_targets",
+                    return_distance_rank_targets);
 
     // --- Task-specific ----------------------------------------------------
     set_optional_from_kwargs(kw, "min_path_length", min_path_length);
@@ -132,12 +183,8 @@ GeneratorConfig::GeneratorConfig(const py::kwargs &kw) {
     set_optional_from_kwargs(kw, "partition_method",    partition_method);
 
     // --- Scratchpad -------------------------------------------------------
-    set_optional_from_kwargs(kw, "sort_adjacency_lists",      sort_adjacency_lists);
-    set_optional_from_kwargs(kw, "use_unique_depth_markers",  use_unique_depth_markers);
+    set_from_kwargs         (kw, "bfs_scratchpad_style",      bfs_scratchpad_style);
     set_optional_from_kwargs(kw, "stop_once_found",           stop_once_found);
-    set_optional_from_kwargs(kw, "include_queue",             include_queue);
-    set_optional_from_kwargs(kw, "reverse_adjacency_lists",   reverse_adjacency_lists);
-    set_optional_from_kwargs(kw, "duplicate_adjacency_lists", duplicate_adjacency_lists);
 
     // --- Graph-kind-specific ---------------------------------------------
     set_optional_from_kwargs     (kw, "edge_prob",       edge_prob);
@@ -191,22 +238,20 @@ std::string GeneratorConfig::validate() const {
         }
     }
 
-    // Vocab sanity: the [min_vocab, max_vocab] slice has to be wide enough
-    // to host distinct token ids for every possible node.
-    if (min_vocab >= 0 && max_vocab >= 0) {
-        if (max_vocab < min_vocab) {
-            return "max_vocab < min_vocab";
-        }
-        const int span = max_vocab - min_vocab;
-        const int required = (max_num_nodes >= 0 ? max_num_nodes : min_num_nodes);
-        if (required > 0 && span < required) {
-            return "max_vocab - min_vocab < max_num_nodes";
-        }
-    }
+    // Node-vocab range is derived from the shared context's
+    // dictionary at sample time (Worker draws vertex ids from
+    // [ctx.num_special, ctx.max_vocab)). No config-level vocab
+    // sanity check to run here -- the dictionary owns that.
 
     // Tokenization sanity.
     if (num_thinking_tokens < 0) {
         return "num_thinking_tokens must be >= 0";
+    }
+    // Value must name a known TokenizationMode; downstream layout code
+    // will convert this string to the enum via tokenization_mode_from_string.
+    if (tokenization_mode != "sean" && tokenization_mode != "stan") {
+        return "tokenization_mode='" + tokenization_mode +
+               "' is not a known mode (expected 'sean' or 'stan')";
     }
 
     // Task-specific cross-field constraints.
@@ -230,11 +275,42 @@ std::string GeneratorConfig::validate() const {
         if (*min_khops > *max_khops) {
             return "min_khops > max_khops";
         }
-        if (!min_prefix_length.has_value() || !max_prefix_length.has_value()) {
-            return "task_kind='" + task_kind + "' requires min_prefix_length and max_prefix_length";
+        if (*min_khops < 1) {
+            return "min_khops must be >= 1";
         }
-        if (*min_prefix_length > *max_prefix_length) {
-            return "min_prefix_length > max_prefix_length";
+        // Prefix-length requirements diverge by task variant:
+        //   * khops_gen ALWAYS needs [min, max]_prefix_length (the
+        //     backtrace layout scales with prefix length).
+        //   * khops with permutation_version generates its own
+        //     length from vocab_size * (k + 1), so prefix_length is
+        //     optional. Otherwise (uniform seq) it's required.
+        const bool khops_perm =
+            task_kind == "khops" && permutation_version.value_or(false);
+        if (!khops_perm) {
+            if (!min_prefix_length.has_value() || !max_prefix_length.has_value()) {
+                return "task_kind='" + task_kind + "' requires min_prefix_length and max_prefix_length";
+            }
+            if (*min_prefix_length > *max_prefix_length) {
+                return "min_prefix_length > max_prefix_length";
+            }
+        }
+        // khops_gen also needs Q >= N (partition feasibility): every
+        // (k, P) draw with k in [min_k, max_k] and P in
+        // [min_prefix_length, max_prefix_length] must satisfy P >= 2k.
+        // The tightest case is the largest k paired with the smallest
+        // P.
+        if (task_kind == "khops_gen") {
+            if (*min_prefix_length < 2 * (*max_khops)) {
+                return "min_prefix_length must be >= 2 * max_khops for a feasible partition";
+            }
+        }
+        // partition_method: only used by khops_gen right now; validate
+        // if set so misspellings fail loudly at construction.
+        if (partition_method.has_value()) {
+            const std::string& pm = *partition_method;
+            if (pm != "uniform" && pm != "non_uniform") {
+                return "partition_method must be 'uniform' or 'non_uniform' (got '" + pm + "')";
+            }
         }
     } else if (task_kind == "none" || task_kind == "None") {
         // Permitted: caller has no task, e.g. sampling graphs for inspection.
@@ -249,6 +325,46 @@ std::string GeneratorConfig::validate() const {
         scratchpad_kind != "None") {
         return "unknown scratchpad_kind='" + scratchpad_kind + "'";
     }
+    // (bfs, bfs) is a redundant combination: the BFS task's target
+    // already IS the BFS visit order, so emitting a BFS-walk
+    // scratchpad in front of it would just duplicate the answer. BFS
+    // scratchpads exist to reason toward a *different* target (e.g.
+    // shortest_path via a BFS trace).
+    if (task_kind == "bfs" && scratchpad_kind == "bfs") {
+        return "(task_kind='bfs', scratchpad_kind='bfs') is redundant: "
+               "the bfs task already outputs the BFS visit order; use "
+               "scratchpad_kind='none', or pair a bfs scratchpad with a "
+               "different task (e.g. shortest_path)";
+    }
+    // bfs_scratchpad_style is inert when scratchpad_kind != "bfs", but
+    // validating it always keeps the failure surface consistent.
+    try {
+        (void)bfs_scratchpad_style_from_string(bfs_scratchpad_style);
+    } catch (const std::invalid_argument &e) {
+        return e.what();
+    }
+
+    // Graph-structure constraints.
+    if (weighted) {
+        return "weighted=true is not implemented; edge weights are not yet "
+               "wired through the tokenizer or into distance-based tasks. "
+               "Leave weighted=false for now.";
+    }
+
+    // hop_distances is now sized from the ACTUAL max num_vertices
+    // observed in the batch (see worker.cpp), so it no longer
+    // requires cfg.max_num_nodes to be pre-set. Any batch with at
+    // least one non-empty sampled graph produces a valid tensor.
+
+    // Positions are only produced by geometric graph samplers;
+    // other kinds have no natural coordinate system to surface.
+    // Reject the flag on non-euclidean configs rather than silently
+    // returning a tensor full of NaN.
+    if (return_positions && graph_kind != "euclidean") {
+        return "return_positions=true is only supported for "
+               "graph_kind='euclidean' (got graph_kind='"
+               + graph_kind + "')";
+    }
 
     // Graph-kind-specific cross-field constraints.
     if (graph_kind == "erdos_renyi") {
@@ -260,6 +376,21 @@ std::string GeneratorConfig::validate() const {
             if (*min_edge_length > *max_edge_length) {
                 return "min_edge_length > max_edge_length";
             }
+        }
+        if (min_edge_length.has_value() && *min_edge_length < 0.0) {
+            return "min_edge_length must be >= 0";
+        }
+        if (dim.has_value() && *dim < 1) {
+            return "dim must be >= 1";
+        }
+        if (dims.has_value()) {
+            return "cfg.dims is reserved for a future per-dimension "
+                   "extent API and is not consumed by sample_euclidean; "
+                   "use cfg.dim for the dimension count";
+        }
+        if (directed) {
+            return "graph_kind='euclidean' does not support directed=true "
+                   "(Euclidean distance is symmetric)";
         }
     } else if (graph_kind == "path_star") {
         if (min_arms.has_value() && max_arms.has_value() &&
@@ -286,8 +417,6 @@ py::dict GeneratorConfig::to_dict() const {
     // Shared
     d["min_num_nodes"] = min_num_nodes;
     d["max_num_nodes"] = max_num_nodes;
-    d["min_vocab"]     = min_vocab;
-    d["max_vocab"]     = max_vocab;
     d["batch_size"]    = batch_size;
     d["max_edges"]     = max_edges;
     d["max_attempts"]  = max_attempts;
@@ -297,27 +426,27 @@ py::dict GeneratorConfig::to_dict() const {
     d["task_kind"]       = task_kind;
     d["scratchpad_kind"] = scratchpad_kind;
 
+    // Graph structure
+    d["directed"] = directed;
+    d["weighted"] = weighted;
+
     // Tokenization
-    d["is_causal"]                           = is_causal;
-    d["is_direct_ranking"]                   = is_direct_ranking;
-    d["query_at_end"]                        = query_at_end;
-    d["no_graph"]                            = no_graph;
-    d["concat_edges"]                        = concat_edges;
-    d["duplicate_edges"]                     = duplicate_edges;
-    d["include_nodes_in_graph_tokenization"] = include_nodes_in_graph_tokenization;
-    d["num_thinking_tokens"]                 = num_thinking_tokens;
-    d["scratchpad_as_prefix"]                = scratchpad_as_prefix;
-    d["is_flat_model"]                       = is_flat_model;
-    d["align_prefix_front_pad"]              = align_prefix_front_pad;
+    d["tokenization_mode"]                   = tokenization_mode;
+
+    d["query_at_end"]                                 = query_at_end;
+    d["include_graph_in_graph_tokenization"]          = include_graph_in_graph_tokenization;
+    d["include_duplicate_edges_in_graph_tokenization"] = include_duplicate_edges_in_graph_tokenization;
+    d["include_nodes_in_graph_tokenization"]          = include_nodes_in_graph_tokenization;
+    d["num_thinking_tokens"]                          = num_thinking_tokens;
+    d["align_prefix_front_pad"]                       = align_prefix_front_pad;
 
     // Pos ids
     d["return_pos_ids"]       = return_pos_ids;
-    d["use_edges_invariance"] = use_edges_invariance;
-    d["use_node_invariance"]  = use_node_invariance;
-    d["use_graph_invariance"] = use_graph_invariance;
-    d["use_query_invariance"] = use_query_invariance;
-    d["use_graph_structure"]  = use_graph_structure;
-    d["use_full_structure"]   = use_full_structure;
+
+    // Distance matrix returns
+    d["return_hop_distances"] = return_hop_distances;
+    d["return_positions"]     = return_positions;
+    d["return_distance_rank_targets"] = return_distance_rank_targets;
 
     // Task-specific
     d["min_path_length"]     = opt_to_py(min_path_length);
@@ -342,12 +471,8 @@ py::dict GeneratorConfig::to_dict() const {
     d["partition_method"]    = opt_to_py(partition_method);
 
     // Scratchpad
-    d["sort_adjacency_lists"]      = opt_to_py(sort_adjacency_lists);
-    d["use_unique_depth_markers"]  = opt_to_py(use_unique_depth_markers);
+    d["bfs_scratchpad_style"]      = bfs_scratchpad_style;
     d["stop_once_found"]           = opt_to_py(stop_once_found);
-    d["include_queue"]             = opt_to_py(include_queue);
-    d["reverse_adjacency_lists"]   = opt_to_py(reverse_adjacency_lists);
-    d["duplicate_adjacency_lists"] = opt_to_py(duplicate_adjacency_lists);
 
     // Graph-kind-specific
     d["edge_prob"]       = opt_to_py(edge_prob);
@@ -379,8 +504,6 @@ std::string GeneratorConfig::to_string() const {
         << ", scratchpad_kind='" << scratchpad_kind << "'"
         << ", min_num_nodes=" << min_num_nodes
         << ", max_num_nodes=" << max_num_nodes
-        << ", min_vocab=" << min_vocab
-        << ", max_vocab=" << max_vocab
         << ", batch_size=" << batch_size
         << ", max_edges=" << max_edges
         << ")";

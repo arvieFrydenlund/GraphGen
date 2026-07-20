@@ -2,9 +2,11 @@
 //
 // Layout (all vertex IDs are internal, 0..n-1):
 //
-//   col_indices  flat array of arc targets, grouped by source vertex.
-//                Size = num_arcs (== 2*m for undirected, m for directed).
-//   row_offsets  size n+1. Arcs out of vertex u live at the half-open
+//   col_indices  flat array of neighbour vertex IDs, grouped by source
+//                vertex. For an undirected graph each edge {u, v} is
+//                stored twice (once in u's slice, once in v's) -- the
+//                CSR row is inherently a per-vertex adjacency list.
+//   row_offsets  size n+1. Neighbours of vertex u live at the half-open
 //                slice col_indices[row_offsets[u], row_offsets[u+1]).
 //   weights      parallel to col_indices when the graph is weighted;
 //                empty vector when unweighted.
@@ -48,43 +50,54 @@ struct NeighbourEdge {
     float weight;
 };
 
-// (source, target) pair yielded by unweighted arc iteration.
-struct Arc {
-    int source;
-    int target;
+// Endpoint pair used both as input to the CsrGraph constructors and as
+// the yield type of edges(). The graph itself carries the directedness
+// flag, so this struct does not commit to a direction: on a directed
+// graph a (u, v) Edge means "directed edge from u to v"; on an
+// undirected graph it means "connection between u and v", and edges()
+// yields each such pair exactly once in canonical order (u < v).
+struct Edge {
+    int u;
+    int v;
 };
 
-// (source, target, weight) yielded by weighted arc iteration.
-struct WeightedArc {
-    int   source;
-    int   target;
+// Same shape as Edge plus a weight.
+struct WeightedEdge {
+    int   u;
+    int   v;
     float weight;
 };
 
 class CsrGraph {
 public:
     // ---------- Construction ---------------------------------------------
-    // Directed: each Arc becomes exactly one arc. If `weights` is provided
-    // it must satisfy weights.size() == edges.size(); it is stored parallel
-    // to the arcs.
+    // Each input Edge {u, v} becomes one stored directed edge u -> v. If
+    // `weights` is provided it must satisfy weights.size() == edges.size();
+    // it is stored parallel to the edges.
     static CsrGraph from_directed_edges(
         int n,
-        std::span<const Arc>   edges,
+        std::span<const Edge>  edges,
         std::span<const float> weights = {});
 
-    // Undirected: each input Arc becomes two arcs (u->v and v->u). Weights
-    // are mirrored across both orientations.
+    // Each input Edge {u, v} becomes two stored directed edges
+    // (u -> v and v -> u) so per-vertex iteration works from either
+    // endpoint. Weights are mirrored across both orientations.
     static CsrGraph from_undirected_edges(
         int n,
-        std::span<const Arc>   edges,
+        std::span<const Edge>  edges,
         std::span<const float> weights = {});
 
     // ---------- Sizes ----------------------------------------------------
     int  num_vertices() const { return n_; }
-    int  num_arcs()     const { return static_cast<int>(col_indices_.size()); }
-    int  num_edges()    const { return is_directed_ ? num_arcs() : num_arcs() / 2; }
-    bool is_directed()  const { return is_directed_; }
-    bool has_weights()  const { return !weights_.empty(); }
+    // Number of logical edges: for directed, one per input Edge; for
+    // undirected, one per input Edge (i.e. half the internal storage
+    // slot count, which is not exposed).
+    int  num_edges() const {
+        const int slots = static_cast<int>(col_indices_.size());
+        return is_directed_ ? slots : slots / 2;
+    }
+    bool is_directed() const { return is_directed_; }
+    bool has_weights() const { return !weights_.empty(); }
 
     // ---------- Per-vertex access ----------------------------------------
     int degree(int u) const {
@@ -92,6 +105,8 @@ public:
     }
 
     // for (int v : g.neighbours(u)) { ... }
+    // On undirected graphs both orientations of each incident edge are
+    // present here -- that is the whole point of iterating out of `u`.
     std::span<const int> neighbours(int u) const {
         return std::span<const int>(
             col_indices_.data() + row_offsets_[u],
@@ -109,24 +124,48 @@ public:
 
     // ---------- Zipped iteration (no offset math at the call site) -------
     class NeighbourEdgeRange;
-    class ArcRange;
-    class WeightedArcRange;
+    class EdgeRange;
+    class WeightedEdgeRange;
 
     // for (auto [v, w] : g.weighted_neighbours(u)) { ... }
     // Weight is 1.0f when the graph is unweighted so weighted algorithm
     // bodies compile and behave correctly on both.
     NeighbourEdgeRange weighted_neighbours(int u) const;
 
-    // for (auto [u, v] : g.arcs()) { ... }
-    // In an undirected graph each edge appears twice (once per orientation).
-    ArcRange arcs() const;
+    // for (auto [u, v] : g.edges()) { ... }
+    // Yields each logical edge exactly once. Directed: all stored
+    // edges. Undirected: only the (u, v) slot with u < v (dedup of
+    // the mirror). Self-loops on undirected graphs are not currently
+    // supported and would be skipped by this iterator.
+    EdgeRange edges() const;
 
-    // for (auto [u, v, w] : g.weighted_arcs()) { ... }
-    WeightedArcRange weighted_arcs() const;
+    // for (auto [u, v, w] : g.weighted_edges()) { ... }
+    // Same dedup rule as edges().
+    WeightedEdgeRange weighted_edges() const;
 
     // ---------- Queries --------------------------------------------------
-    // O(degree(u)). Fine for sanity checks; not for hot loops.
-    bool has_arc(int u, int v) const;
+    // Is v in u's neighbour list? On undirected graphs this is symmetric
+    // (both has_edge(u, v) and has_edge(v, u) hold when the edge exists).
+    // O(degree(u)); fine for sanity checks, not for hot loops.
+    bool has_edge(int u, int v) const;
+
+    // ---------- Graph algorithms -----------------------------------------
+    // Breadth-first shortest hop distances from `source`. Returns a
+    // vector of size num_vertices() where entry v is the number of edges
+    // on the shortest source->v path, or -1 if v is unreachable. Ignores
+    // edge weights (see the plan for Dijkstra when we add weights).
+    std::vector<int> bfs(int source) const;
+
+    // Like bfs(source) but stops expanding beyond `max_dist`: vertices
+    // strictly farther than max_dist stay -1 in the result. Useful for
+    // k-hop task setups that don't need the full distance field.
+    std::vector<int> distance_bounded_bfs(int source, int max_dist) const;
+
+    // Connected-component id per vertex, dense in [0, K) where K is the
+    // number of components. For a directed graph edges are treated as
+    // undirected (weakly connected components). K = 0 for a graph with
+    // zero vertices; otherwise K = max(result) + 1.
+    std::vector<int> connected_components() const;
 
 private:
     int  n_            = 0;
@@ -136,9 +175,10 @@ private:
     std::vector<float> weights_;
 
     // Shared backend for from_directed_edges / from_undirected_edges.
-    // When `mirror` is true each input arc yields both orientations.
+    // When `mirror` is true each input edge yields both orientations
+    // in storage.
     static CsrGraph build(int n,
-                          std::span<const Arc>   edges,
+                          std::span<const Edge>  edges,
                           std::span<const float> weights,
                           bool mirror,
                           bool is_directed);
@@ -180,46 +220,60 @@ public:
     bool                   has_weights_;
 };
 
-class CsrGraph::ArcRange {
+class CsrGraph::EdgeRange {
 public:
     class Iterator {
     public:
-        Arc operator*() const { return Arc{u_, col_indices_[i_]}; }
+        Edge operator*() const { return Edge{u_, col_indices_[i_]}; }
         Iterator& operator++() {
             ++i_;
-            // Advance source vertex when we've walked past its arcs.
-            while (u_ + 1 < n_ && i_ >= row_offsets_[u_ + 1]) ++u_;
+            advance_to_valid();
             return *this;
         }
         bool operator!=(const Iterator& other) const { return i_ != other.i_; }
+
+        // Move (u_, i_) to the next slot that this range should emit.
+        // Bumps u_ past empty rows; on undirected graphs, skips mirror
+        // slots (those where u_ > col_indices_[i_]) so each edge is
+        // yielded only once in canonical (u < v) form.
+        void advance_to_valid() {
+            const int end = row_offsets_[n_];
+            while (i_ < end) {
+                while (u_ + 1 < n_ && i_ >= row_offsets_[u_ + 1]) ++u_;
+                if (is_directed_ || u_ < col_indices_[i_]) return;
+                ++i_;
+            }
+        }
 
         int i_;
         int u_;
         int n_;
         const int* row_offsets_;
         const int* col_indices_;
+        bool is_directed_;
     };
 
     Iterator begin() const {
-        int u = 0;
-        while (u + 1 < n_ && row_offsets_[u] == row_offsets_[u + 1]) ++u;  // skip isolated vertices
-        return {row_offsets_[0], u, n_, row_offsets_, col_indices_};
+        Iterator it{0, 0, n_, row_offsets_, col_indices_, is_directed_};
+        it.advance_to_valid();
+        return it;
     }
     Iterator end() const {
-        return {row_offsets_[n_], n_ - 1, n_, row_offsets_, col_indices_};
+        return {row_offsets_[n_], n_ - 1, n_, row_offsets_, col_indices_, is_directed_};
     }
 
     int n_;
     const int* row_offsets_;
     const int* col_indices_;
+    bool is_directed_;
 };
 
-class CsrGraph::WeightedArcRange {
+class CsrGraph::WeightedEdgeRange {
 public:
     class Iterator {
     public:
-        WeightedArc operator*() const {
-            return WeightedArc{
+        WeightedEdge operator*() const {
+            return WeightedEdge{
                 u_,
                 col_indices_[i_],
                 has_weights_ ? weights_[i_] : 1.0f,
@@ -227,10 +281,19 @@ public:
         }
         Iterator& operator++() {
             ++i_;
-            while (u_ + 1 < n_ && i_ >= row_offsets_[u_ + 1]) ++u_;
+            advance_to_valid();
             return *this;
         }
         bool operator!=(const Iterator& other) const { return i_ != other.i_; }
+
+        void advance_to_valid() {
+            const int end = row_offsets_[n_];
+            while (i_ < end) {
+                while (u_ + 1 < n_ && i_ >= row_offsets_[u_ + 1]) ++u_;
+                if (is_directed_ || u_ < col_indices_[i_]) return;
+                ++i_;
+            }
+        }
 
         int i_;
         int u_;
@@ -239,15 +302,17 @@ public:
         const int* col_indices_;
         const float* weights_;
         bool has_weights_;
+        bool is_directed_;
     };
 
     Iterator begin() const {
-        int u = 0;
-        while (u + 1 < n_ && row_offsets_[u] == row_offsets_[u + 1]) ++u;
-        return {row_offsets_[0], u, n_, row_offsets_, col_indices_, weights_, has_weights_};
+        Iterator it{0, 0, n_, row_offsets_, col_indices_, weights_, has_weights_, is_directed_};
+        it.advance_to_valid();
+        return it;
     }
     Iterator end() const {
-        return {row_offsets_[n_], n_ - 1, n_, row_offsets_, col_indices_, weights_, has_weights_};
+        return {row_offsets_[n_], n_ - 1, n_, row_offsets_, col_indices_,
+                weights_, has_weights_, is_directed_};
     }
 
     int n_;
@@ -255,6 +320,7 @@ public:
     const int* col_indices_;
     const float* weights_;
     bool has_weights_;
+    bool is_directed_;
 };
 
 }  // namespace graphgen

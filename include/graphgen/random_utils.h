@@ -7,8 +7,10 @@
 #ifndef GRAPHGEN_RANDOM_UTILS_H
 #define GRAPHGEN_RANDOM_UTILS_H
 
+#include <cstdint>
 #include <random>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 namespace graphgen {
@@ -75,6 +77,74 @@ private:
     // a few bytes at the cost of an extra branch per draw -- not worth it.
     std::uniform_int_distribution<int> uniform_;
     std::discrete_distribution<int>    discrete_;
+};
+
+// Sample integer partitions -- split Q into N positive parts.
+//
+// Two flavours, both invoked per-item during khops task generation:
+//   * `uniform_random_partition(Q, N, rng, shuffle)` samples uniformly
+//     from the set of all partitions of Q into N parts, via a DP that
+//     counts partition_QN / partition_QNK (memoised across calls).
+//     The DP is O(Q * N) per fresh cell; the cache pays for itself as
+//     soon as the same (Q, N) pair recurs across a batch. See Locey
+//     2013 for the underlying algorithm.
+//   * `non_uniform_random_partition(Q, N, rng, shuffle)` is the cheap
+//     greedy alternative: each part starts at 1, then randomly
+//     absorbs a slice of the remaining length. Biased toward the
+//     first parts under the "shuffle=false" path but that bias is
+//     removed by the trailing shuffle.
+//
+// Both return a `vector<int>` of length exactly N summing to Q, sorted
+// ascending when `shuffle=false` and randomly permuted otherwise.
+//
+// The class holds two caches for the uniform sampler:
+//   * QN_cache_ : (Q, N) -> partition count
+//   * QNK_cache_: (Q, N, K) -> partition count with max part K
+// Keys are packed into 32-/48-bit int64_t for constant-time hashing.
+// Caches shrink to zero when they exceed `max_cache_size` slots so
+// long-running workers can't leak unbounded memory; the same DP
+// results just get recomputed the next time.
+class SampleIntPartition {
+public:
+    // `suggested_cache_size` is a soft target; the cache is cleared
+    // when it grows past `max_cache_multiplier * suggested_cache_size`.
+    explicit SampleIntPartition(int suggested_cache_size    = 10'000'000,
+                                int max_cache_multiplier    = 10);
+
+    std::vector<int> uniform_random_partition(int Q, int N,
+                                              std::mt19937_64& rng,
+                                              bool shuffle = true);
+    std::vector<int> non_uniform_random_partition(int Q, int N,
+                                                  std::mt19937_64& rng,
+                                                  bool shuffle = true);
+
+    // Test / observability hooks.
+    std::size_t qn_cache_size()  const { return qn_cache_.size(); }
+    std::size_t qnk_cache_size() const { return qnk_cache_.size(); }
+
+private:
+    std::int64_t partition_QN (int Q, int N);
+    std::int64_t partition_QNK(int Q, int N, int K);
+    static int   min_max_part_size(int Q, int N);
+    void         clear_if_needed();
+
+    // Pack (Q, N) or (Q, N, K) into an int64 key. Q, N, K assumed to
+    // fit in 20 bits each (comfortably above any realistic khops
+    // prefix length).
+    static std::uint64_t key_qn (int Q, int N) {
+        return (static_cast<std::uint64_t>(Q) << 20)
+             |  static_cast<std::uint64_t>(N);
+    }
+    static std::uint64_t key_qnk(int Q, int N, int K) {
+        return (static_cast<std::uint64_t>(Q) << 40)
+             | (static_cast<std::uint64_t>(N) << 20)
+             |  static_cast<std::uint64_t>(K);
+    }
+
+    std::unordered_map<std::uint64_t, std::int64_t> qn_cache_;
+    std::unordered_map<std::uint64_t, std::int64_t> qnk_cache_;
+    int suggested_cache_size_;
+    int max_cache_size_;
 };
 
 }  // namespace graphgen

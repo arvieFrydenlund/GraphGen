@@ -8,14 +8,20 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <random>
+#include <stdexcept>
+#include <string>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#include "graphgen/check.h"
 #include "graphgen/generator_config.h"
 #include "graphgen/worker_shared_context.h"
 #include "graphgen/worker.h"
+#include "graphgen/random_utils.h"
 
 namespace py = pybind11;
 
@@ -117,7 +123,17 @@ PYBIND11_MODULE(generator, m) {
         .def(py::init<std::shared_ptr<graphgen::WorkerSharedContext>, std::uint64_t>(),
              py::arg("ctx"), py::arg("seed") = 0)
         .def("generate_batch", &graphgen::Worker::generate_batch, py::arg("cfg"),
-             "Sample, tokenize, and package one batch of graph tasks.");
+             "Sample, tokenize, and package one batch of graph tasks.")
+        .def("sample_graph_stats", &graphgen::Worker::sample_graph_stats, py::arg("cfg"),
+             "Test-only: sample one graph and return "
+             "{num_vertices, num_edges, num_components, vocab_ids}. Goes away "
+             "once generate_batch grows a real return shape.")
+        .def("sample_shortest_path_stats", &graphgen::Worker::sample_shortest_path_stats,
+             py::arg("cfg"),
+             "Test-only: run graph_sampler + task_computer for one item and "
+             "return {num_vertices, num_edges, start, end, path, path_length, "
+             "valid_next_hops}. Goes away once generate_batch grows a real "
+             "return shape.");
 
     py::class_<graphgen::GeneratorConfig>(m, "GeneratorConfig")
         .def(py::init<>())
@@ -134,8 +150,6 @@ PYBIND11_MODULE(generator, m) {
         // Shared
         .def_readwrite("min_num_nodes", &graphgen::GeneratorConfig::min_num_nodes)
         .def_readwrite("max_num_nodes", &graphgen::GeneratorConfig::max_num_nodes)
-        .def_readwrite("min_vocab",     &graphgen::GeneratorConfig::min_vocab)
-        .def_readwrite("max_vocab",     &graphgen::GeneratorConfig::max_vocab)
         .def_readwrite("batch_size",    &graphgen::GeneratorConfig::batch_size)
         .def_readwrite("max_edges",     &graphgen::GeneratorConfig::max_edges)
         .def_readwrite("max_attempts",  &graphgen::GeneratorConfig::max_attempts)
@@ -143,26 +157,24 @@ PYBIND11_MODULE(generator, m) {
         .def_readwrite("graph_kind",      &graphgen::GeneratorConfig::graph_kind)
         .def_readwrite("task_kind",       &graphgen::GeneratorConfig::task_kind)
         .def_readwrite("scratchpad_kind", &graphgen::GeneratorConfig::scratchpad_kind)
+        // Graph structure
+        .def_readwrite("directed", &graphgen::GeneratorConfig::directed)
+        .def_readwrite("weighted", &graphgen::GeneratorConfig::weighted)
         // Tokenization
-        .def_readwrite("is_causal",                           &graphgen::GeneratorConfig::is_causal)
-        .def_readwrite("is_direct_ranking",                   &graphgen::GeneratorConfig::is_direct_ranking)
-        .def_readwrite("query_at_end",                        &graphgen::GeneratorConfig::query_at_end)
-        .def_readwrite("no_graph",                            &graphgen::GeneratorConfig::no_graph)
-        .def_readwrite("concat_edges",                        &graphgen::GeneratorConfig::concat_edges)
-        .def_readwrite("duplicate_edges",                     &graphgen::GeneratorConfig::duplicate_edges)
-        .def_readwrite("include_nodes_in_graph_tokenization", &graphgen::GeneratorConfig::include_nodes_in_graph_tokenization)
-        .def_readwrite("num_thinking_tokens",                 &graphgen::GeneratorConfig::num_thinking_tokens)
-        .def_readwrite("scratchpad_as_prefix",                &graphgen::GeneratorConfig::scratchpad_as_prefix)
-        .def_readwrite("is_flat_model",                       &graphgen::GeneratorConfig::is_flat_model)
-        .def_readwrite("align_prefix_front_pad",              &graphgen::GeneratorConfig::align_prefix_front_pad)
+        .def_readwrite("tokenization_mode",                   &graphgen::GeneratorConfig::tokenization_mode)
+        .def_readwrite("query_at_end",                                 &graphgen::GeneratorConfig::query_at_end)
+        .def_readwrite("include_graph_in_graph_tokenization",          &graphgen::GeneratorConfig::include_graph_in_graph_tokenization)
+        .def_readwrite("include_duplicate_edges_in_graph_tokenization", &graphgen::GeneratorConfig::include_duplicate_edges_in_graph_tokenization)
+        .def_readwrite("include_nodes_in_graph_tokenization",          &graphgen::GeneratorConfig::include_nodes_in_graph_tokenization)
+        .def_readwrite("num_thinking_tokens",                          &graphgen::GeneratorConfig::num_thinking_tokens)
+        .def_readwrite("align_prefix_front_pad",                       &graphgen::GeneratorConfig::align_prefix_front_pad)
         // Pos ids
         .def_readwrite("return_pos_ids",       &graphgen::GeneratorConfig::return_pos_ids)
-        .def_readwrite("use_edges_invariance", &graphgen::GeneratorConfig::use_edges_invariance)
-        .def_readwrite("use_node_invariance",  &graphgen::GeneratorConfig::use_node_invariance)
-        .def_readwrite("use_graph_invariance", &graphgen::GeneratorConfig::use_graph_invariance)
-        .def_readwrite("use_query_invariance", &graphgen::GeneratorConfig::use_query_invariance)
-        .def_readwrite("use_graph_structure",  &graphgen::GeneratorConfig::use_graph_structure)
-        .def_readwrite("use_full_structure",   &graphgen::GeneratorConfig::use_full_structure)
+        // Distance / geometry returns
+        .def_readwrite("return_hop_distances", &graphgen::GeneratorConfig::return_hop_distances)
+        .def_readwrite("return_positions",     &graphgen::GeneratorConfig::return_positions)
+        .def_readwrite("return_distance_rank_targets",
+                       &graphgen::GeneratorConfig::return_distance_rank_targets)
         // Task-specific
         .def_readwrite("min_path_length",     &graphgen::GeneratorConfig::min_path_length)
         .def_readwrite("max_path_length",     &graphgen::GeneratorConfig::max_path_length)
@@ -185,12 +197,8 @@ PYBIND11_MODULE(generator, m) {
         .def_readwrite("intermediate_labels", &graphgen::GeneratorConfig::intermediate_labels)
         .def_readwrite("partition_method",    &graphgen::GeneratorConfig::partition_method)
         // Scratchpad
-        .def_readwrite("sort_adjacency_lists",      &graphgen::GeneratorConfig::sort_adjacency_lists)
-        .def_readwrite("use_unique_depth_markers",  &graphgen::GeneratorConfig::use_unique_depth_markers)
+        .def_readwrite("bfs_scratchpad_style",      &graphgen::GeneratorConfig::bfs_scratchpad_style)
         .def_readwrite("stop_once_found",           &graphgen::GeneratorConfig::stop_once_found)
-        .def_readwrite("include_queue",             &graphgen::GeneratorConfig::include_queue)
-        .def_readwrite("reverse_adjacency_lists",   &graphgen::GeneratorConfig::reverse_adjacency_lists)
-        .def_readwrite("duplicate_adjacency_lists", &graphgen::GeneratorConfig::duplicate_adjacency_lists)
         // Graph-kind-specific
         .def_readwrite("edge_prob",       &graphgen::GeneratorConfig::edge_prob)
         .def_readwrite("dim",             &graphgen::GeneratorConfig::dim)
@@ -208,4 +216,127 @@ PYBIND11_MODULE(generator, m) {
         .def_readwrite("max_noise",         &graphgen::GeneratorConfig::max_noise)
         // Debug
         .def_readwrite("print_cpp_args", &graphgen::GeneratorConfig::print_cpp_args);
+
+    // -------------------------------------------------------------------
+    // Free-function helpers for khops / khops_gen consumers on the
+    // Python side. Kept as module-level defs (not methods on any class)
+    // because they're pure math with no need for a Worker / ctx.
+    // -------------------------------------------------------------------
+
+    // Sample an integer partition of Q into N positive parts.
+    //   method='uniform'      -- uniform over all partitions (Locey 2013 DP).
+    //   method='non_uniform'  -- cheap greedy; each part >= 1, biased.
+    // Returns a Python list of length N summing to Q. `seed=None`
+    // constructs a fresh random_device-seeded RNG; passing an int
+    // seed gives determinism.
+    m.def("uniform_random_int_partition",
+          [](int Q, int N, std::optional<std::uint64_t> seed,
+             const std::string& method, bool shuffle) {
+              std::mt19937_64 rng(seed.value_or(std::random_device{}()));
+              graphgen::SampleIntPartition sampler;
+              if (method == "uniform") {
+                  return sampler.uniform_random_partition(Q, N, rng, shuffle);
+              }
+              if (method == "non_uniform") {
+                  return sampler.non_uniform_random_partition(Q, N, rng, shuffle);
+              }
+              throw std::invalid_argument(
+                  "uniform_random_int_partition: method must be 'uniform' or "
+                  "'non_uniform' (got '" + method + "')");
+          },
+          py::arg("Q"), py::arg("N"),
+          py::arg("seed") = py::none(),
+          py::arg("method") = "uniform",
+          py::arg("shuffle") = true,
+          "Sample an integer partition of Q into N positive parts.");
+
+    // Verify a batch of khops_gen (prefix, ground_truths) pairs. Walks
+    // the prefix from the cursor position backward `k` times and
+    // checks that each hop lands on the corresponding ground truth.
+    // Returns a (B,) int32 array of 0/1 flags.
+    m.def("verify_khop_gens",
+          [](py::array_t<int, py::array::c_style> prefixes,
+             py::array_t<int, py::array::c_style> prefix_lengths,
+             py::array_t<int, py::array::c_style> ground_truths,
+             bool right_side_connect) {
+              GG_CHECK(prefixes.ndim() == 2,
+                       "verify_khop_gens: prefixes must be 2-D (B, max_prefix_len)");
+              GG_CHECK(prefix_lengths.ndim() == 1,
+                       "verify_khop_gens: prefix_lengths must be 1-D (B,)");
+              GG_CHECK(ground_truths.ndim() == 2,
+                       "verify_khop_gens: ground_truths must be 2-D (B, k)");
+              const auto B     = prefixes.shape(0);
+              const auto max_P = prefixes.shape(1);
+              GG_CHECK(prefix_lengths.shape(0) == B,
+                       "verify_khop_gens: prefix_lengths.shape[0] != B");
+              GG_CHECK(ground_truths.shape(0) == B,
+                       "verify_khop_gens: ground_truths.shape[0] != B");
+              const auto k = ground_truths.shape(1);
+
+              py::array_t<int> out(B);
+              auto out_       = out.mutable_unchecked<1>();
+              auto pfx_       = prefixes.unchecked<2>();
+              auto len_       = prefix_lengths.unchecked<1>();
+              auto gt_        = ground_truths.unchecked<2>();
+
+              for (py::ssize_t b = 0; b < B; ++b) {
+                  const int P = len_(b);
+                  GG_CHECK(P > 0 && P <= max_P,
+                           "verify_khop_gens: prefix_length out of range");
+                  // Reconstruct semantics ported verbatim from V1's
+                  // verify_khop_gen: build the backtrace list
+                  // [cursor, ..., gt_0] by walking the prefix
+                  // backward, then reverse and compare to the
+                  // provided ground truths (which are in FORWARD
+                  // order: ground_truths[0] = gt at entry of segment
+                  // 0, ..., ground_truths[k-1] = gt at entry of last
+                  // segment == cursor).
+                  std::vector<int> reconstruct;
+                  reconstruct.reserve(static_cast<std::size_t>(k));
+                  int cur_value = pfx_(b, P - 2);   // cursor
+                  reconstruct.push_back(cur_value);
+                  int cur_idx = P - 4;
+                  // V1 used `cur_idx > 0` here, which silently missed
+                  // matches at index 0 when the very first segment was
+                  // short. Relax to `>= 0` under right_side_connect
+                  // (safe: we index cur_idx + 1) and `>= 1` under
+                  // left-side (need cur_idx - 1 to be in-range).
+                  const int min_idx = right_side_connect ? 0 : 1;
+                  while (cur_idx >= min_idx) {
+                      if (pfx_(b, cur_idx) == cur_value) {
+                          if (right_side_connect) {
+                              cur_value = pfx_(b, cur_idx + 1);
+                          } else {
+                              cur_value = pfx_(b, cur_idx - 1);
+                              // Extra decrement matches V1: skip the
+                              // slot we just consumed as the "next"
+                              // pointer so it can't be double-matched
+                              // on the following iteration.
+                              --cur_idx;
+                          }
+                          reconstruct.push_back(cur_value);
+                      }
+                      --cur_idx;
+                  }
+                  std::reverse(reconstruct.begin(), reconstruct.end());
+
+                  bool ok = (static_cast<py::ssize_t>(reconstruct.size()) == k);
+                  if (ok) {
+                      for (py::ssize_t j = 0; j < k; ++j) {
+                          if (reconstruct[static_cast<std::size_t>(j)] != gt_(b, j)) {
+                              ok = false; break;
+                          }
+                      }
+                  }
+                  out_(b) = ok ? 1 : 0;
+              }
+              return out;
+          },
+          py::arg("prefixes"),
+          py::arg("prefix_lengths"),
+          py::arg("ground_truths"),
+          py::arg("right_side_connect") = true,
+          "Verify khops_gen backtraces. Returns a (B,) int32 array of "
+          "0/1 flags: 1 iff walking backward from prefix[-2] hits each "
+          "ground truth in order.");
 }

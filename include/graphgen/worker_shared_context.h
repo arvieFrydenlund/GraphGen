@@ -51,15 +51,18 @@ struct WorkerSharedContext {
     static constexpr int TOK_QUERY_END     = 14;  // "?"
     static constexpr int TOK_AT            = 15;  // "@"
     static constexpr int TOK_SCRATCH_START = 16;  // "#"
-    static constexpr int TOK_BFS_ADJ_START = 17;  // "["
-    static constexpr int TOK_BFS_ADJ_END   = 18;  // "]"
-    static constexpr int TOK_CURLY_START   = 19;  // "{"
-    static constexpr int TOK_CURLY_END     = 20;  // "}"
-    static constexpr int TOK_DOLLAR        = 21;  // "$"
-    static constexpr int TOK_D_PREFIX      = 22;  // "D"  extra-token prefix
+    static constexpr int TOK_SCRATCH_END   = 17;  // "%"
+    static constexpr int TOK_BFS_ADJ_START = 18;  // "["
+    static constexpr int TOK_BFS_ADJ_END   = 19;  // "]"
+    static constexpr int TOK_CURLY_START   = 20;  // "{"
+    static constexpr int TOK_CURLY_END     = 21;  // "}"
+    static constexpr int TOK_DOLLAR        = 22;  // "$"
+    static constexpr int TOK_D_PREFIX      = 23;  // "D"  extra-token prefix
+    static constexpr int TOK_THINK_START   = 24;  // "<"
+    static constexpr int TOK_THINK_END     = 25;  // ">"
 
-    // Number of special tokens in the default dictionary (indices [0, 23)).
-    static constexpr int NUM_SPECIAL_DEFAULT = 23;
+    // Number of special tokens in the default dictionary (indices [0, 26)).
+    static constexpr int NUM_SPECIAL_DEFAULT = 26;
 
     // Dictionaries. token_dict is a flat string -> id lookup;
     // pos_dict maps a name to a half-open [start, end) range in the
